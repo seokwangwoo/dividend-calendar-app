@@ -6,6 +6,10 @@ export default defineConfig({
     globals: true,
     environment: "node",
     setupFiles: ["tests/setup.ts"],
+    // Integration tests share a remote DB — run files sequentially to
+    // prevent parallel writes to dividend_events from interfering.
+    pool: "forks",
+    poolOptions: { forks: { singleFork: true } },
   },
   resolve: {
     alias: {
