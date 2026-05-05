@@ -1,28 +1,24 @@
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { FormField } from "@/components/ui/form-field";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
-import { ACCOUNT_TYPE_OPTIONS } from "@/lib/constants/dividends";
+import { notFound } from "next/navigation";
+import { PageHeader } from "@/components/ui/page-header";
+import { getHoldingById } from "@/features/holdings/queries";
+import { EditHoldingForm } from "@/features/holdings/components/edit-holding-form";
 
-export default function EditHoldingPage() {
+export default async function EditHoldingPage({
+  params
+}: {
+  params: Promise<{ holdingId: string }>;
+}) {
+  const { holdingId } = await params;
+  const holding = await getHoldingById(holdingId);
+
+  if (!holding) {
+    notFound();
+  }
+
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-semibold">保有情報編集</h1>
-      <Card className="space-y-4 p-5">
-        <FormField label="保有数量" htmlFor="quantity">
-          <Input id="quantity" inputMode="decimal" placeholder="100" />
-        </FormField>
-        <FormField label="平均取得単価" htmlFor="average-price">
-          <Input id="average-price" inputMode="decimal" placeholder="4300" />
-        </FormField>
-        <FormField label="口座区分" htmlFor="account-type">
-          <Select id="account-type" options={ACCOUNT_TYPE_OPTIONS} />
-        </FormField>
-        <Button type="button" className="w-full">
-          保存
-        </Button>
-      </Card>
+      <PageHeader title="保有情報編集" actionHref="/app/portfolio" actionLabel="← 戻る" />
+      <EditHoldingForm holding={holding} />
     </div>
   );
 }

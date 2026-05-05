@@ -9,6 +9,40 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      holdings: {
+        Row: {
+          id: string;
+          user_id: string;
+          stock_id: string;
+          quantity: number;
+          average_purchase_price: number;
+          account_type: "nisa" | "tokutei" | "general";
+          memo: string | null;
+          created_at: string;
+          updated_at: string;
+          deleted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          stock_id: string;
+          quantity: number;
+          average_purchase_price: number;
+          account_type: "nisa" | "tokutei" | "general";
+          memo?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+        Update: {
+          quantity?: number;
+          average_purchase_price?: number;
+          account_type?: "nisa" | "tokutei" | "general";
+          memo?: string | null;
+          updated_at?: string;
+          deleted_at?: string | null;
+        };
+      };
       profiles: {
         Row: {
           id: string;
@@ -54,7 +88,37 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      calculate_holding_dividend: {
+        Args: {
+          p_stock_id: string;
+          p_quantity: number;
+          p_average_purchase_price: number;
+          p_account_type: string;
+        };
+        Returns: {
+          before_tax_amount: number | null;
+          estimated_tax_amount: number | null;
+          after_tax_amount: number | null;
+          before_tax_yield: number | null;
+          after_tax_yield: number | null;
+          currency: string;
+        }[];
+      };
+      get_portfolio_summary: {
+        Args: {
+          p_account_type?: string | null;
+        };
+        Returns: {
+          holding_count: number;
+          annual_before_tax_amount: number | null;
+          annual_estimated_tax_amount: number | null;
+          annual_after_tax_amount: number | null;
+          average_after_tax_yield: number | null;
+          currency: string;
+        }[];
+      };
+    };
     Enums: {
       app_role: "user" | "admin";
       profile_status: "active" | "deleted";
