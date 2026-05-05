@@ -7,4 +7,5 @@ coverage
 .env*.local
 *.log
 tsconfig.tsbuildinfo
+supabase/.temp
 .DS_Store
