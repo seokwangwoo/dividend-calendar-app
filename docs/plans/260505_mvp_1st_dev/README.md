@@ -14,6 +14,10 @@ The MVP focuses on one user promise:
 - `docs/dividend_calendar_mvp_plan.md`
 - `docs/dividend_app_mvp_backend_spec.md`
 
+Coverage summary:
+
+- [MVP 1st Spec Coverage](./spec_coverage.md)
+
 ## Fixed MVP Stack
 
 | Area | Decision |
