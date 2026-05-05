@@ -118,6 +118,39 @@ export type Database = {
           currency: string;
         }[];
       };
+      get_home_summary: {
+        Args: {
+          p_year: number;
+        };
+        Returns: Json;
+      };
+      get_dividend_calendar: {
+        Args: {
+          p_year: number;
+          p_basis: string;
+          p_account_type: string;
+        };
+        Returns: {
+          month: number;
+          amount: number | null;
+          event_count: number;
+        }[];
+      };
+      get_dividend_month_detail: {
+        Args: {
+          p_year: number;
+          p_month: number;
+          p_basis: string;
+          p_account_type: string;
+        };
+        Returns: Json;
+      };
+      get_stock_detail: {
+        Args: {
+          p_stock_id: string;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       app_role: "user" | "admin";

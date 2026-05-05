@@ -34,3 +34,29 @@ export function formatReviewStatus(status: ReviewStatus) {
 
   return labels[status];
 }
+
+export function formatNotificationType(type: string): string {
+  const labels: Record<string, string> = {
+    dividend_increase: "増配",
+    dividend_decrease: "減配",
+    no_dividend: "無配",
+    special_dividend: "特別配当",
+    data_update: "データ更新"
+  };
+
+  return labels[type] ?? type;
+}
+
+export function formatChangeType(changeType: string): string {
+  const labels: Record<string, string> = {
+    increase: "増配",
+    decrease: "減配",
+    no_dividend: "無配",
+    resumed: "復配",
+    special: "特別配当",
+    commemorative: "記念配当",
+    unchanged: "変化なし"
+  };
+
+  return labels[changeType] ?? changeType;
+}
