@@ -8,6 +8,8 @@ export interface CreateDividendEventParams {
   dividendPerShare?: number | null;
   expectedPaymentMonth?: number | null;
   expectedPaymentDate?: string | null;
+  recordDate?: string | null;
+  exDividendDate?: string | null;
   status?: string;
   changeType?: string | null;
   reviewStatus?: "pending" | "approved" | "rejected";
@@ -30,6 +32,8 @@ export async function createTestDividendEvent(
       dividend_per_share: params.dividendPerShare ?? 100,
       expected_payment_month: params.expectedPaymentMonth ?? null,
       expected_payment_date: params.expectedPaymentDate ?? null,
+      record_date: params.recordDate ?? null,
+      ex_dividend_date: params.exDividendDate ?? null,
       status: params.status ?? "estimated",
       change_type: params.changeType ?? null,
       review_status: params.reviewStatus ?? "pending",

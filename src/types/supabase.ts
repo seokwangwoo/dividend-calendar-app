@@ -478,8 +478,9 @@ export type Database = {
       get_dividend_calendar: {
         Args: {
           p_year: number;
-          p_basis: string;
+          p_amount_basis: string;
           p_account_type: string;
+          p_calendar_basis?: string;
         };
         Returns: {
           month: number;
@@ -491,8 +492,9 @@ export type Database = {
         Args: {
           p_year: number;
           p_month: number;
-          p_basis: string;
+          p_amount_basis: string;
           p_account_type: string;
+          p_calendar_basis?: string;
         };
         Returns: Json;
       };

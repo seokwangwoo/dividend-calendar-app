@@ -139,8 +139,9 @@ describe("getDividendCalendar", () => {
     expect(createClient).toHaveBeenCalled();
     expect(mockSupabase.rpc).toHaveBeenCalledWith("get_dividend_calendar", {
       p_year: 2024,
-      p_basis: "before_tax",
-      p_account_type: "all"
+      p_amount_basis: "before_tax",
+      p_account_type: "all",
+      p_calendar_basis: "payment_month"
     });
     expect(result).toEqual([
       { month: 1, amount: 10000, eventCount: 2 },
@@ -197,8 +198,9 @@ describe("getDividendMonthDetail", () => {
     expect(mockSupabase.rpc).toHaveBeenCalledWith("get_dividend_month_detail", {
       p_year: 2024,
       p_month: 6,
-      p_basis: "before_tax",
-      p_account_type: "all"
+      p_amount_basis: "before_tax",
+      p_account_type: "all",
+      p_calendar_basis: "payment_month"
     });
     expect(result).toEqual(mockData);
   });

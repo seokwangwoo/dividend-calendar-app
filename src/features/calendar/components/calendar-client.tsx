@@ -13,6 +13,10 @@ import {
   AMOUNT_BASIS_OPTIONS,
   CALENDAR_ACCOUNT_FILTERS
 } from "@/lib/constants/dividends";
+import {
+  CALENDAR_BASIS_OPTIONS,
+  getCalendarBasisLabel
+} from "@/features/calendar/basis";
 import type { CalendarMonth, MonthDetail } from "@/features/dividends/types";
 import { createClient } from "@/lib/supabase/client";
 
@@ -30,6 +34,7 @@ interface CalendarClientProps {
   initialCalendar: CalendarMonth[];
   initialBasis: string;
   initialAccountType: string;
+  initialCalendarBasis: string;
   initialHoldingCount: number;
 }
 
@@ -38,11 +43,13 @@ export function CalendarClient({
   initialCalendar,
   initialBasis,
   initialAccountType,
+  initialCalendarBasis,
   initialHoldingCount
 }: CalendarClientProps) {
   const [year, setYear] = useState(initialYear);
   const [basis, setBasis] = useState(initialBasis);
   const [accountType, setAccountType] = useState(initialAccountType);
+  const [calendarBasis, setCalendarBasis] = useState(initialCalendarBasis);
   const [calendar, setCalendar] = useState<CalendarMonth[]>(initialCalendar);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [monthDetail, setMonthDetail] = useState<MonthDetail | null>(null);
@@ -52,13 +59,19 @@ export function CalendarClient({
   const supabase = createClient();
 
   const fetchCalendar = useCallback(
-    async (newYear: number, newBasis: string, newAccountType: string) => {
+    async (
+      newYear: number,
+      newBasis: string,
+      newAccountType: string,
+      newCalendarBasis: string
+    ) => {
       setLoadingCalendar(true);
       try {
         const { data, error } = await supabase.rpc("get_dividend_calendar", {
           p_year: newYear,
-          p_basis: newBasis,
-          p_account_type: newAccountType
+          p_amount_basis: newBasis,
+          p_account_type: newAccountType,
+          p_calendar_basis: newCalendarBasis
         });
         if (error) throw error;
         setCalendar(
@@ -86,8 +99,9 @@ export function CalendarClient({
           {
             p_year: year,
             p_month: month,
-            p_basis: basis,
-            p_account_type: accountType
+            p_amount_basis: basis,
+            p_account_type: accountType,
+            p_calendar_basis: calendarBasis
           }
         );
         if (error) throw error;
@@ -96,23 +110,28 @@ export function CalendarClient({
         setLoadingDetail(false);
       }
     },
-    [supabase, year, basis, accountType]
+    [supabase, year, basis, accountType, calendarBasis]
   );
 
   function handleYearChange(delta: number) {
     const newYear = year + delta;
     setYear(newYear);
-    fetchCalendar(newYear, basis, accountType);
+    fetchCalendar(newYear, basis, accountType, calendarBasis);
   }
 
   function handleBasisChange(newBasis: string) {
     setBasis(newBasis);
-    fetchCalendar(year, newBasis, accountType);
+    fetchCalendar(year, newBasis, accountType, calendarBasis);
   }
 
   function handleAccountTypeChange(newAccountType: string) {
     setAccountType(newAccountType);
-    fetchCalendar(year, basis, newAccountType);
+    fetchCalendar(year, basis, newAccountType, calendarBasis);
+  }
+
+  function handleCalendarBasisChange(newCalendarBasis: string) {
+    setCalendarBasis(newCalendarBasis);
+    fetchCalendar(year, basis, accountType, newCalendarBasis);
   }
 
   function handleMonthClick(month: number) {
@@ -178,6 +197,24 @@ export function CalendarClient({
             }`}
           >
             {ACCOUNT_FILTER_LABELS[filter]}
+          </button>
+        ))}
+      </div>
+
+      {/* Calendar basis selector */}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {CALENDAR_BASIS_OPTIONS.map((option) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => handleCalendarBasisChange(option)}
+            className={`shrink-0 rounded-full border px-3 py-1 text-sm font-medium transition-colors ${
+              calendarBasis === option
+                ? "border-brand bg-brand/10 text-brand"
+                : "border-line text-muted hover:bg-paper"
+            }`}
+          >
+            {getCalendarBasisLabel(option)}
           </button>
         ))}
       </div>

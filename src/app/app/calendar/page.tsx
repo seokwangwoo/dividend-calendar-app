@@ -7,9 +7,10 @@ export default async function CalendarPage() {
   const year = new Date().getFullYear();
   const basis = "after_tax";
   const accountType = "all";
+  const calendarBasis = "payment_month";
 
   const [initialCalendar, holdings] = await Promise.all([
-    getDividendCalendar(year, basis, accountType),
+    getDividendCalendar(year, basis, accountType, calendarBasis),
     getHoldings()
   ]);
 
@@ -23,6 +24,7 @@ export default async function CalendarPage() {
         initialCalendar={initialCalendar}
         initialBasis={basis}
         initialAccountType={accountType}
+        initialCalendarBasis={calendarBasis}
         initialHoldingCount={holdingCount}
       />
     </div>

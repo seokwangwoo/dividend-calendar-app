@@ -27,14 +27,16 @@ export async function getHomeSummary(year: number): Promise<HomeSummary | null> 
 export async function getDividendCalendar(
   year: number,
   basis: string,
-  accountType: string
+  accountType: string,
+  calendarBasis = "payment_month"
 ): Promise<CalendarMonth[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase.rpc("get_dividend_calendar", {
     p_year: year,
-    p_basis: basis,
-    p_account_type: accountType
+    p_amount_basis: basis,
+    p_account_type: accountType,
+    p_calendar_basis: calendarBasis
   });
 
   if (error) {
@@ -56,15 +58,17 @@ export async function getDividendMonthDetail(
   year: number,
   month: number,
   basis: string,
-  accountType: string
+  accountType: string,
+  calendarBasis = "payment_month"
 ): Promise<MonthDetail | null> {
   const supabase = await createClient();
 
   const { data, error } = await supabase.rpc("get_dividend_month_detail", {
     p_year: year,
     p_month: month,
-    p_basis: basis,
-    p_account_type: accountType
+    p_amount_basis: basis,
+    p_account_type: accountType,
+    p_calendar_basis: calendarBasis
   });
 
   if (error) {

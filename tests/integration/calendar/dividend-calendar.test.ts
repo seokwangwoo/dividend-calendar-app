@@ -12,6 +12,7 @@ import { getTestStocks } from "../../fixtures/test-stock";
 import {
   createTestDividendEvent,
   deleteTestDividendEvents,
+  isoDate
 } from "../../fixtures/test-dividend-events";
 import type { CalendarMonth } from "@/features/dividends/types";
 
@@ -87,7 +88,7 @@ describe("get_dividend_calendar RPC", () => {
   it("returns exactly 12 rows", async () => {
     const { data, error } = await client.rpc("get_dividend_calendar", {
       p_year: YEAR,
-      p_basis: "after_tax",
+      p_amount_basis: "after_tax",
       p_account_type: "all",
     });
     expect(error).toBeNull();
@@ -100,7 +101,7 @@ describe("get_dividend_calendar RPC", () => {
   it("months with events have non-null amounts", async () => {
     const { data } = await client.rpc("get_dividend_calendar", {
       p_year: YEAR,
-      p_basis: "after_tax",
+      p_amount_basis: "after_tax",
       p_account_type: "all",
     });
     type RawRow = { month: number; amount: number | null; event_count: number };
@@ -117,12 +118,12 @@ describe("get_dividend_calendar RPC", () => {
       const [{ data: bData }, { data: aData }] = await Promise.all([
         client.rpc("get_dividend_calendar", {
           p_year: YEAR,
-          p_basis: "before_tax",
+          p_amount_basis: "before_tax",
           p_account_type: "tokutei",
         }),
         client.rpc("get_dividend_calendar", {
           p_year: YEAR,
-          p_basis: "after_tax",
+          p_amount_basis: "after_tax",
           p_account_type: "tokutei",
         }),
       ]);
@@ -135,12 +136,12 @@ describe("get_dividend_calendar RPC", () => {
       const [{ data: bData }, { data: aData }] = await Promise.all([
         client.rpc("get_dividend_calendar", {
           p_year: YEAR,
-          p_basis: "before_tax",
+          p_amount_basis: "before_tax",
           p_account_type: "nisa",
         }),
         client.rpc("get_dividend_calendar", {
           p_year: YEAR,
-          p_basis: "after_tax",
+          p_amount_basis: "after_tax",
           p_account_type: "nisa",
         }),
       ]);
@@ -155,12 +156,12 @@ describe("get_dividend_calendar RPC", () => {
       const [{ data: allData }, { data: nisaData }] = await Promise.all([
         client.rpc("get_dividend_calendar", {
           p_year: YEAR,
-          p_basis: "after_tax",
+          p_amount_basis: "after_tax",
           p_account_type: "all",
         }),
         client.rpc("get_dividend_calendar", {
           p_year: YEAR,
-          p_basis: "after_tax",
+          p_amount_basis: "after_tax",
           p_account_type: "nisa",
         }),
       ]);
@@ -176,12 +177,12 @@ describe("get_dividend_calendar RPC", () => {
       const [{ data: nisaData }, { data: tokuteiData }] = await Promise.all([
         client.rpc("get_dividend_calendar", {
           p_year: YEAR,
-          p_basis: "after_tax",
+          p_amount_basis: "after_tax",
           p_account_type: "nisa",
         }),
         client.rpc("get_dividend_calendar", {
           p_year: YEAR,
-          p_basis: "after_tax",
+          p_amount_basis: "after_tax",
           p_account_type: "tokutei",
         }),
       ]);
@@ -198,17 +199,17 @@ describe("get_dividend_calendar RPC", () => {
         await Promise.all([
           client.rpc("get_dividend_calendar", {
             p_year: YEAR,
-            p_basis: "after_tax",
+            p_amount_basis: "after_tax",
             p_account_type: "all",
           }),
           client.rpc("get_dividend_calendar", {
             p_year: YEAR,
-            p_basis: "after_tax",
+            p_amount_basis: "after_tax",
             p_account_type: "nisa",
           }),
           client.rpc("get_dividend_calendar", {
             p_year: YEAR,
-            p_basis: "after_tax",
+            p_amount_basis: "after_tax",
             p_account_type: "tokutei",
           }),
         ]);
@@ -226,12 +227,64 @@ describe("get_dividend_calendar RPC", () => {
     it("pending events do not appear in calendar totals", async () => {
       const { data } = await client.rpc("get_dividend_calendar", {
         p_year: YEAR,
-        p_basis: "before_tax",
+        p_amount_basis: "before_tax",
         p_account_type: "all",
       });
       const row = (data as CalendarMonth[]).find((r) => r.month === 3);
       // Pending event has DPS=9999 — if included, amount would be far larger
       expect(Number(row!.amount)).toBeLessThan(9999 * QTY);
+    });
+  });
+
+  describe("calendar basis switch", () => {
+    const cbEventIds: string[] = [];
+
+    afterAll(async () => {
+      await deleteTestDividendEvents(cbEventIds);
+    });
+
+    it("record_date basis groups events by record_date month", async () => {
+      const e = await createTestDividendEvent({
+        stockId,
+        fiscalYear: YEAR,
+        dividendPerShare: DPS,
+        expectedPaymentMonth: 9,
+        recordDate: isoDate(YEAR, 5, 20),
+        reviewStatus: "approved"
+      });
+      cbEventIds.push(e);
+
+      const { data } = await client.rpc("get_dividend_calendar", {
+        p_year: YEAR,
+        p_amount_basis: "before_tax",
+        p_account_type: "all",
+        p_calendar_basis: "record_date"
+      });
+      const mayRow = (data as CalendarMonth[]).find((r) => r.month === 5);
+      expect(mayRow!.amount).not.toBeNull();
+      expect(Number(mayRow!.event_count)).toBeGreaterThan(0);
+    });
+
+    it("ex_dividend_date basis groups events by ex_dividend_date month", async () => {
+      const e = await createTestDividendEvent({
+        stockId,
+        fiscalYear: YEAR,
+        dividendPerShare: DPS,
+        expectedPaymentMonth: 9,
+        exDividendDate: isoDate(YEAR, 4, 15),
+        reviewStatus: "approved"
+      });
+      cbEventIds.push(e);
+
+      const { data } = await client.rpc("get_dividend_calendar", {
+        p_year: YEAR,
+        p_amount_basis: "before_tax",
+        p_account_type: "all",
+        p_calendar_basis: "ex_dividend_date"
+      });
+      const aprRow = (data as CalendarMonth[]).find((r) => r.month === 4);
+      expect(aprRow!.amount).not.toBeNull();
+      expect(Number(aprRow!.event_count)).toBeGreaterThan(0);
     });
   });
 });

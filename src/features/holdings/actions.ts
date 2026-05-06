@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { ACCOUNT_TYPES } from "@/lib/constants/dividends";
 import { positiveQuantitySchema, nonNegativePriceSchema } from "@/lib/validators/numbers";
 import { z } from "zod";
+import { parseCsvHoldings } from "@/features/holdings/csv-parser";
+import type { CsvParseResult, ParsedCsvRow } from "@/features/holdings/csv-parser";
 
 const holdingFormSchema = z.object({
   stockId: z.string().uuid("Invalid stock ID"),
@@ -15,6 +17,82 @@ const holdingFormSchema = z.object({
     errorMap: () => ({ message: "Invalid account type" })
   })
 });
+
+export interface CsvPreviewResult extends CsvParseResult {
+  previewRows: Array<ParsedCsvRow & { stockName: string }>;
+}
+
+async function resolveSupportedStocks(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const { data, error } = await supabase
+    .from("stocks")
+    .select("id, ticker, name, support_status");
+  if (error) throw new Error(error.message);
+  const map = new Map<string, { id: string; name: string }>();
+  for (const row of data ?? []) {
+    if (row.support_status === "supported" && row.ticker) {
+      map.set(row.ticker, { id: row.id, name: row.name ?? row.ticker });
+    }
+  }
+  return map;
+}
+
+export async function previewCsvHoldings(csvText: string): Promise<CsvPreviewResult> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/auth/login");
+  }
+
+  const stockMap = await resolveSupportedStocks(supabase);
+  const parseResult = await parseCsvHoldings(csvText, (ticker) =>
+    stockMap.has(ticker)
+  );
+
+  const previewRows = parseResult.validRows.map((row) => ({
+    ...row,
+    stockName: stockMap.get(row.ticker)?.name ?? row.ticker
+  }));
+
+  return { ...parseResult, previewRows };
+}
+
+export async function commitCsvHoldings(csvText: string): Promise<{ insertedCount: number }> {
+  const supabase = await createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (!user) {
+    redirect("/auth/login");
+  }
+
+  const stockMap = await resolveSupportedStocks(supabase);
+  const parseResult = await parseCsvHoldings(csvText, (ticker) =>
+    stockMap.has(ticker)
+  );
+
+  if (parseResult.errors.length > 0) {
+    throw new Error(
+      `CSVにエラーが${parseResult.errors.length}件あります。プレビューで確認してください。`
+    );
+  }
+
+  const rows = parseResult.validRows.map((row) => ({
+    user_id: user.id,
+    stock_id: stockMap.get(row.ticker)!.id,
+    quantity: row.quantity,
+    average_purchase_price: row.averagePurchasePrice,
+    account_type: row.accountType,
+    memo: row.memo ?? null
+  }));
+
+  const { error } = await supabase.from("holdings").insert(rows);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/app/portfolio");
+  return { insertedCount: rows.length };
+}
 
 export async function createHolding(formData: FormData): Promise<void> {
   const supabase = await createClient();

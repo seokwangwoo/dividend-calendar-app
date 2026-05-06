@@ -79,7 +79,7 @@ describe("get_dividend_month_detail RPC", () => {
     const { data, error } = await client.rpc("get_dividend_month_detail", {
       p_year: YEAR,
       p_month: TEST_MONTH,
-      p_basis: "after_tax",
+      p_amount_basis: "after_tax",
       p_account_type: "all",
     });
     expect(error).toBeNull();
@@ -92,7 +92,7 @@ describe("get_dividend_month_detail RPC", () => {
     const { data } = await client.rpc("get_dividend_month_detail", {
       p_year: YEAR,
       p_month: TEST_MONTH,
-      p_basis: "after_tax",
+      p_amount_basis: "after_tax",
       p_account_type: "all",
     });
     const detail = data as unknown as MonthDetail;
@@ -108,7 +108,7 @@ describe("get_dividend_month_detail RPC", () => {
     const { data } = await client.rpc("get_dividend_month_detail", {
       p_year: YEAR,
       p_month: TEST_MONTH,
-      p_basis: "after_tax",
+      p_amount_basis: "after_tax",
       p_account_type: "all",
     });
     const detail = data as unknown as MonthDetail;
@@ -120,7 +120,7 @@ describe("get_dividend_month_detail RPC", () => {
     const { data } = await client.rpc("get_dividend_month_detail", {
       p_year: YEAR,
       p_month: TEST_MONTH,
-      p_basis: "after_tax",
+      p_amount_basis: "after_tax",
       p_account_type: "all",
     });
     const detail = data as unknown as MonthDetail;
@@ -131,7 +131,7 @@ describe("get_dividend_month_detail RPC", () => {
     const { data } = await client.rpc("get_dividend_month_detail", {
       p_year: YEAR,
       p_month: TEST_MONTH,
-      p_basis: "after_tax",
+      p_amount_basis: "after_tax",
       p_account_type: "all",
     });
     const detail = data as unknown as MonthDetail;
@@ -145,7 +145,7 @@ describe("get_dividend_month_detail RPC", () => {
     const { data } = await client.rpc("get_dividend_month_detail", {
       p_year: YEAR,
       p_month: TEST_MONTH,
-      p_basis: "after_tax",
+      p_amount_basis: "after_tax",
       p_account_type: "all",
     });
     const detail = data as unknown as MonthDetail;
@@ -158,7 +158,7 @@ describe("get_dividend_month_detail RPC", () => {
     const { data } = await client.rpc("get_dividend_month_detail", {
       p_year: YEAR,
       p_month: TEST_MONTH,
-      p_basis: "after_tax",
+      p_amount_basis: "after_tax",
       p_account_type: "all",
     });
     const detail = data as unknown as MonthDetail;
@@ -172,7 +172,7 @@ describe("get_dividend_month_detail RPC", () => {
     const { data } = await client.rpc("get_dividend_month_detail", {
       p_year: YEAR,
       p_month: emptyMonth,
-      p_basis: "after_tax",
+      p_amount_basis: "after_tax",
       p_account_type: "all",
     });
     const detail = data as unknown as MonthDetail;
