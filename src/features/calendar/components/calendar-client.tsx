@@ -23,18 +23,22 @@ const ACCOUNT_FILTER_LABELS: Record<string, string> = {
   general: "一般口座"
 };
 
+import { EmptyState } from "@/components/ui/empty-state";
+
 interface CalendarClientProps {
   initialYear: number;
   initialCalendar: CalendarMonth[];
   initialBasis: string;
   initialAccountType: string;
+  initialHoldingCount: number;
 }
 
 export function CalendarClient({
   initialYear,
   initialCalendar,
   initialBasis,
-  initialAccountType
+  initialAccountType,
+  initialHoldingCount
 }: CalendarClientProps) {
   const [year, setYear] = useState(initialYear);
   const [basis, setBasis] = useState(initialBasis);
@@ -180,7 +184,22 @@ export function CalendarClient({
 
       {/* Monthly summary list */}
       <Card className={`divide-y divide-line ${loadingCalendar ? "opacity-60" : ""}`}>
-        {calendar.map((row) => (
+        {calendar.length === 0 && !loadingCalendar ? (
+          initialHoldingCount === 0 ? (
+            <EmptyState
+              title="保有銘柄がありません"
+              description="カレンダーに配当予定を表示するには、まず銘柄を追加してください。"
+              actionHref="/app/portfolio/new"
+              actionLabel="銘柄を追加"
+            />
+          ) : (
+            <EmptyState
+              title="該当する配当予定はありません"
+              description={`${year}年の選択条件に一致する配当イベントがありません。フィルターや口座区分を変更してみてください。`}
+            />
+          )
+        ) : (
+          calendar.map((row) => (
           <button
             key={row.month}
             type="button"
@@ -204,7 +223,7 @@ export function CalendarClient({
               </Badge>
             </div>
           </button>
-        ))}
+        )))}
       </Card>
 
       {/* Month detail */}

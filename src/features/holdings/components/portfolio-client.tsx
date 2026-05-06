@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
 import type { HoldingWithStock } from "@/features/holdings/queries";
 import type { PortfolioSummary } from "@/features/holdings/queries";
 import type { AccountType } from "@/lib/constants/dividends";
+import { sortHoldings, type PortfolioSortOption } from "@/features/holdings/sort";
 
 const FILTER_OPTIONS = [
   { value: "all", label: "すべて" },
@@ -21,6 +22,12 @@ const FILTER_OPTIONS = [
   { value: "tokutei", label: "特定口座" },
   { value: "general", label: "一般口座" }
 ] as const;
+
+const SORT_OPTIONS: { value: PortfolioSortOption; label: string }[] = [
+  { value: "annual_after_tax_desc", label: "税引後配当額順" },
+  { value: "ticker_asc", label: "銘柄コード順" },
+  { value: "recently_added", label: "最近追加" }
+];
 
 type FilterValue = (typeof FILTER_OPTIONS)[number]["value"];
 
@@ -149,11 +156,21 @@ export function PortfolioClient({
   year: number;
 }) {
   const [activeFilter, setActiveFilter] = useState<FilterValue>("all");
+  const [activeSort, setActiveSort] = useState<PortfolioSortOption>("annual_after_tax_desc");
 
-  const filteredHoldings =
-    activeFilter === "all"
-      ? initialHoldings
-      : initialHoldings.filter((h) => h.account_type === activeFilter);
+  const filteredHoldings = useMemo(() => {
+    const list =
+      activeFilter === "all"
+        ? initialHoldings
+        : initialHoldings.filter((h) => h.account_type === activeFilter);
+
+    const withAmount = list.map((h) => ({
+      ...h,
+      annualAfterTaxAmount: calculateHoldingAnnualAmounts(h, year).afterTaxAmount
+    }));
+
+    return sortHoldings(withAmount, activeSort, (h) => h.stock.ticker) as HoldingWithStock[];
+  }, [activeFilter, activeSort, initialHoldings, year]);
 
   // Compute local summary for filtered view
   const localSummary: PortfolioSummary =
@@ -190,23 +207,42 @@ export function PortfolioClient({
     <div className="space-y-4">
       <SummaryCard summary={localSummary} />
 
-      {/* Account type filter tabs */}
-      <div className="flex rounded-lg border border-line bg-white p-1">
-        {FILTER_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => setActiveFilter(opt.value)}
-            className={[
-              "h-9 flex-1 rounded-md text-sm font-medium transition",
-              activeFilter === opt.value
-                ? "bg-paper text-ink"
-                : "text-muted hover:text-ink"
-            ].join(" ")}
-          >
-            {opt.label}
-          </button>
-        ))}
+      {/* Sort and filter controls */}
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex rounded-lg border border-line bg-white p-1">
+          {FILTER_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setActiveFilter(opt.value)}
+              className={[
+                "h-9 flex-1 rounded-md text-sm font-medium transition",
+                activeFilter === opt.value
+                  ? "bg-paper text-ink"
+                  : "text-muted hover:text-ink"
+              ].join(" ")}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {SORT_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setActiveSort(opt.value)}
+              className={`shrink-0 rounded-full border px-3 py-1 text-sm font-medium transition-colors ${
+                activeSort === opt.value
+                  ? "border-brand bg-brand/10 text-brand"
+                  : "border-line text-muted hover:bg-paper"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Holdings list */}

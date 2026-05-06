@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { getDividendCalendar } from "@/features/dividends/queries";
+import { getHoldings } from "@/features/holdings/queries";
 import { CalendarClient } from "@/features/calendar/components/calendar-client";
 
 export default async function CalendarPage() {
@@ -7,7 +8,12 @@ export default async function CalendarPage() {
   const basis = "after_tax";
   const accountType = "all";
 
-  const initialCalendar = await getDividendCalendar(year, basis, accountType);
+  const [initialCalendar, holdings] = await Promise.all([
+    getDividendCalendar(year, basis, accountType),
+    getHoldings()
+  ]);
+
+  const holdingCount = holdings.filter((h) => h.deleted_at == null).length;
 
   return (
     <div className="space-y-5">
@@ -17,6 +23,7 @@ export default async function CalendarPage() {
         initialCalendar={initialCalendar}
         initialBasis={basis}
         initialAccountType={accountType}
+        initialHoldingCount={holdingCount}
       />
     </div>
   );

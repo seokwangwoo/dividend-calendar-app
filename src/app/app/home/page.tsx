@@ -6,12 +6,21 @@ import { formatCurrencyJpy, formatPercent } from "@/lib/formatting/number";
 import { formatDividendStatus } from "@/lib/formatting/dividends";
 import { formatChangeType } from "@/lib/formatting/dividends";
 import { getHomeSummary } from "@/features/dividends/queries";
+import {
+  getHomeDisplayMode,
+  getGoalDisplayState
+} from "@/features/home/display-state";
 
 export default async function HomePage() {
   const year = new Date().getFullYear();
   const summary = await getHomeSummary(year);
 
-  const hasHoldings = summary !== null && summary.holdingCount > 0;
+  const holdingCount = summary?.holdingCount ?? 0;
+  const displayMode = getHomeDisplayMode(holdingCount);
+  const goalState = getGoalDisplayState(
+    holdingCount,
+    summary?.annualGoal?.targetAmount ?? null
+  );
 
   return (
     <div className="space-y-5">
@@ -20,14 +29,14 @@ export default async function HomePage() {
         <h1 className="text-2xl font-semibold">{year}年の配当</h1>
       </header>
 
-      {!hasHoldings ? (
+      {displayMode === "onboarding" ? (
         <EmptyState
           title="保有銘柄が未登録です"
           description="ポートフォリオから最初の銘柄を追加してください。"
           actionHref="/app/portfolio/new"
           actionLabel="銘柄を追加"
         />
-      ) : (
+      ) : summary == null ? null : (
         <>
           {/* Annual dividend summary */}
           <Card className="space-y-2 p-5">
@@ -95,7 +104,7 @@ export default async function HomePage() {
           )}
 
           {/* Annual goal */}
-          {summary.annualGoal !== null ? (
+          {goalState === "progress" && summary.annualGoal !== null ? (
             <Card className="space-y-3 p-5">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted">年間税引後配当目標</p>
@@ -122,14 +131,14 @@ export default async function HomePage() {
                 </span>
               </div>
             </Card>
-          ) : (
+          ) : goalState === "prompt" ? (
             <EmptyState
               title="年間税引後配当目標が未設定です"
               description="設定から年間の税引後配当目標を登録すると、今年の進捗を確認できます。"
               actionHref="/app/settings"
               actionLabel="目標を設定"
             />
-          )}
+          ) : null}
 
           {/* Recent dividend change */}
           {summary.recentDividendChange !== null && (

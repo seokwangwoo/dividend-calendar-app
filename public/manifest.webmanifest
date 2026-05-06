@@ -1,0 +1,22 @@
+{
+  "name": "実入金 配当カレンダー",
+  "short_name": "配当カレンダー",
+  "description": "税引後配当と月別入金予定を確認する配当カレンダー",
+  "start_url": "/app/home",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/icons/icon-512x512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
