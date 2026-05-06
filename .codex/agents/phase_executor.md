@@ -253,10 +253,10 @@ Commit once per completed phase after Auditor PASS.
 Use the commit message specified by the phase plan when present. Otherwise use:
 
 ```text
-phase <number>: <short phase title>
+<plan title> phase <number>: <short phase title>
 ```
 
-Derive `<number>` and `<short phase title>` from the phase filename or heading. Keep the message concise and specific to the completed phase.
+Derive `<plan title>`, `<number>`, and `<short phase title>` from the phase filename or heading. For example: `MVP 1st phase 02: add database auth and rls foundation`. Keep the message concise and specific to the completed phase.
 
 Commit rules:
 
