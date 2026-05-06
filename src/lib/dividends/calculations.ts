@@ -66,3 +66,16 @@ export function calculateHoldingDividend(params: {
     currency
   };
 }
+
+export function calculatePortfolioAfterTaxYield(params: {
+  annualAfterTaxDividend: number | null;
+  totalAcquisitionCost: number;
+}): number | null {
+  const { annualAfterTaxDividend, totalAcquisitionCost } = params;
+
+  if (annualAfterTaxDividend == null || totalAcquisitionCost <= 0) {
+    return null;
+  }
+
+  return (annualAfterTaxDividend / totalAcquisitionCost) * 100;
+}

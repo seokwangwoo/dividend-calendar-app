@@ -78,11 +78,15 @@ export async function getDividendMonthDetail(
   return data as unknown as MonthDetail;
 }
 
-export async function getStockDetail(stockId: string): Promise<StockDetail | null> {
+export async function getStockDetail(
+  stockId: string,
+  year = new Date().getFullYear()
+): Promise<StockDetail | null> {
   const supabase = await createClient();
 
   const { data, error } = await supabase.rpc("get_stock_detail", {
-    p_stock_id: stockId
+    p_stock_id: stockId,
+    p_year: year
   });
 
   if (error) {

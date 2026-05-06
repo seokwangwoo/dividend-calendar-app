@@ -11,10 +11,7 @@ export default async function HomePage() {
   const year = new Date().getFullYear();
   const summary = await getHomeSummary(year);
 
-  const hasHoldings =
-    summary !== null &&
-    (summary.annualDividend.afterTaxAmount !== null ||
-      summary.nextDividend !== null);
+  const hasHoldings = summary !== null && summary.holdingCount > 0;
 
   return (
     <div className="space-y-5">
@@ -97,34 +94,41 @@ export default async function HomePage() {
             </Card>
           )}
 
-          {/* Monthly goal */}
-          {summary.monthlyGoal !== null && (
+          {/* Annual goal */}
+          {summary.annualGoal !== null ? (
             <Card className="space-y-3 p-5">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-muted">月次目標</p>
+                <p className="text-sm text-muted">年間税引後配当目標</p>
                 <span className="text-sm font-semibold">
-                  {formatPercent(summary.monthlyGoal.achievementRate, 1)}
+                  {formatPercent(summary.annualGoal.achievementRate, 1)}
                 </span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-paper">
                 <div
                   className="h-full rounded-full bg-brand transition-all"
                   style={{
-                    width: `${Math.min(summary.monthlyGoal.achievementRate ?? 0, 100)}%`
+                    width: `${Math.min(summary.annualGoal.achievementRate ?? 0, 100)}%`
                   }}
                 />
               </div>
               <div className="flex justify-between text-sm text-muted">
                 <span>
-                  今月{" "}
-                  {formatCurrencyJpy(summary.monthlyGoal.currentAmount)}
+                  今年{" "}
+                  {formatCurrencyJpy(summary.annualGoal.currentAmount)}
                 </span>
                 <span>
                   目標{" "}
-                  {formatCurrencyJpy(summary.monthlyGoal.targetAmount)}
+                  {formatCurrencyJpy(summary.annualGoal.targetAmount)}
                 </span>
               </div>
             </Card>
+          ) : (
+            <EmptyState
+              title="年間税引後配当目標が未設定です"
+              description="設定から年間の税引後配当目標を登録すると、今年の進捗を確認できます。"
+              actionHref="/app/settings"
+              actionLabel="目標を設定"
+            />
           )}
 
           {/* Recent dividend change */}

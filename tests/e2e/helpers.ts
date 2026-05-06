@@ -91,6 +91,7 @@ export async function createApprovedDividendEvent(stockId: string): Promise<stri
     .insert({
       stock_id: stockId,
       fiscal_year: new Date().getFullYear(),
+      payment_year: new Date().getFullYear(),
       event_type: "year_end",
       dividend_per_share: 150,
       expected_payment_month: new Date().getMonth() + 1,

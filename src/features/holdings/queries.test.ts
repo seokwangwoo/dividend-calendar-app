@@ -46,7 +46,9 @@ describe("getHoldings", () => {
     nextResult = { data: null, error: { message: "Query failed" } };
     await expect(getHoldings()).rejects.toThrow("Query failed");
     expect(mockSupabase.from).toHaveBeenCalledWith("holdings");
-    expect(queryBuilder.select).toHaveBeenCalledWith("*, stock:stocks(*)");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "*, stock:stocks(*, dividend_events(payment_year, dividend_per_share, review_status))"
+    );
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
     expect(queryBuilder.order).toHaveBeenCalledWith("created_at", {
       ascending: false
@@ -89,7 +91,9 @@ describe("getHoldingById", () => {
     const result = await getHoldingById("h1");
     expect(result).toBeNull();
     expect(mockSupabase.from).toHaveBeenCalledWith("holdings");
-    expect(queryBuilder.select).toHaveBeenCalledWith("*, stock:stocks(*)");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "*, stock:stocks(*, dividend_events(payment_year, dividend_per_share, review_status))"
+    );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "h1");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
   });
@@ -120,7 +124,8 @@ describe("getPortfolioSummary", () => {
     nextResult = { data: null, error: { message: "RPC failed" } };
     await expect(getPortfolioSummary()).rejects.toThrow("RPC failed");
     expect(mockSupabase.rpc).toHaveBeenCalledWith("get_portfolio_summary", {
-      p_account_type: null
+      p_account_type: null,
+      p_year: expect.any(Number)
     });
   });
 
@@ -141,7 +146,8 @@ describe("getPortfolioSummary", () => {
     nextResult = { data: [rpcRow], error: null };
     await getPortfolioSummary("nisa");
     expect(mockSupabase.rpc).toHaveBeenCalledWith("get_portfolio_summary", {
-      p_account_type: "nisa"
+      p_account_type: "nisa",
+      p_year: expect.any(Number)
     });
   });
 
@@ -149,8 +155,60 @@ describe("getPortfolioSummary", () => {
     nextResult = { data: [rpcRow], error: null };
     await getPortfolioSummary("all");
     expect(mockSupabase.rpc).toHaveBeenCalledWith("get_portfolio_summary", {
-      p_account_type: null
+      p_account_type: null,
+      p_year: expect.any(Number)
     });
+  });
+
+  it("passes selected payment year to rpc", async () => {
+    nextResult = { data: [rpcRow], error: null };
+    await getPortfolioSummary(undefined, 2026);
+    expect(mockSupabase.rpc).toHaveBeenCalledWith("get_portfolio_summary", {
+      p_account_type: null,
+      p_year: 2026
+    });
+  });
+
+  it("maps payment_year-keyed totals from RPC without using stock estimates", async () => {
+    nextResult = {
+      data: [
+        {
+          ...rpcRow,
+          annual_after_tax_amount: 12345,
+          average_after_tax_yield: 4.56
+        }
+      ],
+      error: null
+    };
+
+    const result = await getPortfolioSummary(undefined, 2026);
+
+    expect(mockSupabase.rpc).toHaveBeenCalledWith("get_portfolio_summary", {
+      p_account_type: null,
+      p_year: 2026
+    });
+    expect(result.annualAfterTaxAmount).toBe(12345);
+    expect(result.averageAfterTaxYield).toBe(4.56);
+  });
+
+  it("keeps selected year isolated so events in N±1 are excluded by RPC", async () => {
+    nextResult = {
+      data: [
+        {
+          ...rpcRow,
+          annual_after_tax_amount: 202600
+        }
+      ],
+      error: null
+    };
+
+    const result = await getPortfolioSummary("all", 2026);
+
+    expect(mockSupabase.rpc).toHaveBeenCalledWith("get_portfolio_summary", {
+      p_account_type: null,
+      p_year: 2026
+    });
+    expect(result.annualAfterTaxAmount).toBe(202600);
   });
 
   it("returns mapped summary from rpc row", async () => {

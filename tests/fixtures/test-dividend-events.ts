@@ -3,6 +3,7 @@ import { createAdminClient } from "../helpers/supabase";
 export interface CreateDividendEventParams {
   stockId: string;
   fiscalYear: number;
+  paymentYear?: number;
   eventType?: string;
   dividendPerShare?: number | null;
   expectedPaymentMonth?: number | null;
@@ -24,6 +25,7 @@ export async function createTestDividendEvent(
     .insert({
       stock_id: params.stockId,
       fiscal_year: params.fiscalYear,
+      payment_year: params.paymentYear ?? params.fiscalYear,
       event_type: params.eventType ?? "year_end",
       dividend_per_share: params.dividendPerShare ?? 100,
       expected_payment_month: params.expectedPaymentMonth ?? null,

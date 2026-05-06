@@ -139,6 +139,92 @@ export type Database = {
           deleted_at?: string | null;
         };
       };
+      dividend_events: {
+        Row: {
+          id: string;
+          stock_id: string;
+          fiscal_year: number;
+          payment_year: number | null;
+          event_type: "interim" | "year_end" | "special" | "commemorative" | "other";
+          dividend_per_share: number | null;
+          previous_dividend_per_share: number | null;
+          expected_payment_date: string | null;
+          expected_payment_month: number | null;
+          record_date: string | null;
+          ex_dividend_date: string | null;
+          status: "estimated" | "confirmed" | "paid" | "undecided";
+          change_type:
+            | "increase"
+            | "decrease"
+            | "no_dividend"
+            | "resumed"
+            | "special"
+            | "commemorative"
+            | "unchanged"
+            | null;
+          source_type: string | null;
+          source_url: string | null;
+          source_published_at: string | null;
+          review_status: "pending" | "approved" | "rejected";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          stock_id: string;
+          fiscal_year: number;
+          payment_year?: number | null;
+          event_type: "interim" | "year_end" | "special" | "commemorative" | "other";
+          dividend_per_share?: number | null;
+          previous_dividend_per_share?: number | null;
+          expected_payment_date?: string | null;
+          expected_payment_month?: number | null;
+          record_date?: string | null;
+          ex_dividend_date?: string | null;
+          status?: "estimated" | "confirmed" | "paid" | "undecided";
+          change_type?:
+            | "increase"
+            | "decrease"
+            | "no_dividend"
+            | "resumed"
+            | "special"
+            | "commemorative"
+            | "unchanged"
+            | null;
+          source_type?: string | null;
+          source_url?: string | null;
+          source_published_at?: string | null;
+          review_status?: "pending" | "approved" | "rejected";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          fiscal_year?: number;
+          payment_year?: number | null;
+          event_type?: "interim" | "year_end" | "special" | "commemorative" | "other";
+          dividend_per_share?: number | null;
+          previous_dividend_per_share?: number | null;
+          expected_payment_date?: string | null;
+          expected_payment_month?: number | null;
+          record_date?: string | null;
+          ex_dividend_date?: string | null;
+          status?: "estimated" | "confirmed" | "paid" | "undecided";
+          change_type?:
+            | "increase"
+            | "decrease"
+            | "no_dividend"
+            | "resumed"
+            | "special"
+            | "commemorative"
+            | "unchanged"
+            | null;
+          source_type?: string | null;
+          source_url?: string | null;
+          source_published_at?: string | null;
+          review_status?: "pending" | "approved" | "rejected";
+          updated_at?: string;
+        };
+      };
       notification_rules: {
         Row: {
           id: string;
@@ -293,6 +379,7 @@ export type Database = {
           default_amount_basis: "before_tax" | "after_tax";
           currency: string;
           monthly_dividend_goal_amount: number | null;
+          annual_dividend_goal_amount: number | null;
           created_at: string;
           updated_at: string;
         };
@@ -304,6 +391,7 @@ export type Database = {
           default_amount_basis?: "before_tax" | "after_tax";
           currency?: string;
           monthly_dividend_goal_amount?: number | null;
+          annual_dividend_goal_amount?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -313,6 +401,7 @@ export type Database = {
           default_amount_basis?: "before_tax" | "after_tax";
           currency?: string;
           monthly_dividend_goal_amount?: number | null;
+          annual_dividend_goal_amount?: number | null;
           updated_at?: string;
         };
       };
@@ -357,6 +446,7 @@ export type Database = {
       get_portfolio_summary: {
         Args: {
           p_account_type?: string | null;
+          p_year?: number;
         };
         Returns: {
           holding_count: number;
@@ -397,6 +487,7 @@ export type Database = {
       get_stock_detail: {
         Args: {
           p_stock_id: string;
+          p_year?: number;
         };
         Returns: Json;
       };

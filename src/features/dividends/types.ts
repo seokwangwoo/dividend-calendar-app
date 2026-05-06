@@ -19,7 +19,7 @@ export interface NextDividend {
   status: string;
 }
 
-export interface MonthlyGoal {
+export interface AnnualGoal {
   targetAmount: number;
   currentAmount: number;
   achievementRate: number | null;
@@ -35,10 +35,11 @@ export interface RecentDividendChange {
 
 export interface HomeSummary {
   year: number;
+  holdingCount: number;
   annualDividend: AnnualDividend;
   currentMonthDividend: CurrentMonthDividend;
   nextDividend: NextDividend | null;
-  monthlyGoal: MonthlyGoal | null;
+  annualGoal: AnnualGoal | null;
   recentDividendChange: RecentDividendChange | null;
 }
 
@@ -61,7 +62,6 @@ export interface MonthDetailEvent {
   estimatedTaxAmount: number | null;
   afterTaxAmount: number | null;
   status: string;
-  reviewStatus: string;
   sourceType: string | null;
   sourceUrl: string | null;
 }

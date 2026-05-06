@@ -5,7 +5,13 @@ import type { StockRow } from "@/features/stocks/queries";
 export type HoldingRow = Database["public"]["Tables"]["holdings"]["Row"];
 
 export interface HoldingWithStock extends HoldingRow {
-  stock: StockRow;
+  stock: StockRow & {
+    dividend_events?: Array<{
+      payment_year: number | null;
+      dividend_per_share: number | null;
+      review_status: "pending" | "approved" | "rejected";
+    }>;
+  };
 }
 
 export interface PortfolioSummary {
@@ -24,7 +30,9 @@ export async function getHoldings(
 
   let query = supabase
     .from("holdings")
-    .select("*, stock:stocks(*)")
+    .select(
+      "*, stock:stocks(*, dividend_events(payment_year, dividend_per_share, review_status))"
+    )
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
@@ -48,7 +56,9 @@ export async function getHoldingById(
 
   const { data, error } = await supabase
     .from("holdings")
-    .select("*, stock:stocks(*)")
+    .select(
+      "*, stock:stocks(*, dividend_events(payment_year, dividend_per_share, review_status))"
+    )
     .eq("id", holdingId)
     .is("deleted_at", null)
     .single();
@@ -64,13 +74,15 @@ export async function getHoldingById(
 }
 
 export async function getPortfolioSummary(
-  accountType?: string
+  accountType?: string,
+  year = new Date().getFullYear()
 ): Promise<PortfolioSummary> {
   const supabase = await createClient();
 
   const { data, error } = await supabase.rpc("get_portfolio_summary", {
     p_account_type:
-      accountType && accountType !== "all" ? accountType : null
+      accountType && accountType !== "all" ? accountType : null,
+    p_year: year
   });
 
   if (error) {

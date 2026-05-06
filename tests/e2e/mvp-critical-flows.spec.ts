@@ -98,11 +98,11 @@ test("normal user can complete core portfolio, calendar, notification, and setti
   await expect(page.getByText("有効")).toBeVisible();
 
   await page.goto("/app/settings");
-  await page.getByLabel("月間配当目標額").fill("50000");
+  await page.getByLabel("年間税引後配当目標額").fill("50000");
   await page.getByLabel("金額表示").selectOption("before_tax");
   await expect(page.getByText("税額および税引後配当額は概算です。")).toBeVisible();
   await page.getByRole("button", { name: "保存" }).click();
-  await expect(page.locator('input[name="monthlyDividendGoalAmount"]')).toHaveValue("50000");
+  await expect(page.locator('input[name="annualDividendGoalAmount"]')).toHaveValue("50000");
 
   await page.getByRole("button", { name: "ログアウト" }).click();
   await expect(page).toHaveURL(/\/auth\/login/);

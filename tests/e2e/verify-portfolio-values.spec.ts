@@ -1,14 +1,19 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
+  createAdminClient,
   cleanupUser,
   createConfirmedUser,
   createHolding,
+  deleteDividendEvents,
   getStockByTicker
 } from "./helpers";
 
 let user: Awaited<ReturnType<typeof createConfirmedUser>>;
 let kddi: Awaited<ReturnType<typeof getStockByTicker>>;
 let jt: Awaited<ReturnType<typeof getStockByTicker>>;
+const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_MONTH = new Date().getMonth() + 1;
+const createdEventIds: string[] = [];
 
 async function login(page: Page, email: string, password: string) {
   await page.goto("/auth/login");
@@ -41,9 +46,49 @@ test.beforeAll(async () => {
   // User A holdings per phase plan
   await createHolding(user.id, kddi.id, 100, 4300, "nisa");
   await createHolding(user.id, jt.id, 100, 3800, "tokutei");
+
+  const admin = createAdminClient();
+  const { data: kddiEventData } = await admin
+    .from("dividend_events")
+    .insert({
+      stock_id: kddi.id,
+      fiscal_year: CURRENT_YEAR,
+      payment_year: CURRENT_YEAR,
+      event_type: "year_end",
+      dividend_per_share: 150,
+      expected_payment_month: CURRENT_MONTH,
+      expected_payment_date: `${CURRENT_YEAR}-${String(CURRENT_MONTH).padStart(2, "0")}-15`,
+      status: "confirmed",
+      review_status: "approved",
+      source_type: "e2e",
+      source_url: "https://example.com/e2e-kddi"
+    })
+    .select("id")
+    .single();
+  if (kddiEventData) createdEventIds.push(kddiEventData.id as string);
+
+  const { data: jtEventData } = await admin
+    .from("dividend_events")
+    .insert({
+      stock_id: jt.id,
+      fiscal_year: CURRENT_YEAR,
+      payment_year: CURRENT_YEAR,
+      event_type: "year_end",
+      dividend_per_share: 194,
+      expected_payment_month: CURRENT_MONTH,
+      expected_payment_date: `${CURRENT_YEAR}-${String(CURRENT_MONTH).padStart(2, "0")}-15`,
+      status: "confirmed",
+      review_status: "approved",
+      source_type: "e2e",
+      source_url: "https://example.com/e2e-jt"
+    })
+    .select("id")
+    .single();
+  if (jtEventData) createdEventIds.push(jtEventData.id as string);
 });
 
 test.afterAll(async () => {
+  await deleteDividendEvents(createdEventIds);
   await cleanupUser(user.id);
 });
 
@@ -51,19 +96,16 @@ test("portfolio summary card shows exact values", async ({ page }) => {
   await login(page, user.email, user.password);
   await page.goto("/app/portfolio");
 
-  // KDDI NISA: after_tax = 150 * 100 = 15,000
-  // JT tokutei: after_tax = 194 * 100 * (1 - 0.20315) = 15,458.89
-  // Total after_tax = 30,458.89 -> ¥30,459
+  // KDDI NISA: (seed 140 + e2e 150) * 100 = 29,000
+  // JT tokutei: (seed 38 + e2e 194) * 100 * (1 - 0.20315) = 18,486.92
+  // Total after_tax = 47,486.92 -> ¥47,487
   // Holding count = 2
   const summaryCard = page.locator("div").filter({ hasText: "ポートフォリオ概要" }).first();
   await expect(summaryCard.getByText("2", { exact: true }).first()).toBeVisible();
-  await expect(summaryCard.getByText(formatJpy(30458.89)).first()).toBeVisible();
+  await expect(summaryCard.getByText(formatJpy(47486.92)).first()).toBeVisible();
 
-  // Average yield:
-  // KDDI yield: (150 / 4300) * 100 = 3.4884%
-  // JT yield: (194 * 0.79685 / 3800) * 100 = 4.0670%
-  // Average = (3.4884 + 4.0670) / 2 = 3.7777% -> 3.78%
-  await expect(summaryCard.getByText(formatPercent(3.7777)).first()).toBeVisible();
+  // Portfolio after-tax yield: annual after-tax dividend / total acquisition cost.
+  await expect(summaryCard.getByText(formatPercent(5.8626)).first()).toBeVisible();
 });
 
 test("portfolio account filter updates summary and holding cards", async ({ page }) => {
@@ -78,7 +120,7 @@ test("portfolio account filter updates summary and holding cards", async ({ page
   // Summary should update to 1 holding
   const summaryCard = page.locator("div").filter({ hasText: "ポートフォリオ概要" }).first();
   await expect(summaryCard.getByText("1", { exact: true }).first()).toBeVisible();
-  await expect(summaryCard.getByText(formatJpy(15000)).first()).toBeVisible();
+  await expect(summaryCard.getByText(formatJpy(29000)).first()).toBeVisible();
 
   // 特定口座 filter: only JT
   await page.getByRole("button", { name: "特定口座" }).click();
@@ -101,7 +143,7 @@ test("portfolio holding card shows exact values", async ({ page }) => {
   await expect(kddiCard.getByText("NISA").first()).toBeVisible();
   await expect(kddiCard.getByText(/100株/).first()).toBeVisible();
   await expect(kddiCard.getByText(formatJpy(4300)).first()).toBeVisible();
-  await expect(kddiCard.getByText(formatJpy(15000)).first()).toBeVisible();
+  await expect(kddiCard.getByText(formatJpy(29000)).first()).toBeVisible();
 
   // JT card
   const jtCard = page.getByRole("link", { name: new RegExp(jt.name) });
@@ -109,7 +151,7 @@ test("portfolio holding card shows exact values", async ({ page }) => {
   await expect(jtCard.getByText("特定口座").first()).toBeVisible();
   await expect(jtCard.getByText(/100株/).first()).toBeVisible();
   await expect(jtCard.getByText(formatJpy(3800)).first()).toBeVisible();
-  await expect(jtCard.getByText(formatJpy(15458.89)).first()).toBeVisible();
+  await expect(jtCard.getByText(formatJpy(18486.92)).first()).toBeVisible();
 });
 
 test("portfolio empty state when no holdings exist", async ({ page }) => {

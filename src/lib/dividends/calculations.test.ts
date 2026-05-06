@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { calculateHoldingDividend, TAX_RATES } from "./calculations";
+import {
+  calculateHoldingDividend,
+  calculatePortfolioAfterTaxYield,
+  TAX_RATES
+} from "./calculations";
 
 const DPS = 100;
 const QTY = 100;
@@ -9,6 +13,39 @@ describe("TAX_RATES", () => {
   it("nisa is 0", () => expect(TAX_RATES.nisa).toBe(0));
   it("tokutei is 20.315%", () => expect(TAX_RATES.tokutei).toBeCloseTo(0.20315));
   it("general is 20.315%", () => expect(TAX_RATES.general).toBeCloseTo(0.20315));
+});
+
+describe("calculatePortfolioAfterTaxYield", () => {
+  it("uses annual after-tax dividend divided by total acquisition cost", () => {
+    expect(
+      calculatePortfolioAfterTaxYield({
+        annualAfterTaxDividend: 10000,
+        totalAcquisitionCost: 400000
+      })
+    ).toBeCloseTo(2.5);
+  });
+
+  it("supports NISA and tokutei holding mixes after tax has been applied", () => {
+    const nisaAfterTax = 100 * 100;
+    const tokuteiAfterTax = 100 * 100 * (1 - TAX_RATES.tokutei);
+    const totalAcquisitionCost = 100 * 4000 + 100 * 4000;
+
+    expect(
+      calculatePortfolioAfterTaxYield({
+        annualAfterTaxDividend: nisaAfterTax + tokuteiAfterTax,
+        totalAcquisitionCost
+      })
+    ).toBeCloseTo(((nisaAfterTax + tokuteiAfterTax) / totalAcquisitionCost) * 100);
+  });
+
+  it("is null when approved annual dividend total is null", () => {
+    expect(
+      calculatePortfolioAfterTaxYield({
+        annualAfterTaxDividend: null,
+        totalAcquisitionCost: 400000
+      })
+    ).toBeNull();
+  });
 });
 
 describe("calculateHoldingDividend", () => {

@@ -42,8 +42,8 @@ describe("updateSettings", () => {
       formData.append("inAppNotificationEnabled", overrides.inAppNotificationEnabled ?? "on");
     }
     formData.append("defaultAmountBasis", overrides.defaultAmountBasis ?? "before_tax");
-    if (overrides.monthlyDividendGoalAmount !== undefined && overrides.monthlyDividendGoalAmount !== null) {
-      formData.append("monthlyDividendGoalAmount", overrides.monthlyDividendGoalAmount);
+    if (overrides.annualDividendGoalAmount !== undefined && overrides.annualDividendGoalAmount !== null) {
+      formData.append("annualDividendGoalAmount", overrides.annualDividendGoalAmount);
     }
     return formData;
   }
@@ -73,30 +73,30 @@ describe("updateSettings", () => {
     await expect(updateSettings(formData)).rejects.toThrow();
   });
 
-  it("throws validation error for negative monthlyDividendGoalAmount", async () => {
+  it("throws validation error for negative annualDividendGoalAmount", async () => {
     mockSupabase.auth.getUser.mockResolvedValueOnce({ data: { user: mockUser }, error: null });
 
-    const formData = createFormData({ monthlyDividendGoalAmount: "-100" });
+    const formData = createFormData({ annualDividendGoalAmount: "-100" });
 
     await expect(updateSettings(formData)).rejects.toThrow("Number must be greater than or equal to 0");
   });
 
-  it("converts empty string monthlyDividendGoalAmount to null", async () => {
+  it("converts empty string annualDividendGoalAmount to null", async () => {
     mockSupabase.auth.getUser.mockResolvedValueOnce({ data: { user: mockUser }, error: null });
     mockSupabase.eq.mockResolvedValueOnce({ error: null });
 
-    const formData = createFormData({ monthlyDividendGoalAmount: "" });
+    const formData = createFormData({ annualDividendGoalAmount: "" });
 
     await updateSettings(formData);
 
     expect(mockSupabase.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        monthly_dividend_goal_amount: null
+        annual_dividend_goal_amount: null
       })
     );
   });
 
-  it("converts null monthlyDividendGoalAmount to null", async () => {
+  it("converts null annualDividendGoalAmount to null", async () => {
     mockSupabase.auth.getUser.mockResolvedValueOnce({ data: { user: mockUser }, error: null });
     mockSupabase.eq.mockResolvedValueOnce({ error: null });
 
@@ -104,43 +104,43 @@ describe("updateSettings", () => {
     formData.append("emailNotificationEnabled", "on");
     formData.append("inAppNotificationEnabled", "on");
     formData.append("defaultAmountBasis", "before_tax");
-    // monthlyDividendGoalAmount not appended -> get returns null
+    // annualDividendGoalAmount not appended -> get returns null
 
     await updateSettings(formData);
 
     expect(mockSupabase.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        monthly_dividend_goal_amount: null
+        annual_dividend_goal_amount: null
       })
     );
   });
 
-  it("parses numeric monthlyDividendGoalAmount correctly", async () => {
+  it("parses numeric annualDividendGoalAmount correctly", async () => {
     mockSupabase.auth.getUser.mockResolvedValueOnce({ data: { user: mockUser }, error: null });
     mockSupabase.eq.mockResolvedValueOnce({ error: null });
 
-    const formData = createFormData({ monthlyDividendGoalAmount: "50000" });
+    const formData = createFormData({ annualDividendGoalAmount: "50000" });
 
     await updateSettings(formData);
 
     expect(mockSupabase.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        monthly_dividend_goal_amount: 50000
+        annual_dividend_goal_amount: 50000
       })
     );
   });
 
-  it("parses decimal monthlyDividendGoalAmount correctly", async () => {
+  it("parses decimal annualDividendGoalAmount correctly", async () => {
     mockSupabase.auth.getUser.mockResolvedValueOnce({ data: { user: mockUser }, error: null });
     mockSupabase.eq.mockResolvedValueOnce({ error: null });
 
-    const formData = createFormData({ monthlyDividendGoalAmount: "1234.56" });
+    const formData = createFormData({ annualDividendGoalAmount: "1234.56" });
 
     await updateSettings(formData);
 
     expect(mockSupabase.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        monthly_dividend_goal_amount: 1234.56
+        annual_dividend_goal_amount: 1234.56
       })
     );
   });
@@ -153,7 +153,7 @@ describe("updateSettings", () => {
       emailNotificationEnabled: null,
       inAppNotificationEnabled: "on",
       defaultAmountBasis: "after_tax",
-      monthlyDividendGoalAmount: "100000"
+      annualDividendGoalAmount: "100000"
     });
 
     await updateSettings(formData);
@@ -163,11 +163,30 @@ describe("updateSettings", () => {
       email_notification_enabled: false,
       in_app_notification_enabled: true,
       default_amount_basis: "after_tax",
-      monthly_dividend_goal_amount: 100000,
+      annual_dividend_goal_amount: 100000,
       currency: "JPY"
     });
     expect(mockSupabase.eq).toHaveBeenCalledWith("user_id", "user-123");
     expect(revalidatePath).toHaveBeenCalledWith("/app/settings");
+  });
+
+  it("persists annual dividend goal without overwriting default_amount_basis", async () => {
+    mockSupabase.auth.getUser.mockResolvedValueOnce({ data: { user: mockUser }, error: null });
+    mockSupabase.eq.mockResolvedValueOnce({ error: null });
+
+    const formData = createFormData({
+      defaultAmountBasis: "before_tax",
+      annualDividendGoalAmount: "600000"
+    });
+
+    await updateSettings(formData);
+
+    expect(mockSupabase.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        annual_dividend_goal_amount: 600000,
+        default_amount_basis: "before_tax"
+      })
+    );
   });
 
   it("throws error when supabase update fails", async () => {
@@ -198,10 +217,10 @@ describe("updateSettings", () => {
     );
   });
 
-  it("throws validation error when monthlyDividendGoalAmount is not a number", async () => {
+  it("throws validation error when annualDividendGoalAmount is not a number", async () => {
     mockSupabase.auth.getUser.mockResolvedValueOnce({ data: { user: mockUser }, error: null });
 
-    const formData = createFormData({ monthlyDividendGoalAmount: "abc" });
+    const formData = createFormData({ annualDividendGoalAmount: "abc" });
 
     await expect(updateSettings(formData)).rejects.toThrow();
   });

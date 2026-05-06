@@ -49,6 +49,71 @@ describe("getHomeSummary", () => {
 
     await expect(getHomeSummary(2024)).rejects.toThrow("RPC failed");
   });
+
+  it("returns nextDividend already sorted by payment date, estimated month, and after-tax amount", async () => {
+    const mockData = {
+      year: 2026,
+      holdingCount: 1,
+      nextDividend: {
+        ticker: "9433",
+        stockName: "KDDI",
+        displayDateText: "2026年06月15日",
+        beforeTaxAmount: 29000,
+        afterTaxAmount: 29000,
+        status: "confirmed"
+      }
+    };
+    mockSupabase.rpc.mockResolvedValueOnce({ data: mockData, error: null });
+
+    const result = await getHomeSummary(2026);
+
+    expect(result?.nextDividend).toEqual(mockData.nextDividend);
+  });
+
+  it("returns nextDividend with same-stock multi-account after-tax sum", async () => {
+    const mockData = {
+      year: 2026,
+      holdingCount: 2,
+      nextDividend: {
+        ticker: "9433",
+        stockName: "KDDI",
+        displayDateText: "6月予定",
+        beforeTaxAmount: 30000,
+        afterTaxAmount: 26952.75,
+        status: "estimated"
+      }
+    };
+    mockSupabase.rpc.mockResolvedValueOnce({ data: mockData, error: null });
+
+    const result = await getHomeSummary(2026);
+
+    expect(result?.nextDividend?.beforeTaxAmount).toBe(30000);
+    expect(result?.nextDividend?.afterTaxAmount).toBe(26952.75);
+  });
+
+  it("returns only approved-event user-facing results from the RPC response", async () => {
+    const mockData = {
+      year: 2026,
+      holdingCount: 1,
+      annualDividend: {
+        beforeTaxAmount: null,
+        estimatedTaxAmount: null,
+        afterTaxAmount: null,
+        currency: "JPY"
+      },
+      currentMonthDividend: { month: 5, afterTaxAmount: null },
+      nextDividend: null,
+      annualGoal: null,
+      recentDividendChange: null
+    };
+    mockSupabase.rpc.mockResolvedValueOnce({ data: mockData, error: null });
+
+    const result = await getHomeSummary(2026);
+
+    expect(result).toEqual(mockData);
+    expect(result?.nextDividend).toBeNull();
+    expect(result?.annualDividend.afterTaxAmount).toBeNull();
+  });
 });
 
 describe("getDividendCalendar", () => {
@@ -175,8 +240,22 @@ describe("getStockDetail", () => {
     const result = await getStockDetail("stock-1");
 
     expect(createClient).toHaveBeenCalled();
-    expect(mockSupabase.rpc).toHaveBeenCalledWith("get_stock_detail", { p_stock_id: "stock-1" });
+    expect(mockSupabase.rpc).toHaveBeenCalledWith("get_stock_detail", {
+      p_stock_id: "stock-1",
+      p_year: expect.any(Number)
+    });
     expect(result).toEqual(mockData);
+  });
+
+  it("passes selected payment year to stock detail rpc", async () => {
+    mockSupabase.rpc.mockResolvedValueOnce({ data: { stock: { id: "stock-1" } }, error: null });
+
+    await getStockDetail("stock-1", 2026);
+
+    expect(mockSupabase.rpc).toHaveBeenCalledWith("get_stock_detail", {
+      p_stock_id: "stock-1",
+      p_year: 2026
+    });
   });
 
   it("returns null when data is null", async () => {

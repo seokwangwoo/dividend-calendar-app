@@ -26,7 +26,7 @@ test.beforeAll(async () => {
       email_notification_enabled: true,
       in_app_notification_enabled: false,
       default_amount_basis: "before_tax",
-      monthly_dividend_goal_amount: 75000
+      annual_dividend_goal_amount: 75000
     })
     .eq("user_id", user.id);
 });
@@ -64,7 +64,7 @@ test("settings screen shows default amount basis selector", async ({ page }) => 
   await expect(basisSelect).toHaveValue("before_tax");
 });
 
-test("settings screen shows currency and monthly goal", async ({ page }) => {
+test("settings screen shows currency and annual goal", async ({ page }) => {
   await login(page, user.email, user.password);
   await page.goto("/app/settings");
 
@@ -72,9 +72,9 @@ test("settings screen shows currency and monthly goal", async ({ page }) => {
   await expect(page.getByText("通貨", { exact: true })).toBeVisible();
   await expect(page.locator("input#currency")).toHaveValue("JPY");
 
-  // Monthly goal
-  await expect(page.getByText("月間配当目標額", { exact: true })).toBeVisible();
-  await expect(page.locator('input[name="monthlyDividendGoalAmount"]')).toHaveValue("75000");
+  // Annual goal
+  await expect(page.getByText("年間税引後配当目標額", { exact: true })).toBeVisible();
+  await expect(page.locator('input[name="annualDividendGoalAmount"]')).toHaveValue("75000");
 });
 
 test("settings screen shows tax calculation notice", async ({ page }) => {

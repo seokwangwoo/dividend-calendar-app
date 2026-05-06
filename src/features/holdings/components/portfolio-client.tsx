@@ -7,7 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrencyJpy, formatPercent } from "@/lib/formatting/number";
 import { formatAccountType } from "@/lib/formatting/dividends";
-import { calculateHoldingDividend } from "@/lib/dividends/calculations";
+import {
+  TAX_RATES,
+  calculatePortfolioAfterTaxYield
+} from "@/lib/dividends/calculations";
 import type { HoldingWithStock } from "@/features/holdings/queries";
 import type { PortfolioSummary } from "@/features/holdings/queries";
 import type { AccountType } from "@/lib/constants/dividends";
@@ -37,7 +40,7 @@ function SummaryCard({ summary }: { summary: PortfolioSummary }) {
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted">平均税引後利回り</p>
+          <p className="text-xs text-muted">ポートフォリオ税引後利回り</p>
           <p className="mt-1 text-2xl font-bold">
             {formatPercent(summary.averageAfterTaxYield)}
           </p>
@@ -47,14 +50,58 @@ function SummaryCard({ summary }: { summary: PortfolioSummary }) {
   );
 }
 
-function HoldingCard({ holding }: { holding: HoldingWithStock }) {
+function getApprovedAnnualDividendPerShare(
+  holding: HoldingWithStock,
+  year: number
+): number | null {
+  const total =
+    holding.stock.dividend_events
+      ?.filter(
+        (event) =>
+          event.review_status === "approved" &&
+          event.payment_year === year &&
+          event.dividend_per_share != null
+      )
+      .reduce((sum, event) => sum + Number(event.dividend_per_share), 0) ?? 0;
+
+  return total > 0 ? total : null;
+}
+
+function calculateHoldingAnnualAmounts(holding: HoldingWithStock, year: number) {
+  const annualDividendPerShare = getApprovedAnnualDividendPerShare(holding, year);
+  const taxRate = TAX_RATES[holding.account_type as AccountType];
+
+  if (annualDividendPerShare == null) {
+    return {
+      beforeTaxAmount: null,
+      estimatedTaxAmount: null,
+      afterTaxAmount: null
+    };
+  }
+
+  const beforeTaxAmount = annualDividendPerShare * holding.quantity;
+  const estimatedTaxAmount = beforeTaxAmount * taxRate;
+
+  return {
+    beforeTaxAmount,
+    estimatedTaxAmount,
+    afterTaxAmount: beforeTaxAmount - estimatedTaxAmount
+  };
+}
+
+function HoldingCard({
+  holding,
+  year
+}: {
+  holding: HoldingWithStock;
+  year: number;
+}) {
   const { stock } = holding;
-  const calc = calculateHoldingDividend({
-    expectedAnnualDividendPerShare: stock.expected_annual_dividend_per_share,
-    currentPrice: stock.current_price,
-    quantity: holding.quantity,
-    accountType: holding.account_type as AccountType,
-    currency: stock.currency
+  const calc = calculateHoldingAnnualAmounts(holding, year);
+  const acquisitionCost = holding.quantity * holding.average_purchase_price;
+  const afterTaxYield = calculatePortfolioAfterTaxYield({
+    annualAfterTaxDividend: calc.afterTaxAmount,
+    totalAcquisitionCost: acquisitionCost
   });
 
   return (
@@ -83,7 +130,7 @@ function HoldingCard({ holding }: { holding: HoldingWithStock }) {
               {formatCurrencyJpy(calc.afterTaxAmount)}
             </p>
             <p className="text-xs text-muted">
-              {formatPercent(calc.afterTaxYield)}
+              {formatPercent(afterTaxYield)}
             </p>
           </div>
         </div>
@@ -94,10 +141,12 @@ function HoldingCard({ holding }: { holding: HoldingWithStock }) {
 
 export function PortfolioClient({
   initialHoldings,
-  initialSummary
+  initialSummary,
+  year
 }: {
   initialHoldings: HoldingWithStock[];
   initialSummary: PortfolioSummary;
+  year: number;
 }) {
   const [activeFilter, setActiveFilter] = useState<FilterValue>("all");
 
@@ -114,25 +163,14 @@ export function PortfolioClient({
           let totalBefore = 0;
           let totalTax = 0;
           let totalAfter = 0;
-          let yieldSum = 0;
-          let yieldCount = 0;
+          let totalAcquisitionCost = 0;
 
           for (const h of filteredHoldings) {
-            const calc = calculateHoldingDividend({
-              expectedAnnualDividendPerShare:
-                h.stock.expected_annual_dividend_per_share,
-              currentPrice: h.stock.current_price,
-              quantity: h.quantity,
-              accountType: h.account_type as AccountType,
-              currency: h.stock.currency
-            });
+            const calc = calculateHoldingAnnualAmounts(h, year);
+            totalAcquisitionCost += h.quantity * h.average_purchase_price;
             if (calc.beforeTaxAmount != null) totalBefore += calc.beforeTaxAmount;
             if (calc.estimatedTaxAmount != null) totalTax += calc.estimatedTaxAmount;
             if (calc.afterTaxAmount != null) totalAfter += calc.afterTaxAmount;
-            if (calc.afterTaxYield != null) {
-              yieldSum += calc.afterTaxYield;
-              yieldCount++;
-            }
           }
 
           return {
@@ -140,7 +178,10 @@ export function PortfolioClient({
             annualBeforeTaxAmount: totalBefore || null,
             annualEstimatedTaxAmount: totalTax || null,
             annualAfterTaxAmount: totalAfter || null,
-            averageAfterTaxYield: yieldCount > 0 ? yieldSum / yieldCount : null,
+            averageAfterTaxYield: calculatePortfolioAfterTaxYield({
+              annualAfterTaxDividend: totalAfter || null,
+              totalAcquisitionCost
+            }),
             currency: initialSummary.currency
           };
         })();
@@ -179,7 +220,7 @@ export function PortfolioClient({
       ) : (
         <div className="space-y-3">
           {filteredHoldings.map((holding) => (
-            <HoldingCard key={holding.id} holding={holding} />
+            <HoldingCard key={holding.id} holding={holding} year={year} />
           ))}
         </div>
       )}

@@ -51,6 +51,7 @@ test.beforeAll(async () => {
     .insert({
       stock_id: kddi.id,
       fiscal_year: CURRENT_YEAR,
+      payment_year: CURRENT_YEAR,
       event_type: "year_end",
       dividend_per_share: 150,
       expected_payment_month: 6,
@@ -94,12 +95,12 @@ test("stock detail shows user holdings with exact values", async ({ page }) => {
   await expect(holdingsSection).toBeVisible();
 
   // NISA holding: quantity 100
-  // annual before_tax = 150 * 100 = 15,000
-  // annual after_tax = 15,000 (NISA)
+  // annual before_tax = (seed 140 + e2e 150) * 100 = 29,000
+  // annual after_tax = 29,000 (NISA)
   await expect(holdingsSection.getByText("NISA").first()).toBeVisible();
   await expect(holdingsSection.getByText("100株").first()).toBeVisible();
-  await expect(holdingsSection.getByText(`税引後年間 ${formatJpy(15000)}`).first()).toBeVisible();
-  await expect(holdingsSection.getByText(`税引前 ${formatJpy(15000)}`).first()).toBeVisible();
+  await expect(holdingsSection.getByText(`税引後年間 ${formatJpy(29000)}`).first()).toBeVisible();
+  await expect(holdingsSection.getByText(`税引前 ${formatJpy(29000)}`).first()).toBeVisible();
 });
 
 test("stock detail shows dividend schedule with status labels", async ({ page }) => {

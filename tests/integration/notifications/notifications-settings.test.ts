@@ -242,7 +242,7 @@ describe("notification rules, notifications, and settings", () => {
         email_notification_enabled: false,
         in_app_notification_enabled: true,
         default_amount_basis: "before_tax",
-        monthly_dividend_goal_amount: 50000
+        annual_dividend_goal_amount: 50000
       })
       .eq("user_id", user.id);
 
@@ -251,7 +251,7 @@ describe("notification rules, notifications, and settings", () => {
     const { data: settings } = await client
       .from("user_settings")
       .select(
-        "email_notification_enabled, in_app_notification_enabled, default_amount_basis, monthly_dividend_goal_amount, currency"
+        "email_notification_enabled, in_app_notification_enabled, default_amount_basis, annual_dividend_goal_amount, currency"
       )
       .eq("user_id", user.id)
       .single();
@@ -262,6 +262,6 @@ describe("notification rules, notifications, and settings", () => {
       default_amount_basis: "before_tax",
       currency: "JPY"
     });
-    expect(Number(settings?.monthly_dividend_goal_amount)).toBe(50000);
+    expect(Number(settings?.annual_dividend_goal_amount)).toBe(50000);
   });
 });

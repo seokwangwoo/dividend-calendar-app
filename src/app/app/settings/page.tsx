@@ -51,15 +51,15 @@ export default async function SettingsPage() {
             <Input id="currency" value="JPY" readOnly />
           </FormField>
 
-          <FormField label="月間配当目標額" htmlFor="monthlyDividendGoalAmount">
+          <FormField label="年間税引後配当目標額" htmlFor="annualDividendGoalAmount">
             <Input
-              id="monthlyDividendGoalAmount"
-              name="monthlyDividendGoalAmount"
+              id="annualDividendGoalAmount"
+              name="annualDividendGoalAmount"
               type="number"
               min="0"
               step="1"
-              defaultValue={settings.monthly_dividend_goal_amount ?? ""}
-              placeholder="50000"
+              defaultValue={settings.annual_dividend_goal_amount ?? ""}
+              placeholder="600000"
             />
           </FormField>
 

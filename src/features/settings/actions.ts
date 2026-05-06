@@ -10,7 +10,7 @@ const settingsSchema = z.object({
   emailNotificationEnabled: z.boolean(),
   inAppNotificationEnabled: z.boolean(),
   defaultAmountBasis: z.enum(AMOUNT_BASIS),
-  monthlyDividendGoalAmount: z.preprocess(
+  annualDividendGoalAmount: z.preprocess(
     (value) => (value === "" || value == null ? null : value),
     z.coerce.number().min(0).nullable()
   )
@@ -30,7 +30,7 @@ export async function updateSettings(formData: FormData): Promise<void> {
     emailNotificationEnabled: formData.get("emailNotificationEnabled") === "on",
     inAppNotificationEnabled: formData.get("inAppNotificationEnabled") === "on",
     defaultAmountBasis: formData.get("defaultAmountBasis"),
-    monthlyDividendGoalAmount: formData.get("monthlyDividendGoalAmount")
+    annualDividendGoalAmount: formData.get("annualDividendGoalAmount")
   });
 
   if (!parsed.success) {
@@ -43,7 +43,7 @@ export async function updateSettings(formData: FormData): Promise<void> {
       email_notification_enabled: parsed.data.emailNotificationEnabled,
       in_app_notification_enabled: parsed.data.inAppNotificationEnabled,
       default_amount_basis: parsed.data.defaultAmountBasis,
-      monthly_dividend_goal_amount: parsed.data.monthlyDividendGoalAmount,
+      annual_dividend_goal_amount: parsed.data.annualDividendGoalAmount,
       currency: "JPY"
     })
     .eq("user_id", user.id);

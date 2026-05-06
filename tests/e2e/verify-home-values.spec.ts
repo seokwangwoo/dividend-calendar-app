@@ -75,10 +75,10 @@ test.beforeAll(async () => {
     .single();
   if (jtEventData) createdEventIds.push(jtEventData.id as string);
 
-  // Set monthly goal
+  // Set annual goal
   await admin
     .from("user_settings")
-    .update({ monthly_dividend_goal_amount: 50000 })
+    .update({ annual_dividend_goal_amount: 50000 })
     .eq("user_id", userA.id);
 });
 
@@ -140,16 +140,16 @@ test("home screen shows next dividend card with exact values", async ({ page }) 
   await expect(nextCard.getByText(helperDateText).first()).toBeVisible();
 });
 
-test("home screen shows monthly goal progress", async ({ page }) => {
+test("home screen shows annual goal progress", async ({ page }) => {
   await login(page, userA.email, userA.password);
 
-  const goalCard = page.locator("div").filter({ hasText: "月次目標" }).first();
+  const goalCard = page.locator("div").filter({ hasText: "年間税引後配当目標" }).first();
   await expect(goalCard).toBeVisible();
 
-  // Goal: 50,000; current month: 30,458.89
-  // Rate: 30458.89 / 50000 * 100 = 60.92%
-  await expect(goalCard.getByText("60.9%").first()).toBeVisible();
-  await expect(goalCard.getByText(`今月 ${formatJpy(30458.89)}`).first()).toBeVisible();
+  // Goal: 50,000; annual after-tax: 47,486.92
+  // Rate: 47486.92 / 50000 * 100 = 94.97%
+  await expect(goalCard.getByText("95.0%").first()).toBeVisible();
+  await expect(goalCard.getByText(`今年 ${formatJpy(47486.92)}`).first()).toBeVisible();
   await expect(goalCard.getByText(`目標 ${formatJpy(50000)}`).first()).toBeVisible();
 });
 
@@ -172,5 +172,21 @@ test("home empty state when no holdings exist", async ({ page }) => {
     await expect(page.getByRole("link", { name: "銘柄を追加" })).toBeVisible();
   } finally {
     await cleanupUser(emptyUser.id);
+  }
+});
+
+test("home shows annual goal empty state when holdings exist but annual goal is not set", async ({ page }) => {
+  const goalEmptyUser = await createConfirmedUser("e2e-home-goal-empty");
+
+  try {
+    await createHolding(goalEmptyUser.id, kddi.id, 100, 4300, "nisa");
+
+    await login(page, goalEmptyUser.email, goalEmptyUser.password);
+
+    await expect(page.getByText("年間税引後配当目標が未設定です")).toBeVisible();
+    await expect(page.getByRole("link", { name: "目標を設定" })).toBeVisible();
+    await expect(page.getByText("保有銘柄が未登録です")).not.toBeVisible();
+  } finally {
+    await cleanupUser(goalEmptyUser.id);
   }
 });

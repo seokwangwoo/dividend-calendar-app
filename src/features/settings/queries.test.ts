@@ -22,7 +22,7 @@ describe("getCurrentUserSettings", () => {
     email_notification_enabled: true,
     in_app_notification_enabled: false,
     default_amount_basis: "before_tax",
-    monthly_dividend_goal_amount: 50000,
+    annual_dividend_goal_amount: 50000,
     currency: "JPY"
   };
 
@@ -60,6 +60,19 @@ describe("getCurrentUserSettings", () => {
 
     expect(result.email).toBe("");
     expect(result.settings).toEqual(mockSettings);
+  });
+
+  it("returns annual_dividend_goal_amount as null when it is not set", async () => {
+    const settingsWithoutGoal = {
+      ...mockSettings,
+      annual_dividend_goal_amount: null
+    };
+    mockSupabase.auth.getUser.mockResolvedValueOnce({ data: { user: mockUser }, error: null });
+    mockSupabase.single.mockResolvedValueOnce({ data: settingsWithoutGoal, error: null });
+
+    const result = await getCurrentUserSettings();
+
+    expect(result.settings.annual_dividend_goal_amount).toBeNull();
   });
 
   it("throws authentication error when getUser returns an error", async () => {
