@@ -166,6 +166,7 @@ export type Database = {
           source_url: string | null;
           source_published_at: string | null;
           review_status: "pending" | "approved" | "rejected";
+          rejection_reason: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -195,6 +196,7 @@ export type Database = {
           source_url?: string | null;
           source_published_at?: string | null;
           review_status?: "pending" | "approved" | "rejected";
+          rejection_reason?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -222,6 +224,7 @@ export type Database = {
           source_url?: string | null;
           source_published_at?: string | null;
           review_status?: "pending" | "approved" | "rejected";
+          rejection_reason?: string | null;
           updated_at?: string;
         };
       };
