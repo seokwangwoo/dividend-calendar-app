@@ -9,6 +9,102 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      disclosures: {
+        Row: {
+          id: string;
+          stock_id: string | null;
+          external_id: string | null;
+          source_type: string;
+          title: string;
+          document_url: string | null;
+          storage_path: string | null;
+          published_at: string | null;
+          collected_at: string;
+          status: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          stock_id?: string | null;
+          external_id?: string | null;
+          source_type: string;
+          title: string;
+          document_url?: string | null;
+          storage_path?: string | null;
+          published_at?: string | null;
+          collected_at?: string;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          stock_id?: string | null;
+          external_id?: string | null;
+          source_type?: string;
+          title?: string;
+          document_url?: string | null;
+          storage_path?: string | null;
+          published_at?: string | null;
+          collected_at?: string;
+          status?: string;
+          updated_at?: string;
+        };
+      };
+      dividend_reviews: {
+        Row: {
+          id: string;
+          stock_id: string | null;
+          disclosure_id: string | null;
+          extracted_dividend_per_share: number | null;
+          previous_dividend_per_share: number | null;
+          extracted_payment_date: string | null;
+          extracted_payment_month: number | null;
+          confidence_score: number | null;
+          status: string;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          rejection_reason: string | null;
+          created_dividend_event_id: string | null;
+          raw_payload: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          stock_id?: string | null;
+          disclosure_id?: string | null;
+          extracted_dividend_per_share?: number | null;
+          previous_dividend_per_share?: number | null;
+          extracted_payment_date?: string | null;
+          extracted_payment_month?: number | null;
+          confidence_score?: number | null;
+          status?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          rejection_reason?: string | null;
+          created_dividend_event_id?: string | null;
+          raw_payload?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          stock_id?: string | null;
+          disclosure_id?: string | null;
+          extracted_dividend_per_share?: number | null;
+          previous_dividend_per_share?: number | null;
+          extracted_payment_date?: string | null;
+          extracted_payment_month?: number | null;
+          confidence_score?: number | null;
+          status?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          rejection_reason?: string | null;
+          created_dividend_event_id?: string | null;
+          raw_payload?: Json;
+          updated_at?: string;
+        };
+      };
       holdings: {
         Row: {
           id: string;
@@ -129,6 +225,39 @@ export type Database = {
         Update: {
           status?: "unread" | "read" | "failed";
           read_at?: string | null;
+        };
+      };
+      jobs: {
+        Row: {
+          id: string;
+          type: string;
+          status: string;
+          payload: Json;
+          run_after: string;
+          attempts: number;
+          last_error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          type: string;
+          status?: string;
+          payload?: Json;
+          run_after?: string;
+          attempts?: number;
+          last_error?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          type?: string;
+          status?: string;
+          payload?: Json;
+          run_after?: string;
+          attempts?: number;
+          last_error?: string | null;
+          updated_at?: string;
         };
       };
       profiles: {
@@ -276,6 +405,46 @@ export type Database = {
           p_stock_id?: string | null;
           p_user_id?: string | null;
           p_dry_run?: boolean;
+        };
+        Returns: Json;
+      };
+      approve_dividend_review: {
+        Args: {
+          p_review_id: string;
+        };
+        Returns: Json;
+      };
+      approve_dividend_review_for_reviewer: {
+        Args: {
+          p_review_id: string;
+          p_reviewer_id: string;
+        };
+        Returns: Json;
+      };
+      reject_dividend_review: {
+        Args: {
+          p_review_id: string;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      reject_dividend_review_for_reviewer: {
+        Args: {
+          p_review_id: string;
+          p_reason: string;
+          p_reviewer_id: string;
+        };
+        Returns: Json;
+      };
+      collect_disclosure_candidate: {
+        Args: {
+          p_candidate: Json;
+        };
+        Returns: Json;
+      };
+      parse_disclosure: {
+        Args: {
+          p_disclosure_id: string;
         };
         Returns: Json;
       };
