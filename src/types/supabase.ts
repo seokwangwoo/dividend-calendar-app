@@ -289,6 +289,9 @@ export type Database = {
           sent_at: string | null;
           read_at: string | null;
           created_at: string;
+          sent_via_email_at: string | null;
+          email_delivery_status: string | null;
+          email_delivery_error: string | null;
         };
         Insert: {
           id?: string;
@@ -310,10 +313,16 @@ export type Database = {
           sent_at?: string | null;
           read_at?: string | null;
           created_at?: string;
+          sent_via_email_at?: string | null;
+          email_delivery_status?: string | null;
+          email_delivery_error?: string | null;
         };
         Update: {
           status?: "unread" | "read" | "failed";
           read_at?: string | null;
+          sent_via_email_at?: string | null;
+          email_delivery_status?: string | null;
+          email_delivery_error?: string | null;
         };
       };
       jobs: {
@@ -541,6 +550,31 @@ export type Database = {
           p_disclosure_id: string;
         };
         Returns: Json;
+      };
+      get_pending_email_notifications: {
+        Args: {
+          p_user_id: string;
+        };
+        Returns: Database["public"]["Tables"]["notifications"]["Row"][];
+      };
+      mark_notification_email_delivered: {
+        Args: {
+          p_notification_id: string;
+          p_status: string;
+          p_error?: string | null;
+        };
+        Returns: Json;
+      };
+      get_stocks_with_consecutive_price_refresh_failures: {
+        Args: {
+          p_consecutive_count?: number;
+        };
+        Returns: {
+          stock_id: string;
+          ticker: string | null;
+          name: string | null;
+          failure_count: number;
+        }[];
       };
     };
     Enums: {
