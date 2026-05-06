@@ -1,4 +1,4 @@
-import { describe, it, beforeAll } from "vitest";
+import { describe, expect, it, beforeAll } from "vitest";
 import { requireRemoteTests } from "../../helpers/env";
 import { createTestUser, signInAs, uniqueEmail, deleteTestUser, type TestUser } from "../../helpers/test-users";
 import { expectApprox } from "../../helpers/assertions";

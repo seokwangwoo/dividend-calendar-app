@@ -24,7 +24,7 @@ const YEAR = new Date().getFullYear();
 describe("get_stock_detail RPC", () => {
   let user: TestUser;
   let client: Awaited<ReturnType<typeof signInAs>>;
-  let eventIds: string[] = [];
+  const eventIds: string[] = [];
   let stockId: string;
 
   beforeAll(async () => {
@@ -110,9 +110,6 @@ describe("get_stock_detail RPC", () => {
     // Our approved event has DPS=100 and payment date in month 9 of YEAR.
     // Pending and rejected events should not appear.
     // We identify our event by the unique source URL.
-    const approvedSourceUrls = detail.dividendSchedule.map(
-      (e: { dividendPerShare: number | null; status: string }) => e.status
-    );
     // All returned events must be approved (review_status='approved')
     // The RPC only returns approved events, so every event status can be
     // estimated/confirmed/paid/undecided — but none should be pending/rejected.

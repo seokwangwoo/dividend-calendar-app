@@ -11,8 +11,7 @@ import { cleanupUser } from "../../helpers/cleanup";
 import { getTestStocks } from "../../fixtures/test-stock";
 import {
   createTestDividendEvent,
-  deleteTestDividendEvents,
-  isoDate,
+  deleteTestDividendEvents
 } from "../../fixtures/test-dividend-events";
 import type { HomeSummary } from "@/features/dividends/types";
 
@@ -21,7 +20,6 @@ beforeAll(() => requireRemoteTests());
 const PASSWORD = "Test1234!";
 const YEAR = new Date().getFullYear();
 const CURRENT_MONTH = new Date().getMonth() + 1;
-const TAX_RATE = 0.20315;
 
 describe("get_home_summary RPC", () => {
   let stockId: string;
@@ -63,7 +61,7 @@ describe("get_home_summary RPC", () => {
   describe("with holdings and approved events", () => {
     let user: TestUser;
     let client: Awaited<ReturnType<typeof signInAs>>;
-    let eventIds: string[] = [];
+    const eventIds: string[] = [];
     const QTY = 100;
 
     beforeAll(async () => {
@@ -125,7 +123,7 @@ describe("get_home_summary RPC", () => {
   describe("currentMonthDividend uses only current month events", () => {
     let user: TestUser;
     let client: Awaited<ReturnType<typeof signInAs>>;
-    let eventIds: string[] = [];
+    const eventIds: string[] = [];
     const QTY = 50;
 
     beforeAll(async () => {
@@ -185,7 +183,7 @@ describe("get_home_summary RPC", () => {
   describe("pending and rejected events are excluded", () => {
     let user: TestUser;
     let client: Awaited<ReturnType<typeof signInAs>>;
-    let eventIds: string[] = [];
+    const eventIds: string[] = [];
 
     beforeAll(async () => {
       user = await createTestUser(uniqueEmail("home-pending"), PASSWORD);

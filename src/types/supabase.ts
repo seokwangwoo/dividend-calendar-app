@@ -43,6 +43,94 @@ export type Database = {
           deleted_at?: string | null;
         };
       };
+      notification_rules: {
+        Row: {
+          id: string;
+          user_id: string;
+          stock_id: string;
+          basis: "before_tax_yield" | "after_tax_yield";
+          operator: "gte" | "lte";
+          target_yield: number;
+          notify_in_app: boolean;
+          notify_email: boolean;
+          status: "active" | "disabled";
+          last_triggered_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          stock_id: string;
+          basis: "before_tax_yield" | "after_tax_yield";
+          operator: "gte" | "lte";
+          target_yield: number;
+          notify_in_app?: boolean;
+          notify_email?: boolean;
+          status?: "active" | "disabled";
+          last_triggered_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          basis?: "before_tax_yield" | "after_tax_yield";
+          operator?: "gte" | "lte";
+          target_yield?: number;
+          notify_in_app?: boolean;
+          notify_email?: boolean;
+          status?: "active" | "disabled";
+          last_triggered_at?: string | null;
+          updated_at?: string;
+        };
+      };
+      notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          stock_id: string | null;
+          notification_rule_id: string | null;
+          type:
+            | "yield_target"
+            | "dividend_increase"
+            | "dividend_decrease"
+            | "no_dividend"
+            | "special_dividend"
+            | "data_update";
+          title: string;
+          body: string;
+          payload: Json;
+          status: "unread" | "read" | "failed";
+          channel: "in_app" | "email";
+          sent_at: string | null;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          stock_id?: string | null;
+          notification_rule_id?: string | null;
+          type:
+            | "yield_target"
+            | "dividend_increase"
+            | "dividend_decrease"
+            | "no_dividend"
+            | "special_dividend"
+            | "data_update";
+          title: string;
+          body: string;
+          payload?: Json;
+          status?: "unread" | "read" | "failed";
+          channel?: "in_app" | "email";
+          sent_at?: string | null;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          status?: "unread" | "read" | "failed";
+          read_at?: string | null;
+        };
+      };
       profiles: {
         Row: {
           id: string;
@@ -64,6 +152,38 @@ export type Database = {
           email?: string;
           role?: "user" | "admin";
           status?: "active" | "deleted";
+          updated_at?: string;
+        };
+      };
+      user_settings: {
+        Row: {
+          id: string;
+          user_id: string;
+          email_notification_enabled: boolean;
+          in_app_notification_enabled: boolean;
+          default_amount_basis: "before_tax" | "after_tax";
+          currency: string;
+          monthly_dividend_goal_amount: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email_notification_enabled?: boolean;
+          in_app_notification_enabled?: boolean;
+          default_amount_basis?: "before_tax" | "after_tax";
+          currency?: string;
+          monthly_dividend_goal_amount?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          email_notification_enabled?: boolean;
+          in_app_notification_enabled?: boolean;
+          default_amount_basis?: "before_tax" | "after_tax";
+          currency?: string;
+          monthly_dividend_goal_amount?: number | null;
           updated_at?: string;
         };
       };
@@ -151,10 +271,31 @@ export type Database = {
         };
         Returns: Json;
       };
+      evaluate_notification_rules: {
+        Args: {
+          p_stock_id?: string | null;
+          p_user_id?: string | null;
+          p_dry_run?: boolean;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       app_role: "user" | "admin";
       profile_status: "active" | "deleted";
+      amount_basis: "before_tax" | "after_tax";
+      notification_rule_basis: "before_tax_yield" | "after_tax_yield";
+      notification_operator: "gte" | "lte";
+      notification_rule_status: "active" | "disabled";
+      notification_type:
+        | "yield_target"
+        | "dividend_increase"
+        | "dividend_decrease"
+        | "no_dividend"
+        | "special_dividend"
+        | "data_update";
+      notification_status: "unread" | "read" | "failed";
+      notification_channel: "in_app" | "email";
     };
     CompositeTypes: Record<string, never>;
   };

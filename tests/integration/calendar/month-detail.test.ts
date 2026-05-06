@@ -28,7 +28,7 @@ const TAX_RATE = 0.20315;
 describe("get_dividend_month_detail RPC", () => {
   let user: TestUser;
   let client: Awaited<ReturnType<typeof signInAs>>;
-  let eventIds: string[] = [];
+  const eventIds: string[] = [];
   let stockId: string;
   let stockName: string;
 
@@ -168,7 +168,7 @@ describe("get_dividend_month_detail RPC", () => {
   });
 
   it("empty month returns events: []", async () => {
-    const emptyMonth = TEST_MONTH === 1 ? 2 : 1;
+    const emptyMonth = TEST_MONTH === 6 ? 7 : 6;
     const { data } = await client.rpc("get_dividend_month_detail", {
       p_year: YEAR,
       p_month: emptyMonth,

@@ -19,14 +19,13 @@ beforeAll(() => requireRemoteTests());
 
 const PASSWORD = "Test1234!";
 const YEAR = new Date().getFullYear();
-const TAX_RATE = 0.20315;
 const DPS = 200;
 const QTY = 100;
 
 describe("get_dividend_calendar RPC", () => {
   let user: TestUser;
   let client: Awaited<ReturnType<typeof signInAs>>;
-  let eventIds: string[] = [];
+  const eventIds: string[] = [];
   let stockId: string;
 
   beforeAll(async () => {
@@ -104,9 +103,6 @@ describe("get_dividend_calendar RPC", () => {
       p_basis: "after_tax",
       p_account_type: "all",
     });
-    const rows = data as CalendarMonth[];
-    const m3 = rows.find((r) => r.month === 3);
-    const m9 = rows.find((r) => r.month === 9);
     type RawRow = { month: number; amount: number | null; event_count: number };
     const m3r = (data as RawRow[]).find((r) => r.month === 3);
     const m9r = (data as RawRow[]).find((r) => r.month === 9);

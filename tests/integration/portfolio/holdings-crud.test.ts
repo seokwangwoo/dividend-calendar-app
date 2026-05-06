@@ -1,6 +1,5 @@
 import { describe, it, beforeAll, afterAll, expect } from "vitest";
 import { requireRemoteTests } from "../../helpers/env";
-import { createAdminClient } from "../../helpers/supabase";
 import { createTestUser, signInAs, uniqueEmail, type TestUser } from "../../helpers/test-users";
 import { cleanupUser } from "../../helpers/cleanup";
 import { getTestStocks } from "../../fixtures/test-stock";
