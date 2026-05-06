@@ -76,6 +76,7 @@ Excluded from MVP 1st:
 5. [Phase 05: Notifications and Settings](./phase_05_notifications_and_settings/plan.md)
 6. [Phase 06: Admin Review and Data Pipeline](./phase_06_admin_review_and_data_pipeline/plan.md)
 7. [Phase 07: MVP Acceptance Testing](./phase_07_mvp_acceptance_testing/plan.md)
+8. [Phase 08: UI Value Verification and Screen Rendering Tests](./phase_08_ui_value_verification/plan.md)
 
 ## Development Rules
 
