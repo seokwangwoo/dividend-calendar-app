@@ -25,6 +25,13 @@ describe("notification rules, notifications, and settings", () => {
     stockId = supported.id;
     user = await createTestUser(uniqueEmail("notifications"), PASSWORD);
     client = await signInAs(user.email, PASSWORD);
+
+    // Ensure test stock price is fresh so yield evaluation isn't skipped
+    const admin = createAdminClient();
+    await admin
+      .from("stocks")
+      .update({ price_updated_at: new Date().toISOString() })
+      .eq("id", stockId);
   });
 
   afterAll(async () => {

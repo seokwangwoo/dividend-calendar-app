@@ -36,7 +36,7 @@ test.describe.serial("holding edit and delete", () => {
     await page.goto("/app/portfolio");
     await expect(page.getByText("100株")).toBeVisible();
 
-    await page.getByText(kddi.name).click();
+    await page.getByRole("link", { name: new RegExp(kddi.name) }).click();
     await expect(page).toHaveURL(/\/app\/portfolio\/.+\/edit/);
 
     await page.getByLabel("保有数量").fill("200");
@@ -51,7 +51,7 @@ test.describe.serial("holding edit and delete", () => {
     await page.goto("/app/portfolio");
     await expect(page.getByText(kddi.name)).toBeVisible();
 
-    await page.getByText(kddi.name).click();
+    await page.getByRole("link", { name: new RegExp(kddi.name) }).click();
     await expect(page).toHaveURL(/\/app\/portfolio\/.+\/edit/);
 
     page.once("dialog", (dialog) => dialog.accept());

@@ -42,16 +42,16 @@ test("calendar shows 12 months and year navigation changes displayed year", asyn
   await expect(page.getByText("入金予定")).toHaveCount(12);
 
   const currentYear = new Date().getFullYear();
-  await expect(page.getByText(`${currentYear}年`)).toBeVisible();
+  await expect(page.getByText(`${currentYear}年`, { exact: true })).toBeVisible();
 
   // Navigate forward
   await page.getByRole("button", { name: "›" }).click();
-  await expect(page.getByText(`${currentYear + 1}年`)).toBeVisible();
+  await expect(page.getByText(`${currentYear + 1}年`, { exact: true })).toBeVisible();
   await expect(page.getByText("入金予定")).toHaveCount(12);
 
   // Navigate back
   await page.getByRole("button", { name: "‹" }).click();
-  await expect(page.getByText(`${currentYear}年`)).toBeVisible();
+  await expect(page.getByText(`${currentYear}年`, { exact: true })).toBeVisible();
 });
 
 test("calendar basis toggle switches between tax views", async ({ page }) => {

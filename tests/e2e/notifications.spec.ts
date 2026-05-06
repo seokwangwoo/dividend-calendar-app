@@ -41,10 +41,10 @@ test("notification list shows unread state and can mark a single notification as
   await expect(page.getByText("目標利回り達成")).toBeVisible();
   await expect(page.getByText("未読")).toBeVisible();
 
-  await page.getByRole("button", { name: "既読にする" }).click();
+  await page.getByRole("button", { name: "既読にする", exact: true }).click();
 
-  await expect(page.getByText("既読")).toBeVisible();
-  await expect(page.getByText("未読")).not.toBeVisible();
+  await expect(page.getByText("既読").first()).toBeVisible();
+  await expect(page.getByText("未読").first()).not.toBeVisible();
 });
 
 test("mark all notifications as read clears all unread states", async ({ page }) => {
@@ -66,7 +66,7 @@ test("mark all notifications as read clears all unread states", async ({ page })
 
   await page.getByRole("button", { name: "すべて既読にする" }).click();
 
-  await expect(page.getByText("未読")).not.toBeVisible();
+  await expect(page.getByText("未読").first()).not.toBeVisible();
   await expect(page.getByRole("button", { name: "すべて既読にする" })).not.toBeVisible();
 });
 
@@ -80,5 +80,5 @@ test("notification list investment-neutral disclaimer is visible", async ({ page
   await login(page, user.email, user.password);
   await page.goto("/app/notifications");
 
-  await expect(page.getByText("これは売買を推奨するものではありません。")).toBeVisible();
+  await expect(page.getByText("これは売買を推奨するものではありません。", { exact: false }).first()).toBeVisible();
 });

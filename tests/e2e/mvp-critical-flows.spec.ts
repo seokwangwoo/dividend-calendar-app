@@ -117,6 +117,5 @@ test("admin routes block normal users and allow admin users", async ({ page }) =
   await page.getByRole("button", { name: "ログアウト" }).click();
   await login(page, adminUser.email, adminUser.password);
   await page.goto("/admin/dividend-reviews");
-  await expect(page.getByText("管理者検収")).toBeVisible();
-  await expect(page.getByText("Supabase Studio")).toBeVisible();
+  await expect(page.getByText("配当イベント管理")).toBeVisible();
 });

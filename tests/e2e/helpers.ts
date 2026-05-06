@@ -174,3 +174,82 @@ export async function createInAppNotification(
   if (error || !data) throw new Error(`createInAppNotification: ${error?.message}`);
   return data.id as string;
 }
+
+export async function createDividendEventViaAdmin(
+  stockId: string,
+  overrides: Record<string, unknown> = {}
+): Promise<string> {
+  const year = new Date().getFullYear();
+  const defaults = {
+    stock_id: stockId,
+    fiscal_year: year,
+    payment_year: year,
+    event_type: "year_end",
+    dividend_per_share: 150,
+    expected_payment_month: new Date().getMonth() + 1,
+    expected_payment_date: null,
+    record_date: null,
+    ex_dividend_date: null,
+    status: "estimated",
+    review_status: "pending",
+    source_type: "e2e",
+    source_url: null,
+    source_published_at: new Date().toISOString()
+  };
+  const { data, error } = await createAdminClient()
+    .from("dividend_events")
+    .insert({ ...defaults, ...overrides })
+    .select("id")
+    .single();
+
+  if (error || !data) throw new Error(`createDividendEventViaAdmin: ${error?.message}`);
+  return data.id as string;
+}
+
+export async function approveDividendEventViaAdmin(eventId: string): Promise<void> {
+  const { error } = await createAdminClient()
+    .from("dividend_events")
+    .update({ review_status: "approved" })
+    .eq("id", eventId);
+
+  if (error) throw new Error(`approveDividendEventViaAdmin: ${error.message}`);
+}
+
+export async function createHoldingWithGoal(
+  userId: string,
+  stockId: string,
+  quantity: number,
+  averagePurchasePrice: number,
+  accountType: "nisa" | "tokutei" | "general",
+  annualGoal: number | null
+): Promise<string> {
+  const holdingId = await createHolding(userId, stockId, quantity, averagePurchasePrice, accountType);
+  if (annualGoal != null) {
+    await setUserSetting(userId, "annual_dividend_goal_amount", annualGoal);
+  }
+  return holdingId;
+}
+
+export async function setUserSetting(
+  userId: string,
+  key: string,
+  value: unknown
+): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("user_settings")
+    .upsert({ user_id: userId, [key]: value }, { onConflict: "user_id" });
+
+  if (error) throw new Error(`setUserSetting(${key}): ${error.message}`);
+}
+
+export async function getNotificationCount(userId: string): Promise<number> {
+  const { count, error } = await createAdminClient()
+    .from("notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("status", "unread");
+
+  if (error) throw new Error(`getNotificationCount: ${error.message}`);
+  return count ?? 0;
+}

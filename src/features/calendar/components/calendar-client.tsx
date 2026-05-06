@@ -221,7 +221,7 @@ export function CalendarClient({
 
       {/* Monthly summary list */}
       <Card className={`divide-y divide-line ${loadingCalendar ? "opacity-60" : ""}`}>
-        {calendar.length === 0 && !loadingCalendar ? (
+        {!loadingCalendar && calendar.every((row) => row.eventCount === 0) ? (
           initialHoldingCount === 0 ? (
             <EmptyState
               title="保有銘柄がありません"
