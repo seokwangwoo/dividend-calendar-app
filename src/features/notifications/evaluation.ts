@@ -72,3 +72,104 @@ export function formatRuleCondition(params: {
 }): string {
   return `${params.targetYield.toFixed(1)}%${params.operator === "gte" ? "以上" : "以下"}`;
 }
+
+export type YieldRuleEvaluationResult =
+  | { action: "skip_stale"; lastConditionMet: boolean }
+  | { action: "skip_missing_yield"; lastConditionMet: boolean }
+  | { action: "no_change"; lastConditionMet: boolean }
+  | { action: "transition_to_unmet"; lastConditionMet: false }
+  | { action: "transition_to_met"; lastConditionMet: true };
+
+export function evaluateYieldRuleTransition(params: {
+  expectedAnnualDividendPerShare: number | null;
+  currentPrice: number | null;
+  priceUpdatedAt: string | Date | null;
+  basis: NotificationRuleBasis;
+  accountType: AccountType;
+  targetYield: number;
+  operator: NotificationOperator;
+  lastConditionMet: boolean;
+  staleThresholdHours?: number;
+}): YieldRuleEvaluationResult {
+  const {
+    expectedAnnualDividendPerShare,
+    currentPrice,
+    priceUpdatedAt,
+    basis,
+    accountType,
+    targetYield,
+    operator,
+    lastConditionMet,
+    staleThresholdHours = 48
+  } = params;
+
+  // Check stale price
+  if (priceUpdatedAt == null) {
+    return { action: "skip_stale", lastConditionMet };
+  }
+
+  const updatedTime =
+    typeof priceUpdatedAt === "string"
+      ? new Date(priceUpdatedAt).getTime()
+      : priceUpdatedAt.getTime();
+
+  if (Number.isNaN(updatedTime)) {
+    return { action: "skip_stale", lastConditionMet };
+  }
+
+  const now = Date.now();
+  const thresholdMs = staleThresholdHours * 60 * 60 * 1000;
+  if (now - updatedTime > thresholdMs) {
+    return { action: "skip_stale", lastConditionMet };
+  }
+
+  // Check missing yield data
+  const evaluatedYield = calculateCurrentYield({
+    expectedAnnualDividendPerShare,
+    currentPrice,
+    basis,
+    accountType
+  });
+
+  if (evaluatedYield == null) {
+    return { action: "skip_missing_yield", lastConditionMet };
+  }
+
+  const conditionMet = ruleMatches({
+    evaluatedYield,
+    targetYield,
+    operator
+  });
+
+  if (lastConditionMet && conditionMet) {
+    return { action: "no_change", lastConditionMet: true };
+  }
+
+  if (lastConditionMet && !conditionMet) {
+    return { action: "transition_to_unmet", lastConditionMet: false };
+  }
+
+  if (!lastConditionMet && !conditionMet) {
+    return { action: "no_change", lastConditionMet: false };
+  }
+
+  // !lastConditionMet && conditionMet
+  return { action: "transition_to_met", lastConditionMet: true };
+}
+
+export interface DividendChangeCheckInput {
+  userHasActiveHolding: boolean;
+  existingNotificationForEvent: boolean;
+}
+
+export function shouldSendDividendChangeNotification(
+  check: DividendChangeCheckInput
+): { shouldSend: boolean; reason: "ok" | "no_holding" | "already_notified" } {
+  if (!check.userHasActiveHolding) {
+    return { shouldSend: false, reason: "no_holding" };
+  }
+  if (check.existingNotificationForEvent) {
+    return { shouldSend: false, reason: "already_notified" };
+  }
+  return { shouldSend: true, reason: "ok" };
+}

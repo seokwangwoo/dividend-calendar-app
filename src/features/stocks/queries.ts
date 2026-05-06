@@ -44,3 +44,24 @@ export async function getStockById(stockId: string): Promise<StockRow | null> {
 
   return data;
 }
+
+export interface StockWithConsecutiveFailures {
+  stock_id: string;
+  ticker: string | null;
+  name: string | null;
+  failure_count: number;
+}
+
+export async function getStocksWithConsecutivePriceRefreshFailures(): Promise<
+  StockWithConsecutiveFailures[]
+> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("get_stocks_with_consecutive_price_refresh_failures");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data as StockWithConsecutiveFailures[]) ?? [];
+}

@@ -4,7 +4,9 @@ import {
   isWithinDeduplicationWindow,
   ruleMatches,
   formatRuleCondition,
-  getTaxRateForAccountType
+  getTaxRateForAccountType,
+  evaluateYieldRuleTransition,
+  shouldSendDividendChangeNotification
 } from "@/features/notifications/evaluation";
 
 describe("notification rule evaluation", () => {
@@ -130,6 +132,134 @@ describe("notification rule evaluation", () => {
 
     it("formats lte condition", () => {
       expect(formatRuleCondition({ targetYield: 2.0, operator: "lte" })).toBe("2.0%以下");
+    });
+  });
+
+  describe("evaluateYieldRuleTransition", () => {
+    const baseParams = {
+      expectedAnnualDividendPerShare: 100,
+      currentPrice: 2000,
+      basis: "before_tax_yield" as const,
+      accountType: "nisa" as const,
+      targetYield: 4,
+      operator: "gte" as const,
+      staleThresholdHours: 48
+    };
+
+    it("skips evaluation when price is stale (>48h)", () => {
+      const staleDate = new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString();
+      const result = evaluateYieldRuleTransition({
+        ...baseParams,
+        priceUpdatedAt: staleDate,
+        lastConditionMet: false
+      });
+      expect(result.action).toBe("skip_stale");
+    });
+
+    it("skips evaluation when price_updated_at is null", () => {
+      const result = evaluateYieldRuleTransition({
+        ...baseParams,
+        priceUpdatedAt: null,
+        lastConditionMet: false
+      });
+      expect(result.action).toBe("skip_stale");
+    });
+
+    it("fires on false-to-true transition with fresh price", () => {
+      const freshDate = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
+      const result = evaluateYieldRuleTransition({
+        ...baseParams,
+        priceUpdatedAt: freshDate,
+        lastConditionMet: false
+      });
+      expect(result.action).toBe("transition_to_met");
+      expect(result.lastConditionMet).toBe(true);
+    });
+
+    it("does not fire on true-to-true transition", () => {
+      const freshDate = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
+      const result = evaluateYieldRuleTransition({
+        ...baseParams,
+        priceUpdatedAt: freshDate,
+        lastConditionMet: true
+      });
+      expect(result.action).toBe("no_change");
+      expect(result.lastConditionMet).toBe(true);
+    });
+
+    it("transitions to false on true-to-false with fresh price", () => {
+      const freshDate = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
+      const result = evaluateYieldRuleTransition({
+        ...baseParams,
+        currentPrice: 3000, // yield drops to ~3.33%
+        priceUpdatedAt: freshDate,
+        lastConditionMet: true
+      });
+      expect(result.action).toBe("transition_to_unmet");
+      expect(result.lastConditionMet).toBe(false);
+    });
+
+    it("does not fire on false-to-false transition", () => {
+      const freshDate = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
+      const result = evaluateYieldRuleTransition({
+        ...baseParams,
+        currentPrice: 3000,
+        priceUpdatedAt: freshDate,
+        lastConditionMet: false
+      });
+      expect(result.action).toBe("no_change");
+      expect(result.lastConditionMet).toBe(false);
+    });
+
+    it("skips when missing yield data", () => {
+      const freshDate = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
+      const result = evaluateYieldRuleTransition({
+        ...baseParams,
+        expectedAnnualDividendPerShare: null,
+        priceUpdatedAt: freshDate,
+        lastConditionMet: false
+      });
+      expect(result.action).toBe("skip_missing_yield");
+    });
+
+    it("keeps lastConditionMet unchanged on stale skip", () => {
+      const staleDate = new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString();
+      const result = evaluateYieldRuleTransition({
+        ...baseParams,
+        priceUpdatedAt: staleDate,
+        lastConditionMet: true
+      });
+      expect(result.action).toBe("skip_stale");
+      expect(result.lastConditionMet).toBe(true);
+    });
+  });
+
+  describe("shouldSendDividendChangeNotification", () => {
+    it("allows notification when user holds the stock and no duplicate exists", () => {
+      const result = shouldSendDividendChangeNotification({
+        userHasActiveHolding: true,
+        existingNotificationForEvent: false
+      });
+      expect(result.shouldSend).toBe(true);
+      expect(result.reason).toBe("ok");
+    });
+
+    it("blocks notification when user does not hold the stock", () => {
+      const result = shouldSendDividendChangeNotification({
+        userHasActiveHolding: false,
+        existingNotificationForEvent: false
+      });
+      expect(result.shouldSend).toBe(false);
+      expect(result.reason).toBe("no_holding");
+    });
+
+    it("blocks duplicate notification for the same user, stock, and event", () => {
+      const result = shouldSendDividendChangeNotification({
+        userHasActiveHolding: true,
+        existingNotificationForEvent: true
+      });
+      expect(result.shouldSend).toBe(false);
+      expect(result.reason).toBe("already_notified");
     });
   });
 });

@@ -1,0 +1,18 @@
+name: Daily Stock Price Refresh
+
+on:
+  schedule:
+    - cron: "0 15 * * 1-5" # 15:00 UTC = 00:00 JST on weekdays
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke refresh-stock-prices Edge Function
+        run: |
+          curl -sSf -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/refresh-stock-prices" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' || exit 1
