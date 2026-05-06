@@ -69,13 +69,13 @@ Excluded from MVP 1st:
 
 ## Phase Order
 
-1. [Phase 01: Project Foundation](./phase_01_project_foundation.md)
-2. [Phase 02: Database, Auth, and RLS](./phase_02_database_auth_rls.md)
-3. [Phase 03: Portfolio and Dividend Calculation](./phase_03_portfolio_dividend_calculation.md)
-4. [Phase 04: Home and Calendar Core UI](./phase_04_home_calendar_core_ui.md)
-5. [Phase 05: Notifications and Settings](./phase_05_notifications_and_settings.md)
-6. [Phase 06: Admin Review and Data Pipeline](./phase_06_admin_review_and_data_pipeline.md)
-7. [Phase 07: MVP Acceptance Testing](./phase_07_mvp_acceptance_testing.md)
+1. [Phase 01: Project Foundation](./phase_01_project_foundation/plan.md)
+2. [Phase 02: Database, Auth, and RLS](./phase_02_database_auth_rls/plan.md)
+3. [Phase 03: Portfolio and Dividend Calculation](./phase_03_portfolio_dividend_calculation/plan.md)
+4. [Phase 04: Home and Calendar Core UI](./phase_04_home_calendar_core_ui/plan.md)
+5. [Phase 05: Notifications and Settings](./phase_05_notifications_and_settings/plan.md)
+6. [Phase 06: Admin Review and Data Pipeline](./phase_06_admin_review_and_data_pipeline/plan.md)
+7. [Phase 07: MVP Acceptance Testing](./phase_07_mvp_acceptance_testing/plan.md)
 
 ## Development Rules
 

@@ -12,13 +12,13 @@
 
 ```
 docs/plans/260505_mvp_1st_dev/README.md
-docs/plans/260505_mvp_1st_dev/phase_01_project_foundation.md
-docs/plans/260505_mvp_1st_dev/phase_02_database_auth_rls.md
-docs/plans/260505_mvp_1st_dev/phase_03_portfolio_dividend_calculation.md
-docs/plans/260505_mvp_1st_dev/phase_04_home_calendar_core_ui.md
-docs/plans/260505_mvp_1st_dev/phase_05_notifications_and_settings.md
-docs/plans/260505_mvp_1st_dev/phase_06_admin_review_and_data_pipeline.md
-docs/plans/260505_mvp_1st_dev/phase_07_mvp_acceptance_testing.md
+docs/plans/260505_mvp_1st_dev/phase_01_project_foundation/plan.md
+docs/plans/260505_mvp_1st_dev/phase_02_database_auth_rls/plan.md
+docs/plans/260505_mvp_1st_dev/phase_03_portfolio_dividend_calculation/plan.md
+docs/plans/260505_mvp_1st_dev/phase_04_home_calendar_core_ui/plan.md
+docs/plans/260505_mvp_1st_dev/phase_05_notifications_and_settings/plan.md
+docs/plans/260505_mvp_1st_dev/phase_06_admin_review_and_data_pipeline/plan.md
+docs/plans/260505_mvp_1st_dev/phase_07_mvp_acceptance_testing/plan.md
 ```
 
 ---
@@ -170,7 +170,7 @@ Loop:
 수정 후 재감사 호출 예시:
 
 ```
-이전 루프에서 FAIL된 파일: phase_02_database_auth_rls.md, phase_04_home_calendar_core_ui.md.
+이전 루프에서 FAIL된 파일: phase_02_database_auth_rls/plan.md, phase_04_home_calendar_core_ui/plan.md.
 
 수정된 파일에 대해 동일한 감사 기준으로 재감사를 수행하고 결과를 반환하세요.
 ```

@@ -30,7 +30,7 @@ Determine phase order from the plan root in this priority order:
 
 1. An explicit ordered list in the user's request.
 2. An ordered list in the plan README or overview file.
-3. Numerically or lexically ordered phase files in the plan root, such as `phase_01_*.md`, `phase-01-*.md`, or `01_*.md`.
+3. Numerically or lexically ordered phase folders in the plan root, each containing a `plan.md`, such as `phase_01_*/plan.md`, `phase-01-*/plan.md`, or `01_*/plan.md`.
 
 Supporting references are plan-specific. Use the references named by the phase file, plan README, or user request. If references are not named, inspect nearby documentation only when it is needed to understand or verify the phase.
 

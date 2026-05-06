@@ -1,6 +1,6 @@
 # Phase 06 Verification
 
-- Phase file: `docs/plans/260505_mvp_1st_dev/phase_06_admin_review_and_data_pipeline.md`
+- Phase file: `docs/plans/260505_mvp_1st_dev/phase_06_admin_review_and_data_pipeline/plan.md`
 - Verification date: 2026-05-06
 - Environment: local Next.js/Node workspace with `.env.local`; remote Supabase integration tests and DB lint run with network access.
 

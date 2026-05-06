@@ -1,6 +1,6 @@
 # Phase 05 Verification
 
-- Phase file: `docs/plans/260505_mvp_1st_dev/phase_05_notifications_and_settings.md`
+- Phase file: `docs/plans/260505_mvp_1st_dev/phase_05_notifications_and_settings/plan.md`
 - Verification date: 2026-05-06
 - Environment: local Next.js/Node workspace with `.env.local`; remote Supabase integration tests run with network access after initial sandbox DNS failure.
 

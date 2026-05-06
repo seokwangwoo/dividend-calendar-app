@@ -1,6 +1,6 @@
 # Phase 07 Verification
 
-- Phase file: `docs/plans/260505_mvp_1st_dev/phase_07_mvp_acceptance_testing.md`
+- Phase file: `docs/plans/260505_mvp_1st_dev/phase_07_mvp_acceptance_testing/plan.md`
 - Verification date: 2026-05-06
 - Environment: local Next.js/Node workspace with `.env.local`; Playwright E2E tests use the configured Supabase project.
 
