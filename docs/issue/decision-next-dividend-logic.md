@@ -1,5 +1,7 @@
 # 설계 결정: 홈 화면 "다음 배당 예정" 선택 로직
 
+> **상태: ✅ 해결됨** — `get_home_summary()` RPC에서 `expected_payment_date ASC` 정렬로 구현 완료
+
 ## 결정일
 2026-05-06
 

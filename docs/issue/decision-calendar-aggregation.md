@@ -1,5 +1,7 @@
 # 설계 결정: 배당 캘린더 월 집계 기준 및 날짜 표현
 
+> **상태: ✅ 해결됨** — `get_dividend_calendar()` RPC가 `estimated_payment_month` 기준으로 집계 완료
+
 ## 결정일
 2026-05-06
 

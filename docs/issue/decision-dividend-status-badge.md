@@ -1,5 +1,7 @@
 # 설계 결정: 배당 데이터 상태 배지 정의
 
+> **상태: ✅ 해결됨** — `formatDividendStatus()` 구현 및 RPC에서 `review_status = 'approved'` 필터 적용 완료
+
 ## 결정일
 2026-05-06
 
