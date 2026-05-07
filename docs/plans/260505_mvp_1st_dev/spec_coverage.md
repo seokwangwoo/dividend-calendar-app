@@ -23,12 +23,12 @@ MVP 1st는 일본 국내 배당 투자자가 이메일 계정으로 로그인해
 | Next.js App Router, TypeScript, Tailwind 기반 웹앱 | 포함 | 01 | 네이티브 앱은 제외 |
 | 이메일/비밀번호 인증, 로그아웃, 비밀번호 재설정 | 포함 | 02 | Supabase Auth 기준 |
 | 인증된 앱 shell과 하단 탭 | 포함 | 01 | 홈, 포트폴리오, 캘린더, 알림, 설정 |
-| 일본 주식 검색과 지원/미지원 표시 | 포함 | 02, 03 | 30~50개 seed, unsupported row 포함 |
+| 일본 주식 검색과 지원/미지원 표시 | 포함 | 02, 03 | `/app/stocks/search`로 종목 상세 진입, 30~50개 seed, unsupported row 포함 |
 | 보유 종목 CRUD와 동일 종목 복수 계좌 등록 | 포함 | 03 | soft delete 기준 |
 | NISA/特定口座/一般口座 세전/세후 계산 | 포함 | 03, 07 | `nisa`, `tokutei`, `general`, 세율 0%/20.315% |
 | 홈 요약, 월별 캘린더, 종목 상세 | 포함 | 04 | 승인된 배당 데이터만 사용자 화면에 사용 |
-| 목표 배당수익률 알림 규칙과 앱 내 알림 | 포함 | 05 | `gte`/`lte`, 세전/세후 yield 기준 |
-| 설정 화면 | 포함 | 05 | 알림, 표시 기준, 월 목표, 세금 고지 |
+| 목표 배당수익률 알림 규칙과 앱 내 알림 | 포함 | 05 | `gte`/`lte`, 예상 배당수익률(세전) 기준, 종목당 active 룰 1개 |
+| 설정 화면 | 포함 | 05 | 알림, 표시 기준, 연간 세후 배당 목표, 세금 고지 |
 | 배당 변경 알림 | 포함 | 06 | 승인된 review에서만 생성 |
 | 관리자 검수 | 부분 | 06 | 커스텀 관리자 화면이 아니라 Supabase Studio 운영 |
 | TDnet 공시 수집 | 부분 | 06 | 후보 메타데이터 수집과 job foundation, 완전 자동 커버리지는 제외 |
@@ -56,12 +56,12 @@ Source: `docs/dividend_app_wireframe.md`
 | 배당 캘린더 화면 | 포함 | 04 | 연도, 세전/세후 기준, 계좌 필터, 월별 요약, 월 상세 |
 | 상태 배지 | 포함 | 01, 04 | estimated/confirmed/paid/unknown/reviewed 계열 표시 |
 | 종목 상세 화면 | 포함 | 04 | 현재 정보, 내 보유 정보, 배당 일정, 출처/검수 상태 |
-| 목표 배당수익률 알림 설정 | 포함 | 05 | 세전/세후 yield, 이상/이하, 채널 선택, 투자 판단 고지 |
+| 목표 배당수익률 알림 설정 | 포함 | 05 | 예상 배당수익률(세전) 기준, 종목당 active 룰 1개, 이상/이하, 채널 선택, 투자 판단 고지 |
 | 알림 목록 화면 | 포함 | 05 | 필터, 그룹, unread/read, mark read |
 | 설정 화면 | 포함 | 05 | 계정, 알림, 표시 기준, JPY, 세금 고지, 로그아웃 |
 | 관리자 검수 화면 | 부분 | 01, 06 | `/admin` placeholder는 두지만 MVP 운영은 Supabase Studio 중심 |
 | 신규 사용자 온보딩 | 제외 | - | route suggestion에는 있으나 phase scope에는 없음 |
-| `/app/stocks/search` 별도 검색 화면 | 부분 | 03 | 별도 route 대신 `/app/portfolio/new` 검색 흐름으로 흡수 |
+| `/app/stocks/search` 별도 검색 화면 | 포함 | 후속 이슈 | 종목 상세/알림 설정 진입점으로 MVP에 추가 필요 |
 | `/admin/disclosures`, `/admin/parse-jobs` 커스텀 화면 | 부분 | 01, 06 | placeholder/foundation 수준, 실제 검수는 Supabase Studio |
 | 디자인 톤과 금지 방향 | 포함 | 01, 07 | 차분한 금융 서비스, 매수/매도 추천 표현 금지 |
 
