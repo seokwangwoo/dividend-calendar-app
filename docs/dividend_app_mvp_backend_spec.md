@@ -225,7 +225,7 @@ create table user_settings (
   in_app_notification_enabled boolean not null default true,
   default_amount_basis text not null default 'after_tax',
   currency text not null default 'JPY',
-  monthly_dividend_goal_amount numeric(18,2),
+  annual_dividend_goal_amount numeric(18,2),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique(user_id)
@@ -235,7 +235,7 @@ create table user_settings (
 | 컬럼 | 설명 |
 |---|---|
 | default_amount_basis | before_tax 또는 after_tax |
-| monthly_dividend_goal_amount | 월 목표 배당금 |
+| annual_dividend_goal_amount | 연간 세후 배당 목표 금액 |
 | currency | MVP에서는 JPY 고정 |
 
 ---
@@ -377,7 +377,7 @@ create table notification_rules (
 
 | 컬럼 | 설명 |
 |---|---|
-| basis | before_tax_yield, after_tax_yield |
+| basis | MVP 사용자 생성 룰은 before_tax_yield 고정. after_tax_yield는 Phase 2 고급 알림 후보 |
 | operator | gte, lte |
 | target_yield | 목표 수익률 |
 
@@ -471,7 +471,7 @@ create table jobs (
 | notification_rules | 본인 데이터만 CRUD |
 | notifications | 본인 데이터만 조회/수정 |
 | stocks | 로그인 사용자는 조회 가능 |
-| dividend_events | 승인된 데이터만 조회 가능 |
+| dividend_events | 승인된 데이터만 조회 가능. pending/rejected는 사용자 화면과 알림 생성에서 제외 |
 | dividend_reviews | admin만 접근 |
 | disclosures | admin만 전체 접근, 사용자는 제한 조회 |
 
@@ -737,7 +737,7 @@ POST /functions/v1/approve-dividend-review
 4. status = pending인지 확인
 5. dividend_events 생성
 6. dividend_reviews.status = approved 변경
-7. 관련 종목 보유 사용자 조회
+7. 관련 종목 active holding 보유 사용자 조회 (`holdings.deleted_at IS NULL`)
 8. notifications 생성
 ```
 
@@ -799,6 +799,8 @@ create table tax_policies (
 | no_dividend | 무배 |
 | special_dividend | 특별배당 |
 | data_update | 배당 데이터 업데이트 |
+
+배당 변경 알림(`dividend_increase`, `dividend_decrease`, `no_dividend`, `special_dividend`)은 MVP에서 해당 종목을 active holding으로 보유한 사용자에게만 생성합니다. `deleted_at`이 설정된 보유 정보와 목표수익률 룰만 설정한 미보유 사용자는 대상에서 제외합니다.
 
 ---
 
