@@ -103,7 +103,7 @@ MVP는 웹앱/PWA로 시작하며, 증권사 자동 연동이나 네이티브 �
 - 배당수익률 조건 알림
 - 증배/감배/무배 알림
 - 공시 기반 데이터 출처 표시
-- **데이터 검수 품질** — TDnet 공시와 XBRL/PDF 파싱에서 수집한 데이터는 반드시 출처와 검수 상태를 붙여 신뢰도를 확보합니다.
+- **데이터 검수 품질** — TDnet/Yanoshin 공시와 PDF+AI 파싱에서 수집한 데이터는 반드시 출처와 검수 상태를 붙이며, 관리자 승인 전에는 사용자 화면에 노출하지 않습니다.
 - **차별화** — 경쟁 앱이 세전 예측과 단순 합계에 머무르는 데 반해, 본 서비스는 세후 실수령과 입금 일정을 정확히 보여줍니다【422402774009173†L19-L23】.
 
 ---
@@ -115,7 +115,7 @@ MVP는 웹앱/PWA로 시작하며, 증권사 자동 연동이나 네이티브 �
 | 실제 입금액 확인 | **세전이 아닌 세후 실수령액**을 계좌 종류별로 보여주어 사용자가 실제 현금 흐름을 이해할 수 있게 합니다. |
 | 월별 배당 현금흐름 관리 | 지급 개시일을 기반으로 실제 입금일을 예측해 달력으로 제시하여 언제 얼마가 들어오는지 한눈에 확인합니다. |
 | 목표 배당수익률 알림 | 사용자가 설정한 예상 배당수익률(세전) 조건에 도달하면 앱 내 알림과 이메일로 통보합니다. |
-| 배당 변경 빠른 감지 | 증배, 감배, 무배, 복배, 특별배당을 반자동 TDnet 공시 수집과 XBRL/PDF 파싱을 통해 신속히 탐지하고 공시 출처와 함께 알려줍니다. |
+| 배당 변경 빠른 감지 | 증배, 감배, 무배, 복배, 특별/기념 배당을 TDnet/Yanoshin 공시 수집, PDF 저장, AI 구조화 추출, 관리자 승인 흐름으로 탐지하고 공시 출처와 함께 알려줍니다. |
 | NISA 활용 지원 | 비과세 계좌와 과세계좌(特定口座/一般口座)의 과세 차이를 적용해 세후 금액을 계산하고, 사용자가 NISA 이점을 확인할 수 있게 합니다. |
 | 데이터 신뢰도 | 각 배당 데이터에 출처 URL과 검수 상태를 명시하여 사용자가 데이터의 신뢰도를 확인할 수 있게 합니다【422402774009173†L19-L23】. |
 | 초보자 친화 UI | 복잡한 투자 분석 없이 핵심 숫자와 달력 중심 UI를 제공해 누구나 쉽게 사용할 수 있게 합니다. |
@@ -141,7 +141,7 @@ MVP는 웹앱/PWA로 시작하며, 증권사 자동 연동이나 네이티브 �
 | 관리자용 배당 데이터 관리 | 포함 |
 | 이메일 알림 | 포함 |
 | TDnet 공시 후보 수집 | 포함 |
-| XBRL/PDF 파싱 | 포함 (일본 상장사의 공시를 대상으로 XBRL 및 PDF에서 배당 정보를 자동 추출) |
+| PDF+AI 파싱 | 포함 (TDnet PDF를 private Storage에 저장하고 OpenAI Responses API로 배당 후보를 구조화 추출하되, 승인 전 사용자 노출은 금지) |
 | CSV import | Phase 2 후보 |
 
 ### MVP 제외 기능
@@ -185,10 +185,10 @@ Must
 
 ### 표시 항목
 
-- 올해 예상 세후 배당금 (`payment_year = 현재 연도` 기준)
+- 올해 예상 세후 배당금 (`payment_year = 현재 연도`, `review_status = approved`, payable event 기준)
 - 올해 예상 세전 배당금
 - 예상 세금
-- 이번 달 예상 세후 배당금 (`payment_year = 현재 연도 AND estimated_payment_month = 현재 월`)
+- 이번 달 예상 세후 배당금 (`payment_year = 현재 연도 AND estimated_payment_month = 현재 월`, `annual_total` 제외)
 - 다음 배당 예정 종목 (가장 가까운 1걸만 표시, 같은 종목 다계좌 시 세후 합산)
 - 연간 목표 배당 달성률 (세후 기준)
 - 최근 배당 변경 알림
@@ -469,7 +469,7 @@ Must
 - 배당금이 증가하면 증배 알림을 생성한다.
 - 배당금이 감소하면 감배 알림을 생성한다.
 - 배당이 0 또는 무배로 변경되면 무배 알림을 생성한다.
-- 특별배당/기념배당은 일반 배당과 구분한다.
+- 특별배당/기념배당은 일반 배당과 구분하되, 동일한 중간/기말 지급에 포함된 구성요소는 breakdown으로 보관하고 별도 payable row로 중복 집계하지 않는다.
 - 알림에는 변경 전/후 금액과 출처가 표시되어야 한다.
 - 미검수 데이터는 사용자에게 자동 발송하지 않는다.
 - **배당 변경 알림은 해당 종목을 보유한 사용자에게만 발송한다.**
@@ -499,21 +499,21 @@ Must
 
 ## 8.9 공시 데이터 수집
 
-앱은 TDnet 등 공시 소스에서 배당 관련 공시 후보를 수집합니다. 일본거래소그룹의 공시 열람 서비스는 최신 공시를 무료로 볼 수 있지만 보관 기간이 짧고 공식 API 비용이 높기 때문에【422402774009173†L112-L116】, 초기 MVP에서는 **무료 공개 소스와 스크래핑을 활용한 반자동 수집**을 채택합니다. 모든 공시는 관리자 검수를 거쳐 사용자에게 제공됩니다.
+앱은 Yanoshin TDnet list API와 TDnet PDF에서 배당 관련 공시 후보를 수집합니다. 일본거래소그룹의 공시 열람 서비스는 최신 공시를 무료로 볼 수 있지만 보관 기간이 짧고 공식 API 비용이 높기 때문에, 초기 MVP에서는 **Yanoshin의 무료 TDnet 목록 응답과 원문 PDF 보관을 활용한 반자동 수집**을 채택합니다. 모든 공시는 관리자 검수를 거쳐 사용자에게 제공됩니다.
 
 ### 요구사항
 
-- 시스템은 주기적으로 공시 목록을 확인한다.
-- 시스템은 공시 제목에서 배당 관련 키워드를 필터링한다.
-- 시스템은 공시 원본 URL을 저장한다.
-- 시스템은 종목코드, 회사명, 공시 제목, 공시 시각을 저장한다.
-- 배당 관련 공시는 관리자 검수 큐에 등록한다.
-- XBRL 파일이 있으면 원본을 저장한다.
-- PDF 파일이 있으면 원본 URL 또는 파일을 저장한다.
+- 시스템은 GitHub Actions Cron → Edge Function으로 주기적으로 Yanoshin TDnet 목록을 확인한다.
+- MVP PDF 수집 경로는 Yanoshin `json2`/`json` 응답과 `hasXBRL=0` 조건을 사용한다.
+- 시스템은 공시 제목에서 강한 배당 키워드, 결산短信 키워드, 정정 키워드를 필터링한다.
+- 시스템은 종목코드, 회사명, 공시 제목, 공시 시각, 외부 ID, 원본 PDF URL을 저장한다.
+- PDF URL이 있는 배당 관련 공시는 `download_disclosure_pdf` job을 만들고, URL이 없으면 다운로드/파싱 job 없이 관리자 확인 대상으로 남긴다.
+- PDF 파일은 private Supabase Storage의 `disclosures/{ticker}/{published_date}/{external_id}.pdf` 경로에 저장한다.
+- `parse_disclosure_pdf_ai` job은 PDF 저장 성공 후 `disclosures.storage_path`가 채워진 경우에만 생성한다.
 
 ### 운영상의 유의사항
 
-- 공식 TDnet API 이용료는 월 수십만 엔 수준으로 비용이 크기 때문에, MVP에서는 TDnet 웹사이트의 무료 공시 목록을 주기적으로 수집하고 기간 내 파일을 보관합니다【422402774009173†L112-L116】.
+- 공식 TDnet API 이용료는 월 수십만 엔 수준으로 비용이 크기 때문에, MVP에서는 Yanoshin TDnet 목록 응답을 주기적으로 수집하고 기간 내 PDF 파일을 보관합니다.
 - 공시 수집 후에는 관리자 검수를 거친 자료만 사용자에게 반영합니다. 검수 과정에서 필요한 경우 수동으로 데이터 수정 및 보완을 수행합니다.
 
 ### 배당 키워드
@@ -548,31 +548,33 @@ Must
 
 ---
 
-## 8.10 XBRL/PDF 파싱
+## 8.10 PDF + AI 파싱
 
-공시 원본(XBRL, HTML, PDF)에서 배당 데이터를 자동 또는 반자동으로 추출합니다. 일본 국내 상장사의 공시를 대상으로 하며, TDnet에서 내려받은 XBRL과 PDF 파일을 우선 파싱합니다. 해외 종목은 MVP에서 제외합니다.
+공시 원본 PDF에서 배당 후보를 자동 또는 반자동으로 추출합니다. 일본 국내 상장사의 TDnet PDF를 대상으로 하며, 텍스트 추출을 우선 적용한 뒤 OpenAI Responses API의 Structured Outputs/JSON schema로 구조화합니다. 해외 종목과 전체 XBRL parser 구현은 MVP에서 제외합니다.
 
 ### 처리 우선순위
 
-1. XBRL
-2. HTML
-3. PDF 텍스트
-4. PDF 표 추출
-5. 관리자 수동 입력
+1. 저장된 PDF에서 텍스트 추출
+2. 배당 관련 섹션 우선 선별 (`配当の状況`, `1株当たり配当金`, `年間配当金` 등)
+3. OpenAI Responses API Structured Outputs로 JSON 추출
+4. 서버 측 validation과 confidence 조정
+5. 관리자 수동 수정/승인
 
 ### 요구사항
 
-- 시스템은 XBRL 원본에서 배당 관련 fact 후보를 **자동으로** 추출한다. 추출된 fact의 tag, contextRef, unitRef, value를 저장한다.
-- 시스템은 PDF에서 배당 키워드 주변 텍스트를 **자동으로** 추출할 수 있다.
-- 시스템은 추출 결과에 confidence score를 부여한다.
-- confidence가 낮은 결과는 관리자 검수 큐로 보낸다.
+- 시스템은 PDF에서 배당 키워드 주변 텍스트를 추출하고, 결산短信에서는 배당 표 섹션을 우선 입력으로 사용한다.
+- 시스템은 dividend disclosure와 earnings release용 prompt/schema를 분리한다.
+- AI 응답은 이벤트별 JSON 배열로 검증하고, 하나의 AI 이벤트마다 `dividend_reviews` row를 1개 생성한다.
+- 시스템은 event type, change type, 배당금, 이전 배당금, 지급일/지급월, 기준일, 명시된 권리락일, evidence text, confidence score, ordinary/special/commemorative breakdown을 검증한다.
+- confidence가 낮거나 정정/감배/무배/특별/기념/큰 차이 케이스는 high 또는 urgent 관리자 검수 큐로 보낸다.
 - 未定은 0으로 저장하면 안 된다.
-- 특별배당/기념배당은 일반 배당과 분리한다.
+- `annual_total`은 검증/참고용이며 사용자 현금흐름 합계에 포함하지 않는다.
+- `ex_dividend_date`는 공시에 명시된 경우에만 저장하고 `record_date`에서 추정하지 않는다.
 - 파싱 실패 시 관리자 수동 입력이 가능해야 한다.
 
 ### 운영상의 유의사항
 
-- PDF와 스캔본은 정형화되지 않은 경우가 많아 파싱 정확도가 낮을 수 있습니다. 이 경우 시스템은 자동 추출 결과에 낮은 신뢰도 점수를 부여하고 관리자 검수 과정을 거칩니다.
+- PDF와 스캔본은 정형화되지 않은 경우가 많아 파싱 정확도가 낮을 수 있습니다. 이 경우 시스템은 자동 추출 결과에 낮은 신뢰도 점수를 부여하고 관리자 검수 과정을 거칩니다. 이미지 전용 OCR 인프라는 Phase 08 정확도 근거가 부족할 때까지 MVP 범위에서 제외합니다.
 - 공시 파일의 저장 기간이 제한적이므로, 중요 데이터를 장기 보관하려면 저장소를 별도로 확보해야 합니다.
 
 ### 우선순위
@@ -594,22 +596,24 @@ Must
 - approved 데이터만 사용자 화면에 반영한다.
 - pending/rejected 데이터는 관리자 화면과 운영 큐에서만 확인하며, MVP 사용자 화면에는 "검수 중" 힌트도 노출하지 않는다.
 - pending 데이터로 홈/캘린더/종목 상세 값을 바꾸거나 사용자 알림을 생성하지 않는다.
-- 관리자는 배당 금액, 지급월, 상태, 출처를 입력/수정할 수 있다.
-- 관리자는 원문 공시 URL을 확인할 수 있다.
-- **관리자 인증**: `users.is_admin = TRUE`인 사용자만 `/admin`에 접근할 수 있다.
+- 관리자는 배당 금액, 지급연도, 지급월, 상태, event type, change type, 출처, evidence, breakdown을 입력/수정할 수 있다.
+- 지급일이 없고 지급월만 있을 때는 관리자가 `payment_year`를 확인해야 승인할 수 있다.
+- 관리자는 admin 전용 signed URL로 원문 PDF를 확인할 수 있다.
+- **관리자 인증**: `profiles.role = admin`인 사용자만 `/admin`에 접근할 수 있다.
 
 ### MVP 관리자 화면 범위 (최소 버전)
 
-- `dividend_events` 목록 테이블
-- 새 배당 데이터 입력 폼
-- 상태 변경 드롭다운 (`pending` → `approved` / `rejected`)
+- `/admin/dividend-reviews` pending 목록
+- AI evidence, confidence, review priority 표시
+- PDF signed URL 보기
+- 추출값 수정 폼
+- 승인/거절 액션 (`pending` → `approved` / `rejected`)
 
 ### Phase 2에서 추가될 기능
 
-- 원문 공시 보기 (PDF/XBRL 렌더링)
-- Confidence score 표시
-- 파싱 결과 변경 전/후 비교
 - 검수 이력 로그
+- fixture 기반 정확도 대시보드
+- batch approve/reject 보조 기능
 
 ### 자동 승인 제외 조건
 
@@ -624,7 +628,7 @@ Must
 - 전년 대비 ±50% 이상 변화
 - 배당수익률 10% 이상
 - 주식분할 직후 배당 변경
-- PDF에서만 추출된 데이터
+- PDF+AI에서 추출된 모든 신규 후보. 단, 관리자가 승인한 뒤에만 사용자 데이터로 반영한다.
 
 ### 우선순위
 
@@ -737,19 +741,20 @@ fiscal_year           -- 회계연도 (관리자/공시 추적용)
 fiscal_period
 amount_per_share
 currency
-dividend_type
+dividend_type         -- interim/year_end/annual_total/special/commemorative/other
 status
 record_date
 ex_date
 payment_start_date
 estimated_payment_month
-payment_year          -- 실제 지급 연도 (달력연도, 사용자 집계용)
+payment_year          -- 실제 지급 연도 (달력연도, 사용자 집계용, 승인 전 필수)
 source_type
 source_url
 source_title
 source_published_at
 confidence_score
-review_status
+review_status         -- pending/approved/rejected; 사용자 화면은 approved만 사용
+raw_payload           -- special/commemorative breakdown, AI evidence, source metadata
 created_at
 updated_at
 ```
@@ -783,33 +788,71 @@ source_url
 sent_at
 read_at
 sent_via_email_at     -- 이메일 발송 완료 시각 (NULL이면 미발송)
-created_at
 ```
 
-### disclosure_sources
+### disclosures
 
 ```text
 id
 stock_id
-source_type
-source_url
-source_title
+external_id
+source_type            -- tdnet_yanoshin 등
+disclosure_type        -- dividend_forecast_revision/dividend_decision/earnings_release/earnings_revision/correction/other
+title
+document_url
+storage_path           -- disclosures/{ticker}/{published_date}/{external_id}.pdf
 published_at
-raw_file_url
+collected_at
+status
+parse_status           -- pending/downloaded/parsed/failed/skipped
+parse_error
 created_at
+updated_at
 ```
 
-### parse_jobs
+### dividend_reviews
 
 ```text
 id
-disclosure_source_id
+stock_id
+disclosure_id
+event_index            -- 동일 공시 내 AI event index
+extracted_event_type
+extracted_change_type
+extracted_dividend_per_share
+previous_dividend_per_share
+extracted_payment_date
+extracted_payment_month
+extracted_payment_year
+extracted_record_date
+extracted_ex_dividend_date
+confidence_score
+review_priority
 status
-error_message
-started_at
-finished_at
+evidence_text
+warnings
+raw_payload
+created_dividend_event_id
 created_at
+updated_at
 ```
+
+### jobs
+
+```text
+id
+type                   -- collect_disclosures/download_disclosure_pdf/parse_disclosure_pdf_ai/approve_dividend_review/evaluate_notification_rules/send_email_notification
+status
+payload
+run_after
+attempts
+max_attempts
+last_error
+created_at
+updated_at
+```
+
+> `disclosure_sources`와 `parse_jobs`처럼 원문/파싱 작업을 분리하던 초기 초안 모델은 PDF+AI MVP에서 `disclosures`와 중앙 `jobs` 테이블로 대체합니다.
 
 ---
 
@@ -886,29 +929,36 @@ ex_date_before
 
 ```text
 Frontend:
-Next.js
+Next.js App Router
 TypeScript
 Tailwind CSS
 
 Hosting:
-Cloudflare Pages
+Vercel 또는 Cloudflare Pages
 
-API:
-Cloudflare Workers
+API / Custom Logic:
+Supabase PostgREST
+Supabase RPC
+Supabase Edge Functions
 
 Database/Auth:
 Supabase PostgreSQL
 Supabase Auth
+Supabase Row Level Security
 
 Queue/Scheduler:
-Cloudflare Queues
-Cloudflare Cron Triggers
+PostgreSQL jobs table
+process-jobs Supabase Edge Function
+GitHub Actions Cron
 
 Storage:
-Supabase Storage 또는 Cloudflare R2
+Private Supabase Storage bucket: disclosures
+
+AI Parsing:
+OpenAI Responses API from Edge Functions only
 
 Email:
-Resend 또는 SendGrid
+Resend
 ```
 
 ### 추천 아키텍처
@@ -916,19 +966,24 @@ Resend 또는 SendGrid
 ```text
 사용자 브라우저 / PWA
         ↓
-Cloudflare Pages
+Next.js App Router
         ↓
-Cloudflare Workers API
+Supabase Client / RPC
         ↓
-Supabase PostgreSQL
+Supabase PostgreSQL + RLS
+
+GitHub Actions Cron
         ↓
-Cloudflare Queues
+collect-disclosures Edge Function
         ↓
-Parser Worker
+Yanoshin TDnet list API / TDnet PDF
         ↓
-Supabase DB 저장
+disclosures + jobs
         ↓
-Email / 앱 내 알림
+process-jobs Edge Function
+        ├─ download_disclosure_pdf → private Storage
+        ├─ parse_disclosure_pdf_ai → OpenAI Responses API → dividend_reviews
+        └─ approve_dividend_review → dividend_events + notifications
 ```
 
 ### 운영 비용 목표
@@ -948,15 +1003,15 @@ MVP:
 ```text
 Scheduler
   ↓
-TDnet 공시 확인
+Yanoshin TDnet 목록 확인
   ↓
-공시 제목/파일 저장
+공시 제목/PDF URL 저장
   ↓
-배당 관련 분류
+배당·결산·정정 키워드 분류
   ↓
-XBRL/PDF 다운로드
+PDF 다운로드 및 private Storage 저장
   ↓
-배당 데이터 추출
+PDF 텍스트 추출 + OpenAI 구조화 파싱
   ↓
 이상치 검증
   ↓
@@ -1073,7 +1128,7 @@ yield_above 조건: 3.5% 이상
 - MVP는 월 $0~$5 수준에서 운영 가능하도록 설계한다.
 - 상시 서버를 사용하지 않는다.
 - 배치 작업은 Cron/Queue 기반으로 실행한다.
-- LLM 파싱은 기본 사용하지 않고 예외 케이스에만 사용한다.
+- LLM 파싱은 PDF+AI 수집 MVP의 핵심 경로로 사용하되, 제목 필터와 섹션 선별로 입력을 제한하고 관리자 승인 전 사용자 노출을 금지해 비용과 리스크를 제어한다.
 - 유료 데이터 API는 MVP에서 사용하지 않는다.
 
 ---
@@ -1192,7 +1247,7 @@ GET /api/notifications
 - 관리자 검수 상태
 - 출처 URL 저장
 - TDnet 공시 후보 수집
-- XBRL/PDF 파싱
+- PDF+AI 파싱
 
 ### Should
 
@@ -1286,7 +1341,7 @@ MVP에서는 하지 않습니다.
 본 서비스가 경쟁 시장에서 살아남기 위해서는 단순히 배당 정보를 제공하는 것을 넘어 **신뢰성과 정확도**를 핵심 가치로 삼아야 합니다. 기획 검증 보고서에서도 지적했듯이, 일본 시장에는 이미 다양한 배당 관리 앱과 포트폴리오 서비스가 존재하며 월별 배당 예측, 목표 수익률 알림, NISA/과세계좌 구분을 제공하는 제품들이 많습니다【422402774009173†L66-L70】. 따라서 우리 앱의 가장 큰 차별점은 다음과 같습니다.
 
 - **세후 실수령액에 집중**: 기존 경쟁자들은 세전 기준의 추정값을 제공하는 경우가 많습니다. 우리는 계좌 유형별 세금 구조를 적용해 **실제 손에 들어오는 금액과 실제 입금일**을 보여줍니다【422402774009173†L19-L23】.
-- **공시 기반 데이터 검수**: TDnet 공시와 XBRL/PDF에서 추출한 데이터에 출처 URL과 검수 상태를 명시하여 데이터 품질을 확보합니다【422402774009173†L19-L23】.
+- **공시 기반 데이터 검수**: TDnet/Yanoshin 공시와 PDF+AI에서 추출한 데이터에 출처 URL과 검수 상태를 명시하고, 승인 전 AI 후보를 사용자 화면에서 숨겨 데이터 품질을 확보합니다【422402774009173†L19-L23】.
 - **범위의 집중**: 초기 MVP는 일본 고배당주 30~50개로 범위를 좁혀 데이터 운영과 품질을 관리합니다【422402774009173†L64-L70】. 미국 ETF와 해외 주식은 차후 버전에서 다룹니다.
 - **사용자 경험 단순화**: 복잡한 재무지표 대신 달력과 알림 중심 UI를 제공해 초보 투자자도 쉽게 사용할 수 있습니다.
 

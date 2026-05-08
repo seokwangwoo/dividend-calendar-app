@@ -16,10 +16,11 @@ Next.js + Tailwind CSS
 + Supabase Storage
 + Supabase Studio
 + GitHub Actions Cron
++ OpenAI Responses API
 + Resend
 ```
 
-이 방식은 기존 백엔드 설계의 핵심인 **사용자별 포트폴리오 관리, 일본 주식 배당 데이터 관리, 세후 배당 계산, 월별 배당 캘린더, 목표수익률 알림, 배당 변경 알림, 관리자 검수**를 유지하면서도 운영비와 개발 복잡도를 줄이는 구조입니다.
+이 방식은 기존 백엔드 설계의 핵심인 **사용자별 포트폴리오 관리, 일본 주식 배당 데이터 관리, 세후 배당 계산, 월별 배당 캘린더, 목표수익률 알림, 배당 변경 알림, 관리자 검수**를 유지하면서도 운영비와 개발 복잡도를 줄이는 구조입니다. 배당 데이터 수집은 TDnet/Yanoshin 공시 목록 → PDF 저장 → AI 구조화 추출 → 관리자 승인 순서의 반자동 파이프라인으로 운영하며, 승인 전 AI 결과는 사용자 화면과 알림에 노출하지 않습니다.
 
 ---
 
@@ -85,7 +86,7 @@ app/
 | API | Supabase PostgREST | 기본 CRUD API 자동 제공 |
 | Complex API | Supabase RPC | 홈 요약, 캘린더 계산 등 |
 | Custom Logic | Supabase Edge Functions | 관리자 승인, 알림 생성, 외부 수집 처리 |
-| File Storage | Supabase Storage | 공시 원문 PDF/XBRL 저장 |
+| File Storage | Supabase Storage | 공시 원문 PDF 저장 |
 | Admin | Supabase Studio | MVP 관리자 검수 대체 |
 | Scheduler | GitHub Actions Cron | 정기 데이터 수집/알림 평가 |
 | Email | Resend | 이메일 알림 발송 |
@@ -112,7 +113,9 @@ GitHub Actions Cron
 Supabase Edge Functions
   ↓
 External Sources
-  ├─ TDnet
+  ├─ Yanoshin TDnet list API
+  ├─ TDnet PDF
+  ├─ OpenAI Responses API
   └─ Stock Price API
 
 Supabase Studio
@@ -302,6 +305,7 @@ create table dividend_events (
   id uuid primary key default gen_random_uuid(),
   stock_id uuid not null references stocks(id),
   fiscal_year int not null,
+  payment_year int,
   event_type text not null,
   dividend_per_share numeric(18,2),
   previous_dividend_per_share numeric(18,2),
@@ -315,6 +319,7 @@ create table dividend_events (
   source_url text,
   source_published_at timestamptz,
   review_status text not null default 'pending',
+  raw_payload jsonb not null default '{}',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -322,16 +327,18 @@ create table dividend_events (
 
 | 컬럼 | 설명 |
 |---|---|
-| event_type | interim, year_end, special, other |
-| status | estimated, confirmed, paid, undecided |
-| change_type | increase, decrease, no_dividend, special, unchanged |
-| review_status | pending, approved, rejected |
+| event_type | interim, year_end, annual_total, special, commemorative, other. `annual_total`은 검증/참고용이며 사용자 현금흐름 합계에는 포함하지 않는다. MVP에서는 특별/기념 배당을 별도 지급 row로 중복 집계하지 않고 payable interim/year_end 이벤트의 breakdown metadata로 보관한다. |
+| status | estimated, confirmed, paid, undecided. `undecided`/未定은 0円으로 저장하지 않는다. |
+| change_type | increase, decrease, no_dividend, resumed, special, commemorative, unchanged, unknown |
+| review_status | pending, approved, rejected. 사용자 화면과 알림은 approved만 사용한다. |
+| payment_year | 기존 앱의 사용자-facing 달력연도 집계 키. `expected_payment_date`가 있으면 그 연도에서 도출하고, 지급월만 있을 때는 관리자 확인 전까지 승인할 수 없다. |
+| raw_payload | ordinary/special/commemorative breakdown, AI evidence, source metadata 등 감사용 보조 데이터 |
 
 ---
 
 ## 6.6 dividend_reviews
 
-관리자 검수용 테이블입니다.
+관리자 검수용 테이블입니다. AI 파싱 결과는 사용자 데이터가 아니라 후보 데이터이며, AI가 하나의 공시에서 여러 배당 이벤트를 추출하면 이벤트별로 review row를 1개씩 생성합니다.
 
 ```sql
 create table dividend_reviews (
@@ -342,13 +349,23 @@ create table dividend_reviews (
   previous_dividend_per_share numeric(18,2),
   extracted_payment_date date,
   extracted_payment_month int,
+  extracted_fiscal_year int,
+  extracted_payment_year int,
+  extracted_event_type text,
+  extracted_change_type text,
+  extracted_record_date date,
+  extracted_ex_dividend_date date,
   confidence_score numeric(5,4),
+  review_priority text not null default 'normal',
   status text not null default 'pending',
   reviewed_by uuid references profiles(id),
   reviewed_at timestamptz,
   rejection_reason text,
   created_dividend_event_id uuid references dividend_events(id),
   raw_payload jsonb not null default '{}',
+  event_index int not null default 0,
+  evidence_text text,
+  warnings jsonb not null default '[]',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -422,9 +439,12 @@ create table disclosures (
   title text not null,
   document_url text,
   storage_path text,
+  disclosure_type text not null default 'other',
   published_at timestamptz,
   collected_at timestamptz not null default now(),
   status text not null default 'collected',
+  parse_status text not null default 'pending',
+  parse_error text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -444,6 +464,7 @@ create table jobs (
   payload jsonb not null default '{}',
   run_after timestamptz not null default now(),
   attempts int not null default 0,
+  max_attempts int not null default 3,
   last_error text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -452,8 +473,10 @@ create table jobs (
 
 | type | 설명 |
 |---|---|
-| collect_disclosures | 공시 수집 |
-| parse_disclosure | 공시 파싱 |
+| collect_disclosures | Yanoshin TDnet list API에서 배당/결산 공시 후보 수집 |
+| download_disclosure_pdf | PDF URL이 있는 공시만 내려받아 private Storage에 저장 |
+| parse_disclosure_pdf_ai | 저장된 PDF/추출 텍스트를 OpenAI Responses API로 구조화 파싱 |
+| approve_dividend_review | 승인된 review를 `dividend_events`에 upsert하고 알림 평가 job 생성 |
 | evaluate_notification_rules | 목표수익률 조건 평가 |
 | send_email_notification | 이메일 알림 발송 |
 
@@ -576,8 +599,8 @@ MVP에서는 REST API 서버를 직접 만들지 않고, 아래 3가지 방식�
 |---|---|
 | approve-dividend-review | 관리자 검수 승인 |
 | reject-dividend-review | 관리자 검수 거절 |
-| collect-disclosures | 공시 데이터 수집 |
-| parse-disclosure | 공시 원문 파싱 |
+| collect-disclosures | Yanoshin/TDnet 공시 후보 수집 및 다운로드 job 생성 |
+| process-jobs | `jobs` claim/retry/dispatch 중앙 runner. Phase별로 PDF 다운로드, AI 파싱, 승인 후 알림 평가 handler를 추가한다. |
 | evaluate-notification-rules | 목표수익률 알림 조건 평가 |
 | send-email-notification | 이메일 알림 발송 |
 | refresh-stock-prices | 주가 데이터 갱신 |
@@ -853,9 +876,19 @@ notify_email = true이면 email job 생성
 |---|---|
 | 1단계 | CSV 또는 수동 입력으로 종목/배당 데이터 등록 |
 | 2단계 | TDnet 공시 메타데이터 수집 |
-| 3단계 | 공시 원문 저장 |
-| 4단계 | PDF/XBRL 파싱 |
+| 3단계 | PDF URL이 있는 공시 원문을 private Storage에 저장 |
+| 4단계 | 저장된 PDF를 텍스트 우선 + OpenAI Structured Outputs로 파싱 |
 | 5단계 | 관리자 검수 후 사용자 화면 반영 |
+
+### PDF + AI 수집 세부 원칙
+
+- 공시 목록은 Yanoshin TDnet list API의 `json2` 또는 `json` 응답을 사용하고, MVP PDF 수집 경로에서는 `hasXBRL=0` 조건을 사용한다.
+- 제목 필터는 강한 배당 키워드(`配当予想の修正`, `剰余金の配当`, `増配`, `減配`, `無配`, `復配`), 결산短信 키워드, 정정 키워드를 구분한다.
+- PDF URL이 없는 공시는 accepted disclosure로 저장하더라도 다운로드/파싱 job을 만들지 않고 관리자 확인 대상으로 남긴다.
+- Storage 경로는 `disclosures/{ticker}/{published_date}/{external_id}.pdf` 형식을 사용한다.
+- `parse_disclosure_pdf_ai` job은 PDF 저장 성공 후 `disclosures.storage_path`가 채워진 경우에만 생성한다.
+- OpenAI 호출은 Edge Function 내부에서만 수행하고, 구조화 JSON 출력과 서버 측 validation/confidence 조정을 거쳐 `dividend_reviews`에 저장한다.
+- 브라우저 코드에는 `OPENAI_API_KEY`, service-role key, OpenAI model 설정 secret, raw private Storage path를 노출하지 않는다.
 
 ---
 
@@ -891,11 +924,11 @@ jobs:
 | 추출값 수정 | Supabase Studio에서 직접 수정 |
 | 승인 | approve-dividend-review Edge Function |
 | 거절 | reject-dividend-review Edge Function |
-| 원문 보기 | disclosures.storage_path 확인 |
+| 원문 보기 | admin 전용 signed URL로 private Storage PDF 확인 |
 
 ---
 
-## 13.2 추후 Admin 화면
+## 13.2 Custom Admin 화면
 
 Next.js에 `/admin` 라우트를 추가합니다.
 
@@ -905,7 +938,7 @@ Next.js에 `/admin` 라우트를 추가합니다.
 /admin/jobs
 ```
 
-단, MVP 1차에서는 Supabase Studio로 충분합니다.
+MVP 1차에서는 Supabase Studio를 fallback으로 사용할 수 있지만, PDF+AI 수집 MVP 2에서는 `/admin/dividend-reviews`에서 pending 목록, evidence, PDF signed URL, 값 수정, 승인, 거절을 제공해야 합니다.
 
 ---
 
@@ -915,7 +948,7 @@ Next.js에 `/admin` 라우트를 추가합니다.
 
 | Bucket | 용도 | Public |
 |---|---|---|
-| disclosures | 공시 원문 PDF/XBRL | No |
+| disclosures | 공시 원문 PDF | No |
 | exports | 관리자 CSV Export | No |
 
 ## 14.2 파일 접근 정책
@@ -1098,7 +1131,8 @@ create index idx_holdings_user_id on holdings(user_id);
 create index idx_holdings_user_stock on holdings(user_id, stock_id);
 
 create index idx_dividend_events_stock_year on dividend_events(stock_id, fiscal_year);
-create index idx_dividend_events_payment_month on dividend_events(fiscal_year, expected_payment_month);
+create index idx_dividend_events_payment_year_month on dividend_events(payment_year, expected_payment_month);
+create index idx_dividend_events_payable on dividend_events(review_status, event_type, payment_year, expected_payment_month);
 create index idx_dividend_events_review_status on dividend_events(review_status);
 
 create index idx_notification_rules_user_id on notification_rules(user_id);
@@ -1108,6 +1142,9 @@ create index idx_notifications_user_created on notifications(user_id, created_at
 create index idx_notifications_user_status on notifications(user_id, status);
 
 create index idx_dividend_reviews_status on dividend_reviews(status);
+create index idx_dividend_reviews_disclosure_event on dividend_reviews(disclosure_id, event_index);
+create index idx_disclosures_external_id on disclosures(external_id);
+create index idx_disclosures_parse_status on disclosures(parse_status);
 create index idx_jobs_status_run_after on jobs(status, run_after);
 ```
 
@@ -1142,9 +1179,10 @@ create index idx_jobs_status_run_after on jobs(status, run_after);
 | 2 | 목표수익률 평가 Edge Function |
 | 3 | Resend 이메일 발송 연동 |
 | 4 | GitHub Actions Cron 설정 |
-| 5 | disclosures 저장 |
-| 6 | dividend_reviews 승인 Edge Function |
-| 7 | 배당 변경 알림 생성 |
+| 5 | disclosures 저장 및 private PDF Storage bucket 구성 |
+| 6 | `process-jobs` 기반 PDF 다운로드/AI 파싱 job 처리 |
+| 7 | dividend_reviews 승인 Edge Function |
+| 8 | 승인 후 배당 변경 알림 생성 |
 
 ---
 
@@ -1153,8 +1191,8 @@ create index idx_jobs_status_run_after on jobs(status, run_after);
 | 순서 | 작업 |
 |---:|---|
 | 1 | `/admin` Next.js 관리자 화면 |
-| 2 | TDnet 자동 수집 |
-| 3 | PDF/XBRL 파싱 |
+| 2 | Yanoshin/TDnet 자동 수집 고도화 |
+| 3 | PDF+AI 파싱 정확도 고도화 |
 | 4 | Materialized View 최적화 |
 | 5 | Cloudflare R2 또는 별도 Storage 검토 |
 | 6 | 별도 백엔드 서버 도입 검토 |
