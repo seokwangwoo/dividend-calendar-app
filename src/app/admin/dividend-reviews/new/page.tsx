@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { listAllStocks } from "@/features/admin/queries";
 import { createDividendEvent } from "@/features/admin/actions";
+import type { Database } from "@/types/supabase";
 
 export default async function NewDividendEventPage() {
   const stocks = await listAllStocks();
@@ -31,19 +32,12 @@ export default async function NewDividendEventPage() {
           : null,
       eventType: String(
         formData.get("eventType") ?? "year_end"
-      ) as "interim" | "year_end" | "special" | "commemorative" | "other",
+      ) as Database["public"]["Enums"]["dividend_event_type"],
       status: String(
         formData.get("status") ?? "estimated"
       ) as "estimated" | "confirmed" | "paid" | "undecided",
       changeType: formData.get("changeType")
-        ? (String(formData.get("changeType")) as
-            | "increase"
-            | "decrease"
-            | "no_dividend"
-            | "resumed"
-            | "special"
-            | "commemorative"
-            | "unchanged")
+        ? (String(formData.get("changeType")) as Database["public"]["Enums"]["dividend_change_type"])
         : null,
       dividendPerShare:
         dividendRaw && String(dividendRaw).trim() !== ""
@@ -147,6 +141,7 @@ export default async function NewDividendEventPage() {
             >
               <option value="year_end">期末</option>
               <option value="interim">中間</option>
+              <option value="annual_total">年間合計</option>
               <option value="special">特別</option>
               <option value="commemorative">記念</option>
               <option value="other">その他</option>
@@ -201,6 +196,7 @@ export default async function NewDividendEventPage() {
             <option value="increase">増額</option>
             <option value="decrease">減額</option>
             <option value="unchanged">変化なし</option>
+            <option value="unknown">不明</option>
             <option value="no_dividend">無配</option>
             <option value="resumed">復配</option>
             <option value="special">特別</option>

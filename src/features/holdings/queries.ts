@@ -9,7 +9,7 @@ export interface HoldingWithStock extends HoldingRow {
     dividend_events?: Array<{
       payment_year: number | null;
       dividend_per_share: number | null;
-      review_status: "pending" | "approved" | "rejected";
+      review_status: Database["public"]["Enums"]["review_status"];
     }>;
   };
 }

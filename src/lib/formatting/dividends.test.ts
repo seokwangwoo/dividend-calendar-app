@@ -24,6 +24,8 @@ describe("formatReviewStatus", () => {
   it("formats pending", () => expect(formatReviewStatus("pending")).toBe("検収待ち"));
   it("formats approved", () => expect(formatReviewStatus("approved")).toBe("検収済"));
   it("formats rejected", () => expect(formatReviewStatus("rejected")).toBe("却下"));
+  it("formats needs_manual_check", () =>
+    expect(formatReviewStatus("needs_manual_check")).toBe("要確認"));
 });
 
 describe("formatNotificationType", () => {
@@ -49,9 +51,10 @@ describe("formatChangeType", () => {
     expect(formatChangeType("special")).toBe("特別配当");
     expect(formatChangeType("commemorative")).toBe("記念配当");
     expect(formatChangeType("unchanged")).toBe("変化なし");
+    expect(formatChangeType("unknown")).toBe("不明");
   });
 
   it("returns raw type for unknown", () => {
-    expect(formatChangeType("unknown")).toBe("unknown");
+    expect(formatChangeType("split")).toBe("split");
   });
 });

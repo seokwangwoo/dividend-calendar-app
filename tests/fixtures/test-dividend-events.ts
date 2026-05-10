@@ -1,18 +1,25 @@
 import { createAdminClient } from "../helpers/supabase";
+import type { Database } from "@/types/supabase";
+
+type DividendEventType = Database["public"]["Enums"]["dividend_event_type"];
+type DividendEventStatus =
+  Database["public"]["Tables"]["dividend_events"]["Insert"]["status"];
+type DividendChangeType = Database["public"]["Enums"]["dividend_change_type"];
+type ReviewStatus = Database["public"]["Enums"]["review_status"];
 
 export interface CreateDividendEventParams {
   stockId: string;
   fiscalYear: number;
   paymentYear?: number;
-  eventType?: string;
+  eventType?: DividendEventType;
   dividendPerShare?: number | null;
   expectedPaymentMonth?: number | null;
   expectedPaymentDate?: string | null;
   recordDate?: string | null;
   exDividendDate?: string | null;
-  status?: string;
-  changeType?: string | null;
-  reviewStatus?: "pending" | "approved" | "rejected";
+  status?: DividendEventStatus;
+  changeType?: DividendChangeType | null;
+  reviewStatus?: ReviewStatus;
   sourceType?: string | null;
   sourceUrl?: string | null;
   sourcePublishedAt?: string | null;

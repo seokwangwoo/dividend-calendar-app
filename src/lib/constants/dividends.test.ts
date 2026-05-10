@@ -3,10 +3,25 @@ import {
   ACCOUNT_TYPES,
   AMOUNT_BASIS,
   CALENDAR_ACCOUNT_FILTERS,
+  DISCLOSURE_PARSE_STATUSES,
+  DISCLOSURE_TYPES,
+  DIVIDEND_CHANGE_TYPES,
+  DIVIDEND_EVENT_TYPES,
   DIVIDEND_STATUSES,
+  JOB_TYPES,
   REVIEW_STATUSES,
+  REVIEW_PRIORITIES,
+  USER_PAYABLE_DIVIDEND_EVENT_TYPES,
   ACCOUNT_TYPE_OPTIONS,
-  AMOUNT_BASIS_OPTIONS
+  AMOUNT_BASIS_OPTIONS,
+  isDisclosureParseStatus,
+  isDisclosureType,
+  isDividendChangeType,
+  isDividendEventType,
+  isJobType,
+  isReviewPriority,
+  isReviewStatus,
+  isUserPayableDividendEventType
 } from "./dividends";
 
 describe("dividends constants", () => {
@@ -26,8 +41,84 @@ describe("dividends constants", () => {
     expect(DIVIDEND_STATUSES).toEqual(["estimated", "confirmed", "paid", "undecided"]);
   });
 
+  it("PDF AI disclosure contract values are explicit", () => {
+    expect(DISCLOSURE_TYPES).toEqual([
+      "dividend_forecast_revision",
+      "dividend_decision",
+      "earnings_release",
+      "earnings_revision",
+      "correction",
+      "other"
+    ]);
+    expect(DISCLOSURE_PARSE_STATUSES).toEqual([
+      "pending",
+      "downloaded",
+      "parsing",
+      "parsed",
+      "failed",
+      "skipped"
+    ]);
+    expect(REVIEW_PRIORITIES).toEqual(["low", "normal", "high", "urgent"]);
+  });
+
+  it("dividend event and change contract values include AI review cases", () => {
+    expect(DIVIDEND_EVENT_TYPES).toEqual([
+      "interim",
+      "year_end",
+      "annual_total",
+      "special",
+      "commemorative",
+      "other"
+    ]);
+    expect(USER_PAYABLE_DIVIDEND_EVENT_TYPES).toEqual(["interim", "year_end", "other"]);
+    expect(DIVIDEND_CHANGE_TYPES).toEqual([
+      "increase",
+      "decrease",
+      "no_dividend",
+      "resumed",
+      "special",
+      "commemorative",
+      "unchanged",
+      "unknown"
+    ]);
+  });
+
   it("REVIEW_STATUSES has correct values", () => {
-    expect(REVIEW_STATUSES).toEqual(["pending", "approved", "rejected"]);
+    expect(REVIEW_STATUSES).toEqual([
+      "pending",
+      "approved",
+      "rejected",
+      "needs_manual_check"
+    ]);
+  });
+
+  it("JOB_TYPES has phase job contract values", () => {
+    expect(JOB_TYPES).toEqual([
+      "collect_disclosures",
+      "download_disclosure_pdf",
+      "parse_disclosure_pdf_ai",
+      "approve_dividend_review",
+      "evaluate_notification_rules"
+    ]);
+  });
+
+  it("type guards accept known values and reject unknown values", () => {
+    expect(isDisclosureType("correction")).toBe(true);
+    expect(isDisclosureType("press_release")).toBe(false);
+    expect(isDisclosureParseStatus("downloaded")).toBe(true);
+    expect(isDisclosureParseStatus("collected")).toBe(false);
+    expect(isReviewPriority("urgent")).toBe(true);
+    expect(isReviewPriority("blocked")).toBe(false);
+    expect(isDividendEventType("annual_total")).toBe(true);
+    expect(isDividendEventType("quarterly")).toBe(false);
+    expect(isUserPayableDividendEventType("year_end")).toBe(true);
+    expect(isUserPayableDividendEventType("annual_total")).toBe(false);
+    expect(isReviewStatus("needs_manual_check")).toBe(true);
+    expect(isReviewStatus("archived")).toBe(false);
+    expect(isDividendChangeType("unknown")).toBe(true);
+    expect(isDividendChangeType("split")).toBe(false);
+    expect(isJobType("parse_disclosure_pdf_ai")).toBe(true);
+    expect(isJobType("parse_disclosure")).toBe(false);
   });
 
   it("ACCOUNT_TYPE_OPTIONS has correct labels", () => {

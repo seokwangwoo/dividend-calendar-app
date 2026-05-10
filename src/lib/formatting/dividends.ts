@@ -29,7 +29,8 @@ export function formatReviewStatus(status: ReviewStatus) {
   const labels: Record<ReviewStatus, string> = {
     pending: "検収待ち",
     approved: "検収済",
-    rejected: "却下"
+    rejected: "却下",
+    needs_manual_check: "要確認"
   };
 
   return labels[status];
@@ -55,7 +56,8 @@ export function formatChangeType(changeType: string): string {
     resumed: "復配",
     special: "特別配当",
     commemorative: "記念配当",
-    unchanged: "変化なし"
+    unchanged: "変化なし",
+    unknown: "不明"
   };
 
   return labels[changeType] ?? changeType;

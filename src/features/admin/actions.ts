@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdminUser } from "./auth";
 import { createClient } from "@/lib/supabase/server";
 import { validateMonth, validateDividendAmount, validatePaymentYear } from "./validation";
+import type { Database } from "@/types/supabase";
 
 const USER_FACING_PATHS = ["/app/home", "/app/portfolio", "/app/calendar"];
 
@@ -13,17 +14,9 @@ export type CreateDividendEventInput = {
   paymentYear: number;
   estimatedPaymentMonth?: number | null;
   paymentStartDate?: string | null;
-  eventType: "interim" | "year_end" | "special" | "commemorative" | "other";
+  eventType: Database["public"]["Enums"]["dividend_event_type"];
   status?: "estimated" | "confirmed" | "paid" | "undecided";
-  changeType?:
-    | "increase"
-    | "decrease"
-    | "no_dividend"
-    | "resumed"
-    | "special"
-    | "commemorative"
-    | "unchanged"
-    | null;
+  changeType?: Database["public"]["Enums"]["dividend_change_type"] | null;
   dividendPerShare?: number | null;
   previousDividendPerShare?: number | null;
   sourceType?: string | null;

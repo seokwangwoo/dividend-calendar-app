@@ -20,7 +20,7 @@ export type DividendEventWithStock = {
   change_type: string | null;
   source_type: string | null;
   source_url: string | null;
-  review_status: "pending" | "approved" | "rejected";
+  review_status: Database["public"]["Enums"]["review_status"];
   rejection_reason: string | null;
   created_at: string;
   updated_at: string;

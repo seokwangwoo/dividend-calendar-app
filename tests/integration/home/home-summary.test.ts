@@ -184,6 +184,7 @@ describe("get_home_summary RPC", () => {
     let user: TestUser;
     let client: Awaited<ReturnType<typeof signInAs>>;
     const eventIds: string[] = [];
+    const ISOLATED_YEAR = YEAR + 20;
 
     beforeAll(async () => {
       user = await createTestUser(uniqueEmail("home-pending"), PASSWORD);
@@ -200,14 +201,16 @@ describe("get_home_summary RPC", () => {
       // Only pending and rejected events — should not contribute to totals
       const e1 = await createTestDividendEvent({
         stockId,
-        fiscalYear: YEAR,
+        fiscalYear: ISOLATED_YEAR,
+        paymentYear: ISOLATED_YEAR,
         dividendPerShare: 5000,
         expectedPaymentMonth: CURRENT_MONTH,
         reviewStatus: "pending",
       });
       const e2 = await createTestDividendEvent({
         stockId,
-        fiscalYear: YEAR,
+        fiscalYear: ISOLATED_YEAR,
+        paymentYear: ISOLATED_YEAR,
         dividendPerShare: 5000,
         expectedPaymentMonth: CURRENT_MONTH,
         reviewStatus: "rejected",
@@ -221,7 +224,7 @@ describe("get_home_summary RPC", () => {
     });
 
     it("annualDividend.afterTaxAmount is null with only pending/rejected events", async () => {
-      const { data } = await client.rpc("get_home_summary", { p_year: YEAR });
+      const { data } = await client.rpc("get_home_summary", { p_year: ISOLATED_YEAR });
       const summary = data as unknown as HomeSummary;
       expect(summary.annualDividend.afterTaxAmount).toBeNull();
     });

@@ -21,6 +21,12 @@ export type Database = {
           published_at: string | null;
           collected_at: string;
           status: string;
+          disclosure_type: Database["public"]["Enums"]["disclosure_type"];
+          parse_status: Database["public"]["Enums"]["disclosure_parse_status"];
+          review_priority: Database["public"]["Enums"]["disclosure_review_priority"];
+          ai_parse_attempts: number;
+          last_parse_error: string | null;
+          raw_payload: Json;
           created_at: string;
           updated_at: string;
         };
@@ -35,6 +41,12 @@ export type Database = {
           published_at?: string | null;
           collected_at?: string;
           status?: string;
+          disclosure_type?: Database["public"]["Enums"]["disclosure_type"];
+          parse_status?: Database["public"]["Enums"]["disclosure_parse_status"];
+          review_priority?: Database["public"]["Enums"]["disclosure_review_priority"];
+          ai_parse_attempts?: number;
+          last_parse_error?: string | null;
+          raw_payload?: Json;
           created_at?: string;
           updated_at?: string;
         };
@@ -48,6 +60,12 @@ export type Database = {
           published_at?: string | null;
           collected_at?: string;
           status?: string;
+          disclosure_type?: Database["public"]["Enums"]["disclosure_type"];
+          parse_status?: Database["public"]["Enums"]["disclosure_parse_status"];
+          review_priority?: Database["public"]["Enums"]["disclosure_review_priority"];
+          ai_parse_attempts?: number;
+          last_parse_error?: string | null;
+          raw_payload?: Json;
           updated_at?: string;
         };
       };
@@ -61,6 +79,13 @@ export type Database = {
           extracted_payment_date: string | null;
           extracted_payment_month: number | null;
           confidence_score: number | null;
+          fiscal_year: number | null;
+          event_type: Database["public"]["Enums"]["dividend_event_type"] | null;
+          extracted_record_date: string | null;
+          extracted_ex_dividend_date: string | null;
+          change_type: Database["public"]["Enums"]["dividend_change_type"] | null;
+          evidence_text: string | null;
+          warning_message: string | null;
           status: string;
           reviewed_by: string | null;
           reviewed_at: string | null;
@@ -79,6 +104,13 @@ export type Database = {
           extracted_payment_date?: string | null;
           extracted_payment_month?: number | null;
           confidence_score?: number | null;
+          fiscal_year?: number | null;
+          event_type?: Database["public"]["Enums"]["dividend_event_type"] | null;
+          extracted_record_date?: string | null;
+          extracted_ex_dividend_date?: string | null;
+          change_type?: Database["public"]["Enums"]["dividend_change_type"] | null;
+          evidence_text?: string | null;
+          warning_message?: string | null;
           status?: string;
           reviewed_by?: string | null;
           reviewed_at?: string | null;
@@ -96,6 +128,13 @@ export type Database = {
           extracted_payment_date?: string | null;
           extracted_payment_month?: number | null;
           confidence_score?: number | null;
+          fiscal_year?: number | null;
+          event_type?: Database["public"]["Enums"]["dividend_event_type"] | null;
+          extracted_record_date?: string | null;
+          extracted_ex_dividend_date?: string | null;
+          change_type?: Database["public"]["Enums"]["dividend_change_type"] | null;
+          evidence_text?: string | null;
+          warning_message?: string | null;
           status?: string;
           reviewed_by?: string | null;
           reviewed_at?: string | null;
@@ -145,7 +184,7 @@ export type Database = {
           stock_id: string;
           fiscal_year: number;
           payment_year: number | null;
-          event_type: "interim" | "year_end" | "special" | "commemorative" | "other";
+          event_type: Database["public"]["Enums"]["dividend_event_type"];
           dividend_per_share: number | null;
           previous_dividend_per_share: number | null;
           expected_payment_date: string | null;
@@ -154,19 +193,14 @@ export type Database = {
           ex_dividend_date: string | null;
           status: "estimated" | "confirmed" | "paid" | "undecided";
           change_type:
-            | "increase"
-            | "decrease"
-            | "no_dividend"
-            | "resumed"
-            | "special"
-            | "commemorative"
-            | "unchanged"
-            | null;
+            Database["public"]["Enums"]["dividend_change_type"] | null;
           source_type: string | null;
           source_url: string | null;
           source_published_at: string | null;
-          review_status: "pending" | "approved" | "rejected";
+          review_status: Database["public"]["Enums"]["review_status"];
           rejection_reason: string | null;
+          disclosure_id: string | null;
+          raw_payload: Json;
           created_at: string;
           updated_at: string;
         };
@@ -175,7 +209,7 @@ export type Database = {
           stock_id: string;
           fiscal_year: number;
           payment_year?: number | null;
-          event_type: "interim" | "year_end" | "special" | "commemorative" | "other";
+          event_type: Database["public"]["Enums"]["dividend_event_type"];
           dividend_per_share?: number | null;
           previous_dividend_per_share?: number | null;
           expected_payment_date?: string | null;
@@ -183,27 +217,21 @@ export type Database = {
           record_date?: string | null;
           ex_dividend_date?: string | null;
           status?: "estimated" | "confirmed" | "paid" | "undecided";
-          change_type?:
-            | "increase"
-            | "decrease"
-            | "no_dividend"
-            | "resumed"
-            | "special"
-            | "commemorative"
-            | "unchanged"
-            | null;
+          change_type?: Database["public"]["Enums"]["dividend_change_type"] | null;
           source_type?: string | null;
           source_url?: string | null;
           source_published_at?: string | null;
-          review_status?: "pending" | "approved" | "rejected";
+          review_status?: Database["public"]["Enums"]["review_status"];
           rejection_reason?: string | null;
+          disclosure_id?: string | null;
+          raw_payload?: Json;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           fiscal_year?: number;
           payment_year?: number | null;
-          event_type?: "interim" | "year_end" | "special" | "commemorative" | "other";
+          event_type?: Database["public"]["Enums"]["dividend_event_type"];
           dividend_per_share?: number | null;
           previous_dividend_per_share?: number | null;
           expected_payment_date?: string | null;
@@ -211,20 +239,14 @@ export type Database = {
           record_date?: string | null;
           ex_dividend_date?: string | null;
           status?: "estimated" | "confirmed" | "paid" | "undecided";
-          change_type?:
-            | "increase"
-            | "decrease"
-            | "no_dividend"
-            | "resumed"
-            | "special"
-            | "commemorative"
-            | "unchanged"
-            | null;
+          change_type?: Database["public"]["Enums"]["dividend_change_type"] | null;
           source_type?: string | null;
           source_url?: string | null;
           source_published_at?: string | null;
-          review_status?: "pending" | "approved" | "rejected";
+          review_status?: Database["public"]["Enums"]["review_status"];
           rejection_reason?: string | null;
+          disclosure_id?: string | null;
+          raw_payload?: Json;
           updated_at?: string;
         };
       };
@@ -333,6 +355,7 @@ export type Database = {
           payload: Json;
           run_after: string;
           attempts: number;
+          max_attempts: number;
           last_error: string | null;
           created_at: string;
           updated_at: string;
@@ -344,6 +367,7 @@ export type Database = {
           payload?: Json;
           run_after?: string;
           attempts?: number;
+          max_attempts?: number;
           last_error?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -354,6 +378,7 @@ export type Database = {
           payload?: Json;
           run_after?: string;
           attempts?: number;
+          max_attempts?: number;
           last_error?: string | null;
           updated_at?: string;
         };
@@ -595,6 +620,44 @@ export type Database = {
         | "data_update";
       notification_status: "unread" | "read" | "failed";
       notification_channel: "in_app" | "email";
+      disclosure_type:
+        | "dividend_forecast_revision"
+        | "dividend_decision"
+        | "earnings_release"
+        | "earnings_revision"
+        | "correction"
+        | "other";
+      disclosure_parse_status:
+        | "pending"
+        | "downloaded"
+        | "parsing"
+        | "parsed"
+        | "failed"
+        | "skipped";
+      disclosure_review_priority: "low" | "normal" | "high" | "urgent";
+      dividend_event_type:
+        | "interim"
+        | "year_end"
+        | "annual_total"
+        | "special"
+        | "commemorative"
+        | "other";
+      dividend_change_type:
+        | "increase"
+        | "decrease"
+        | "no_dividend"
+        | "resumed"
+        | "special"
+        | "commemorative"
+        | "unchanged"
+        | "unknown";
+      review_status: "pending" | "approved" | "rejected" | "needs_manual_check";
+      job_type:
+        | "collect_disclosures"
+        | "download_disclosure_pdf"
+        | "parse_disclosure_pdf_ai"
+        | "approve_dividend_review"
+        | "evaluate_notification_rules";
     };
     CompositeTypes: Record<string, never>;
   };
