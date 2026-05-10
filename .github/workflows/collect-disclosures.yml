@@ -36,6 +36,11 @@ on:
         required: false
         default: "300"
         type: string
+      process_batch_size:
+        description: "process-jobs batch size after collection"
+        required: false
+        default: "5"
+        type: string
 
 jobs:
   collect:
@@ -68,6 +73,31 @@ jobs:
               "Content-Type": "application/json"
             },
             body: JSON.stringify(payload)
+          });
+          const text = await response.text();
+          console.log(text);
+          if (!response.ok) process.exit(1);
+          NODE
+  process-jobs:
+    runs-on: ubuntu-latest
+    needs: collect
+    if: always()
+    steps:
+      - name: Invoke process-jobs
+        env:
+          SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PROCESS_BATCH_SIZE: ${{ inputs.process_batch_size || vars.PROCESS_JOBS_BATCH_SIZE || '5' }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const response = await fetch(`${process.env.SUPABASE_FUNCTION_URL}/process-jobs`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ batch_size: Number(process.env.PROCESS_BATCH_SIZE || "5") })
           });
           const text = await response.text();
           console.log(text);
