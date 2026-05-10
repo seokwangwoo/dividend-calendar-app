@@ -10,6 +10,7 @@ import {
   getHomeDisplayMode,
   getGoalDisplayState
 } from "@/features/home/display-state";
+import { DISCLOSURE_SOURCE_DISCLAIMER } from "@/features/notifications/constants";
 
 export default async function HomePage() {
   const year = new Date().getFullYear();
@@ -190,6 +191,11 @@ export default async function HomePage() {
               ポートフォリオを確認する
             </Link>
           </div>
+
+          {/* Disclosure source disclaimer */}
+          <p className="whitespace-pre-line rounded-md bg-paper p-3 text-sm leading-6 text-muted">
+            {DISCLOSURE_SOURCE_DISCLAIMER}
+          </p>
         </>
       )}
     </div>

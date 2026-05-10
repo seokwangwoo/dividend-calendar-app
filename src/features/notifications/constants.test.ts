@@ -5,6 +5,7 @@ import {
   NOTIFICATION_RULE_BASIS_OPTIONS,
   NOTIFICATION_OPERATOR_OPTIONS,
   INVESTMENT_NEUTRAL_DISCLAIMER,
+  DISCLOSURE_SOURCE_DISCLAIMER,
   NOTIFICATION_FILTERS
 } from "./constants";
 
@@ -34,6 +35,12 @@ describe("notification constants", () => {
   it("INVESTMENT_NEUTRAL_DISCLAIMER is defined", () => {
     expect(INVESTMENT_NEUTRAL_DISCLAIMER).toContain("売買を推奨するものではありません");
     expect(INVESTMENT_NEUTRAL_DISCLAIMER).toContain("投資判断はご自身で行ってください。");
+  });
+
+  it("DISCLOSURE_SOURCE_DISCLAIMER mentions TDnet and brokerage confirmation", () => {
+    expect(DISCLOSURE_SOURCE_DISCLAIMER).toContain("TDnet");
+    expect(DISCLOSURE_SOURCE_DISCLAIMER).toContain("証券会社");
+    expect(DISCLOSURE_SOURCE_DISCLAIMER).toContain("売買を推奨するものではありません");
   });
 
   it("NOTIFICATION_FILTERS has correct labels", () => {

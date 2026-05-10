@@ -20,6 +20,17 @@ export const NOTIFICATION_OPERATOR_OPTIONS = [
 export const INVESTMENT_NEUTRAL_DISCLAIMER =
   "これは売買を推奨するものではありません。\n投資判断はご自身で行ってください。";
 
+/**
+ * Disclaimer shown on home and calendar surfaces where users interpret
+ * dividend schedule data derived from TDnet/Yanoshin disclosures.
+ *
+ * Clarifies that the information is schedule management based on public
+ * disclosure filings, not buy/sell advice, and that actual payment amounts
+ * and tax should be confirmed with brokerage statements.
+ */
+export const DISCLOSURE_SOURCE_DISCLAIMER =
+  "配当予定はTDnet開示資料をもとにしたスケジュール管理のための情報です。実際の支払金額・税額は証券会社の取引報告書でご確認ください。これは売買を推奨するものではありません。";
+
 export const NOTIFICATION_FILTERS = [
   { value: "all", label: "すべて" },
   { value: "yield_target", label: "目標利回り" },

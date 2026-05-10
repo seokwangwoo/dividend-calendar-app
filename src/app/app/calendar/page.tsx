@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { getDividendCalendar } from "@/features/dividends/queries";
 import { getHoldings } from "@/features/holdings/queries";
 import { CalendarClient } from "@/features/calendar/components/calendar-client";
+import { DISCLOSURE_SOURCE_DISCLAIMER } from "@/features/notifications/constants";
 
 export default async function CalendarPage() {
   const year = new Date().getFullYear();
@@ -27,6 +28,9 @@ export default async function CalendarPage() {
         initialCalendarBasis={calendarBasis}
         initialHoldingCount={holdingCount}
       />
+      <p className="whitespace-pre-line rounded-md bg-paper p-3 text-sm leading-6 text-muted">
+        {DISCLOSURE_SOURCE_DISCLAIMER}
+      </p>
     </div>
   );
 }
