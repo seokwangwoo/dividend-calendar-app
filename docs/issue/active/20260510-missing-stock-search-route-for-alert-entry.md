@@ -1,3 +1,11 @@
+---
+status: open
+type: feature
+created: 2026-05-10
+priority: high
+labels: [ui, routing, mvp-scope, notifications, stock-search]
+---
+
 # 종목 상세/알림 설정 진입을 위한 `/app/stocks/search` 라우트 누락
 
 ## 개요 (Overview)

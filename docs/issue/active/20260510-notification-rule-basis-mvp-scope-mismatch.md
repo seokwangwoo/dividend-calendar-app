@@ -1,3 +1,11 @@
+---
+status: open
+type: bug
+created: 2026-05-10
+priority: high
+labels: [ui, mvp-scope, notifications, product-consistency]
+---
+
 # 목표수익률 알림 기준 UI가 MVP 예상 배당수익률 단일 기준 정책과 충돌
 
 ## 개요 (Overview)

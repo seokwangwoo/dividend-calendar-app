@@ -1,3 +1,11 @@
+---
+status: open
+type: bug
+created: 2026-05-10
+priority: high
+labels: [ui, mvp-scope, product-consistency, calendar]
+---
+
 # 캘린더 기준 전환 UI가 MVP 입금월 기준 정책과 충돌
 
 ## 개요 (Overview)
