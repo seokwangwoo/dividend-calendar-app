@@ -79,6 +79,7 @@ Excluded from this plan:
 6. [Phase 06: Admin Review UI](./phase_06_admin_review_ui/plan.md)
 7. [Phase 07: Notifications and User Surfaces](./phase_07_notifications_and_user_surfaces/plan.md)
 8. [Phase 08: Accuracy Hardening](./phase_08_accuracy_hardening/plan.md)
+9. [Phase 09: E2E Testing](./phase_09_e2e_testing/plan.md)
 
 ## Development Rules
 

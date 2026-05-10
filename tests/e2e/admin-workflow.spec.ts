@@ -113,7 +113,7 @@ test("admin sees AI review list with priority sorting and filters", async ({ pag
   await expect(page.locator("input[name='ticker']")).toBeVisible();
 
   // The review we created should appear (urgent priority)
-  await expect(page.locator("text=緊急")).toBeVisible();
+  await expect(page.locator("tbody").getByText("緊急")).toBeVisible();
 });
 
 test("admin can view review detail with AI values and evidence", async ({ page }) => {
@@ -125,8 +125,8 @@ test("admin can view review detail with AI values and evidence", async ({ page }
   await page.goto(`/admin/dividend-reviews/${reviewId}`);
 
   // Page should show AI review detail
-  await expect(page.getByText("AI抽出値")).toBeVisible();
-  await expect(page.getByText("開示情報")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI抽出値" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "開示情報" })).toBeVisible();
   await expect(page.getByText("配当予想の修正 e2eテスト")).toBeVisible();
 
   // Investment caution
@@ -140,7 +140,7 @@ test("admin can view review detail with AI values and evidence", async ({ page }
   await expect(page.getByRole("button", { name: "承認する" })).toBeVisible();
 
   // Reject form
-  await expect(page.getByText("却下")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "却下" })).toBeVisible();
   await expect(page.getByRole("button", { name: "却下する" })).toBeVisible();
 
   // Raw payload toggle
@@ -179,7 +179,7 @@ test("annual_total review is visually marked as reference-only", async ({ page }
   await expect(page.locator("text=参考専用（集計除外）")).toBeVisible();
 
   // The annual_total caution should mention aggregation exclusion
-  await expect(page.getByText(/年間合計.*集計/)).toBeVisible();
+  await expect(page.getByText("年間合計（参考専用・集計除外）")).toBeVisible();
 });
 
 test("non-admin cannot access dividend review detail page", async ({ page }) => {

@@ -24,7 +24,7 @@ export function createAdminClient(): SupabaseClient {
 }
 
 export function uniqueEmail(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}@test.example.com`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}@example.com`;
 }
 
 export async function createConfirmedUser(prefix: string): Promise<TestUser> {
@@ -318,4 +318,150 @@ export async function cleanupDividendReviews(reviewIds: string[]): Promise<void>
 export async function cleanupDisclosures(disclosureIds: string[]): Promise<void> {
   if (disclosureIds.length === 0) return;
   await createAdminClient().from("disclosures").delete().in("id", disclosureIds);
+}
+
+export async function createDisclosure(opts: {
+  stockId?: string;
+  externalId?: string;
+  sourceType?: string;
+  title?: string;
+  documentUrl?: string | null;
+  publishedAt?: string;
+  disclosureType?: string;
+  parseStatus?: string;
+  reviewPriority?: string;
+  storagePath?: string | null;
+} = {}) {
+  const admin = createAdminClient();
+  const externalId = opts.externalId ?? `e2e-disc-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const { data, error } = await admin
+    .from("disclosures")
+    .insert({
+      stock_id: opts.stockId ?? null,
+      external_id: externalId,
+      source_type: opts.sourceType ?? "tdnet",
+      title: opts.title ?? "E2E disclosure",
+      document_url: opts.documentUrl ?? `https://example.com/${externalId}`,
+      published_at: opts.publishedAt ?? new Date().toISOString(),
+      disclosure_type: opts.disclosureType ?? "other",
+      parse_status: opts.parseStatus ?? "pending",
+      review_priority: opts.reviewPriority ?? "normal",
+      storage_path: opts.storagePath ?? null
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) throw new Error(`createDisclosure: ${error?.message}`);
+  return data.id as string;
+}
+
+export async function createReview(opts: {
+  stockId: string;
+  disclosureId: string;
+  extractedDividendPerShare?: number;
+  previousDividendPerShare?: number;
+  extractedPaymentDate?: string | null;
+  extractedPaymentMonth?: number | null;
+  extractedRecordDate?: string | null;
+  extractedExDividendDate?: string | null;
+  fiscalYear?: number | null;
+  eventType?: string;
+  changeType?: string;
+  confidenceScore?: number;
+  status?: string;
+  evidenceText?: string;
+  warningMessage?: string;
+  rawPayload?: Record<string, unknown>;
+}) {
+  const admin = createAdminClient();
+  const year = new Date().getFullYear();
+  const { data, error } = await admin
+    .from("dividend_reviews")
+    .insert({
+      stock_id: opts.stockId,
+      disclosure_id: opts.disclosureId,
+      extracted_dividend_per_share: opts.extractedDividendPerShare === undefined ? 100 : opts.extractedDividendPerShare,
+      previous_dividend_per_share: opts.previousDividendPerShare === undefined ? 80 : opts.previousDividendPerShare,
+      extracted_payment_date: opts.extractedPaymentDate === undefined ? `${year + 1}-09-25` : opts.extractedPaymentDate,
+      extracted_payment_month: opts.extractedPaymentMonth === undefined ? 9 : opts.extractedPaymentMonth,
+      extracted_record_date: opts.extractedRecordDate === undefined ? null : opts.extractedRecordDate,
+      extracted_ex_dividend_date: opts.extractedExDividendDate === undefined ? null : opts.extractedExDividendDate,
+      fiscal_year: opts.fiscalYear === undefined ? year + 1 : opts.fiscalYear,
+      event_type: opts.eventType === undefined ? "year_end" : opts.eventType,
+      change_type: opts.changeType === undefined ? "increase" : opts.changeType,
+      confidence_score: opts.confidenceScore === undefined ? 0.85 : opts.confidenceScore,
+      status: opts.status === undefined ? "pending" : opts.status,
+      evidence_text: opts.evidenceText === undefined ? "E2E evidence" : opts.evidenceText,
+      warning_message: opts.warningMessage === undefined ? null : opts.warningMessage,
+      raw_payload: opts.rawPayload === undefined ? { eventType: opts.eventType === undefined ? "year_end" : opts.eventType, fiscalYear: opts.fiscalYear === undefined ? year + 1 : opts.fiscalYear } : opts.rawPayload
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) throw new Error(`createReview: ${error?.message}`);
+  return data.id as string;
+}
+
+export async function approveReviewViaApi(
+  reviewId: string,
+  adminUserId: string,
+  overrides?: Record<string, unknown>
+): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("approve_dividend_review_for_reviewer", {
+    p_review_id: reviewId,
+    p_reviewer_id: adminUserId,
+    p_override: overrides ?? {}
+  });
+  if (error) throw new Error(`approveReviewViaApi: ${error.message}`);
+}
+
+export async function rejectReviewViaApi(
+  reviewId: string,
+  adminUserId: string,
+  reason: string
+): Promise<void> {
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("reject_dividend_review_for_reviewer", {
+    p_review_id: reviewId,
+    p_reason: reason,
+    p_reviewer_id: adminUserId
+  });
+  if (error) throw new Error(`rejectReviewViaApi: ${error.message}`);
+}
+
+export async function getNotificationsForUser(userId: string): Promise<
+  Array<{
+    id: string;
+    type: string;
+    title: string;
+    body: string;
+    status: string;
+    payload: Record<string, unknown> | null;
+  }>
+> {
+  const { data, error } = await createAdminClient()
+    .from("notifications")
+    .select("id, type, title, body, status, payload")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(`getNotificationsForUser: ${error.message}`);
+  return (data ?? []) as Array<{
+    id: string;
+    type: string;
+    title: string;
+    body: string;
+    status: string;
+    payload: Record<string, unknown> | null;
+  }>;
+}
+
+export async function cleanupNotificationsForUser(userId: string): Promise<void> {
+  await createAdminClient().from("notifications").delete().eq("user_id", userId);
+}
+
+export async function cleanupJobs(jobIds: string[]): Promise<void> {
+  if (jobIds.length === 0) return;
+  await createAdminClient().from("jobs").delete().in("id", jobIds);
 }

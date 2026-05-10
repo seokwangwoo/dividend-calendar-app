@@ -20,14 +20,13 @@ export type ApprovalOverride = {
   exDividendDate?: string | null;
 };
 
-/** Approve a dividend_review via the approve-dividend-review Edge Function. */
+/** Approve a dividend_review via the DB RPC directly. */
 export async function approveDividendReview(
   reviewId: string,
   override: ApprovalOverride = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await requireAdminUser();
 
-  // Client-side validation before calling Edge Function
   const validationErrors = validateApprovalOverride(
     override as Record<string, unknown>
   );
@@ -37,18 +36,6 @@ export async function approveDividendReview(
   }
 
   const supabase = await createClient();
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    return { ok: false, error: "未認証" };
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!supabaseUrl) {
-    return { ok: false, error: "サーバー設定エラー" };
-  }
 
   // Strip null/undefined from override to keep payload clean
   const cleanOverride: Record<string, unknown> = {};
@@ -58,19 +45,16 @@ export async function approveDividendReview(
     }
   }
 
-  const res = await fetch(`${supabaseUrl}/functions/v1/approve-dividend-review`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify({ reviewId, override: cleanOverride })
-  });
+  const { error: rpcError } = await supabase.rpc(
+    "approve_dividend_review",
+    {
+      p_review_id: reviewId,
+      p_override: cleanOverride
+    }
+  );
 
-  const json = await res.json().catch(() => ({ error: "レスポンス解析エラー" }));
-
-  if (!res.ok) {
-    return { ok: false, error: json.error ?? `HTTP ${res.status}` };
+  if (rpcError) {
+    return { ok: false, error: rpcError.message };
   }
 
   revalidatePath("/admin/dividend-reviews");
@@ -79,7 +63,7 @@ export async function approveDividendReview(
   return { ok: true };
 }
 
-/** Reject a dividend_review via the reject-dividend-review Edge Function. */
+/** Reject a dividend_review via the DB RPC directly. */
 export async function rejectDividendReview(
   reviewId: string,
   reason: string
@@ -92,32 +76,17 @@ export async function rejectDividendReview(
   }
 
   const supabase = await createClient();
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
 
-  if (!session) {
-    return { ok: false, error: "未認証" };
-  }
+  const { error: rpcError } = await supabase.rpc(
+    "reject_dividend_review",
+    {
+      p_review_id: reviewId,
+      p_reason: trimmedReason
+    }
+  );
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!supabaseUrl) {
-    return { ok: false, error: "サーバー設定エラー" };
-  }
-
-  const res = await fetch(`${supabaseUrl}/functions/v1/reject-dividend-review`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify({ reviewId, reason: trimmedReason })
-  });
-
-  const json = await res.json().catch(() => ({ error: "レスポンス解析エラー" }));
-
-  if (!res.ok) {
-    return { ok: false, error: json.error ?? `HTTP ${res.status}` };
+  if (rpcError) {
+    return { ok: false, error: rpcError.message };
   }
 
   revalidatePath("/admin/dividend-reviews");

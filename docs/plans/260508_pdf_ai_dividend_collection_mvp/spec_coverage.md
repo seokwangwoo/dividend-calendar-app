@@ -36,6 +36,13 @@
 | Investment disclaimer | User-facing and notification copy makes clear the app is not investment advice | Phase 07 |
 | MVP 1/2/3 priority sequencing | Data/contracts, collection, download, parsing, review approval, admin UI, notifications, hardening | Phases 01-08 |
 | Success criteria | Collection, PDF storage, AI extraction, review, user reflection, notifications, safety | Plan Completion Definition |
+| E2E user isolation safety | Pending/rejected/needs-manual-check reviews invisible to users; `annual_total` excluded from cash/calendar totals; special/commemorative non-double-count; explicit-only `ex_dividend_date` | Phase 09 |
+| E2E admin review UI | List filters, priority sorting, detail rendering, signed PDF access, raw payload visibility, correction badges | Phase 09 |
+| E2E approval pipeline | Approve/reject via real Edge Functions, override validation, required `payment_year` for month-only timing, idempotency, sibling independence | Phase 09 |
+| E2E notification integration | Eligible change types create notifications after approval, deduplication on re-approval, rejection creates no notification | Phase 09 |
+| E2E full pipeline flow | Seeded disclosure → review → approval → user home/calendar/notification reflection in a single narrative spec | Phase 09 |
+| E2E regression protection | Existing `mvp-critical-flows`, `calendar`, `notifications`, `portfolio`, `admin-workflow`, and `verify-*` specs continue to pass | Phase 09 |
+| E2E system pipeline | `collect-disclosures` fixture candidate → disclosure + job creation, idempotency; `process-jobs` download → complete/retry/final-failure → DB + Admin UI reflection | Phase 09 |
 
 ## Existing Repository Contracts To Preserve
 

@@ -32,10 +32,12 @@ Deno.serve(async (req: Request) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const apiSecret = Deno.env.get("API_SECRET");
   if (!supabaseUrl || !serviceRoleKey) {
     return jsonResponse({ error: "Missing Supabase environment" }, 500);
   }
-  if (req.headers.get("Authorization") !== `Bearer ${serviceRoleKey}`) {
+  const authHeader = req.headers.get("Authorization");
+  if (authHeader !== `Bearer ${serviceRoleKey}` && authHeader !== `Bearer ${apiSecret}`) {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
