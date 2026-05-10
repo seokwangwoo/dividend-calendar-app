@@ -160,7 +160,12 @@ const VALID_STATUS_VALUES = new Set<string>([
   "undecided"
 ]);
 
-const SUSPICIOUS_DIVIDEND_THRESHOLD = 10000;
+/**
+ * Dividend amounts above this threshold (JPY per share) are flagged as suspicious
+ * and trigger confidence reduction and high-priority routing.
+ * 1000 JPY/share covers most real-world Japanese dividends with a comfortable margin.
+ */
+const SUSPICIOUS_DIVIDEND_THRESHOLD = 1000;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // ---------------------------------------------------------------------------
@@ -300,6 +305,11 @@ export type TextExtractionResult = {
   fallbackReason: string | null;
 };
 
+/**
+ * Keywords that mark the start of dividend-relevant content.
+ * Includes earnings-release dividend table row labels (第2四半期末, 当期実績, etc.)
+ * so that 決算短信 dividend tables are captured even when not under a named heading.
+ */
 const DIVIDEND_SECTION_KEYWORDS = [
   "配当の状況",
   "1株当たり配当金",
@@ -316,7 +326,34 @@ const DIVIDEND_SECTION_KEYWORDS = [
   "記念配当",
   "特別配当",
   "基準日",
-  "支払予定日"
+  "支払予定日",
+  // Earnings-release dividend table row labels
+  "第2四半期末",
+  "第1四半期末",
+  "第3四半期末",
+  "当期実績",
+  "前期実績",
+  "次期予想",
+  "合計",
+  "年間"
+];
+
+/**
+ * Section-end markers for earnings releases — headings that signal the end
+ * of the dividend section and start of unrelated financial metrics.
+ * When we are inside a dividend section and hit one of these headings,
+ * we stop collecting lines to avoid sending irrelevant P/L figures to AI.
+ */
+const EARNINGS_NON_DIVIDEND_HEADINGS = [
+  "経営成績",
+  "財務状態",
+  "キャッシュ・フロー",
+  "売上高",
+  "営業利益",
+  "経常利益",
+  "当期純利益",
+  "純資産",
+  "総資産"
 ];
 
 /** Minimum character count for text to be considered usable */
@@ -408,9 +445,18 @@ function decodeHexPdfString(hex: string): string {
 
 /**
  * Trims extracted text to focus on dividend-relevant sections.
+ *
+ * For earnings releases (決算短信), the function focuses on the dividend table
+ * section (配当の状況 / 1株当たり配当金) and stops when it encounters an
+ * unrelated financial-metrics heading. This prevents irrelevant P/L figures
+ * from being sent to the AI model.
+ *
  * Returns the trimmed text and whether trimming occurred.
  */
-export function trimToDividendSections(text: string): {
+export function trimToDividendSections(text: string, options: {
+  /** Pass true when the disclosure type is earnings_release or earnings_revision */
+  earningsRelease?: boolean;
+} = {}): {
   trimmedText: string;
   sectionTrimmed: boolean;
 } {
@@ -418,6 +464,10 @@ export function trimToDividendSections(text: string): {
   const relevantLines: string[] = [];
   let inDividendSection = false;
   let sectionTrimmed = false;
+  // Track how many consecutive non-dividend heading lines we see while inside a section
+  // to detect when we've left the dividend table
+  let consecutiveNonDividendLines = 0;
+  const MAX_NON_DIVIDEND_LINES = options.earningsRelease ? 5 : 30;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -430,11 +480,36 @@ export function trimToDividendSections(text: string): {
     if (isDividendKeyword) {
       inDividendSection = true;
       sectionTrimmed = true;
+      consecutiveNonDividendLines = 0;
     }
 
     if (inDividendSection) {
+      // For earnings releases: stop when we hit an unrelated financial section heading
+      if (options.earningsRelease) {
+        const isNonDividendHeading = EARNINGS_NON_DIVIDEND_HEADINGS.some((h) =>
+          trimmed.includes(h)
+        );
+        if (isNonDividendHeading && !isDividendKeyword) {
+          // If the same line mentions a dividend keyword too, keep going.
+          // Otherwise, break to avoid sending unrelated financials to AI.
+          break;
+        }
+      }
+
       relevantLines.push(trimmed);
-      // Stop after capturing a large enough section
+
+      // Track lines without dividend keywords to detect section end
+      if (!isDividendKeyword) {
+        consecutiveNonDividendLines++;
+        if (consecutiveNonDividendLines > MAX_NON_DIVIDEND_LINES) {
+          // Likely left the dividend section
+          break;
+        }
+      } else {
+        consecutiveNonDividendLines = 0;
+      }
+
+      // Hard cap to avoid sending extremely long sections to AI
       if (relevantLines.length > 200) break;
     }
   }
@@ -457,10 +532,14 @@ export function isTextUsable(text: string): boolean {
 
 /**
  * Prepares the text or fallback payload to send to OpenAI.
+ * @param pdfBytes Raw PDF bytes.
+ * @param disclosureType Optional disclosure type for smarter section trimming.
  */
-export function prepareTextForAI(pdfBytes: Uint8Array): TextExtractionResult {
+export function prepareTextForAI(pdfBytes: Uint8Array, disclosureType?: string): TextExtractionResult {
   const rawText = extractTextFromPdf(pdfBytes);
-  const { trimmedText, sectionTrimmed } = trimToDividendSections(rawText);
+  const earningsRelease =
+    disclosureType === "earnings_release" || disclosureType === "earnings_revision";
+  const { trimmedText, sectionTrimmed } = trimToDividendSections(rawText, { earningsRelease });
 
   if (isTextUsable(trimmedText)) {
     return {
@@ -778,6 +857,8 @@ function buildReviewRawPayload(params: {
     sectionTrimmed: boolean;
     fallbackReason: string | null;
     openaiUsage?: { input_tokens?: number; output_tokens?: number };
+    isCorrection?: boolean;
+    disclosureTitle?: string;
   };
   isPayable: boolean;
 }): JsonRecord {
@@ -800,6 +881,15 @@ function buildReviewRawPayload(params: {
     expected_payment_date: event.expected_payment_date ?? null,
     expected_payment_month: event.expected_payment_month ?? null,
     evidence_text: event.evidence_text,
+    // Correction context: preserved for admin triage
+    ...(disclosureLevel.isCorrection ? {
+      correction_context: {
+        is_correction: true,
+        disclosure_title: disclosureLevel.disclosureTitle ?? null,
+        disclosure_type: disclosureLevel.disclosureType,
+        note: "This review originated from a correction disclosure. Verify against the original announcement."
+      }
+    } : {}),
     disclosure_ai_summary: {
       ticker: disclosureLevel.ticker,
       company_name: disclosureLevel.companyName,
@@ -829,6 +919,9 @@ export function buildReviewRows(params: {
   const stockId = resolveStockId(disclosure);
   const rows: DividendReviewInsert[] = [];
 
+  const disclosureType = disclosure.disclosure_type ?? aiOutput.disclosure_type ?? "other";
+  const isCorrection = isCorrectionDisclosure(disclosure.title, disclosureType);
+
   const disclosureLevelMeta = {
     ticker: aiOutput.ticker,
     companyName: aiOutput.company_name,
@@ -839,18 +932,30 @@ export function buildReviewRows(params: {
     textExtractionMethod: textExtraction.method,
     sectionTrimmed: textExtraction.sectionTrimmed,
     fallbackReason: textExtraction.fallbackReason,
-    openaiUsage
+    openaiUsage,
+    isCorrection,
+    disclosureTitle: disclosure.title
   };
 
-  const combinedWarnings = [...validationWarnings, ...aiOutput.warnings];
+  const combinedWarnings = [
+    ...validationWarnings,
+    ...aiOutput.warnings,
+    ...(isCorrection ? ["correction_disclosure:review_against_original"] : [])
+  ];
 
   for (let i = 0; i < aiOutput.events.length; i++) {
     const event = aiOutput.events[i];
     const adjusted = adjustEventConfidenceAndPriority(event, combinedWarnings);
     const isPayable = isPayableEventType(event.event_type);
 
+    // Correction disclosures always route to at least high priority
+    let effectivePriority = adjusted.reviewPriority;
+    if (isCorrection && (effectivePriority === "normal" || effectivePriority === "low")) {
+      effectivePriority = "high";
+    }
+
     const reviewStatus =
-      adjusted.reviewPriority === "urgent" || aiOutput.needs_manual_check
+      effectivePriority === "urgent" || aiOutput.needs_manual_check
         ? "needs_manual_check"
         : "pending";
 
@@ -858,7 +963,7 @@ export function buildReviewRows(params: {
       eventIndex: i,
       event,
       adjustedConfidence: adjusted.adjustedConfidence,
-      reviewPriority: adjusted.reviewPriority,
+      reviewPriority: effectivePriority,
       warnings: adjusted.warnings,
       disclosureLevel: disclosureLevelMeta,
       isPayable
@@ -934,7 +1039,7 @@ export function buildNoEventsManualCheckRow(params: {
 }
 
 // ---------------------------------------------------------------------------
-// Strong disclosure detection
+// Strong disclosure detection and correction handling
 // ---------------------------------------------------------------------------
 
 const STRONG_DIVIDEND_KEYWORDS = [
@@ -954,6 +1059,18 @@ export function isStrongDividendDisclosure(title: string, disclosureType: string
   ]);
   if (strongTypes.has(disclosureType)) return true;
   return STRONG_DIVIDEND_KEYWORDS.some((kw) => title.includes(kw));
+}
+
+const CORRECTION_TITLE_KEYWORDS = ["訂正", "一部訂正"];
+
+/**
+ * Returns true when the disclosure is a correction announcement.
+ * Correction disclosures are always routed to high priority and
+ * their raw context is preserved in the review payload.
+ */
+export function isCorrectionDisclosure(title: string, disclosureType: string): boolean {
+  if (disclosureType === "correction") return true;
+  return CORRECTION_TITLE_KEYWORDS.some((kw) => title.includes(kw));
 }
 
 // ---------------------------------------------------------------------------
@@ -1008,11 +1125,11 @@ export async function executeParseDisclosurePdfAi(
     );
   }
 
-  // Extract text / determine input method
-  const textExtraction = prepareTextForAI(pdfBytes);
-
   // Build prompt
   const disclosureType = disclosure.disclosure_type ?? "other";
+
+  // Extract text / determine input method, passing disclosure type for smarter section trimming
+  const textExtraction = prepareTextForAI(pdfBytes, disclosureType);
   const promptText =
     textExtraction.method === "extracted_text"
       ? textExtraction.text
