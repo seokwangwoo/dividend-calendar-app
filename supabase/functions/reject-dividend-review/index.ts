@@ -51,12 +51,17 @@ Deno.serve(async (req: Request) => {
   }
 
   const body = await req.json().catch(() => ({}));
+
+  // Accept both camelCase (reviewId) and snake_case (review_id) for compatibility
+  const reviewId = body.reviewId ?? body.review_id;
+
+  // Service-role client for privileged operations — NEVER exposed to browser
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
   const { data, error } = await admin.rpc("reject_dividend_review_for_reviewer", {
-    p_review_id: body.reviewId,
-    p_reason: body.reason ?? "",
+    p_review_id:   reviewId,
+    p_reason:      body.reason ?? body.rejectionReason ?? "",
     p_reviewer_id: userData.user.id
   });
 

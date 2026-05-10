@@ -541,6 +541,7 @@ export type Database = {
       approve_dividend_review: {
         Args: {
           p_review_id: string;
+          p_override?: Json;
         };
         Returns: Json;
       };
@@ -548,6 +549,7 @@ export type Database = {
         Args: {
           p_review_id: string;
           p_reviewer_id: string;
+          p_override?: Json;
         };
         Returns: Json;
       };
