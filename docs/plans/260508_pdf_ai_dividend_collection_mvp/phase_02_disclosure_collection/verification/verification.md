@@ -19,9 +19,9 @@ Environment:
 | `npm run build` | PASS | Next.js production build compiled, type-checked, and generated 18 static pages. |
 | `npm run test:unit` | PASS | 37 files, 348 tests passed. Includes new disclosure collection helper tests. |
 | `npm run test:integration` when Supabase credentials are available | PASS | Initial sandbox run failed on Supabase DNS/network access. Re-run with approved network escalation passed: 11 files, 71 tests passed. |
-| Manual: invoke `collect-disclosures` with mocked Yanoshin `json2` response and fixture candidates | PASS BY MOCKED FIXTURE TEST | Direct Edge Function invocation was not available locally because `deno` is not installed. Equivalent mocked fixture coverage is in `src/features/disclosures/disclosure-collection.test.ts`, covering `json2` row extraction, normalized candidate input, dividend/earnings/correction/unrelated titles, and alphanumeric ticker normalization. |
-| Manual: confirm only accepted disclosures are stored and request URL uses `hasXBRL=0` | PASS BY CODE/TABLE CONTRACT REVIEW | Helper tests prove unrelated titles are rejected before persistence and `buildYanoshinListUrl` emits `hasXBRL=0` with default `json2` and configurable `limit`. Edge Function persistence only runs after `candidate.accepted`. |
-| Manual: confirm duplicate invocations do not create duplicate disclosures or duplicate jobs | PASS BY CODE/TABLE CONTRACT REVIEW | `disclosures.external_id` is used for lookup before insert. `download_disclosure_pdf` job creation checks existing `jobs` rows with matching `{ disclosureId }` payload before insert. No `parse_disclosure_pdf_ai` job is created by Phase 02 code. |
+| Manual: invoke `collect-disclosures` with mocked Yanoshin `json2` response and fixture candidates | PASS | Served the function through local Supabase Edge runtime and invoked it twice with fixture candidates. Dividend and missing-document candidates were stored; unrelated title was skipped. |
+| Manual: confirm only accepted disclosures are stored and request URL uses `hasXBRL=0` | PASS | Local Edge invocation confirmed unrelated titles are skipped before persistence. Helper tests prove `buildYanoshinListUrl` emits `hasXBRL=0` with default `json2` and configurable `limit`. |
+| Manual: confirm duplicate invocations do not create duplicate disclosures or duplicate jobs | PASS | Second local Edge invocation returned the same disclosure IDs with `inserted: false` and `jobCreated: false`. Local DB query showed only `download_disclosure_pdf` job type, with no Phase 02 AI parse job. |
 
 ## Commands Run
 
@@ -68,10 +68,29 @@ npm run test:integration
 Result after approved network escalation: PASS, 11 test files and 71 tests.
 
 ```bash
-deno --version
+./node_modules/.bin/supabase start
 ```
 
-Result: FAIL, `deno` is not installed locally. This prevented a local `supabase functions serve` style manual Edge Function invocation, so manual fixture checks were verified through the shared helper unit tests and implementation review.
+Result: PASS. Local Supabase stack started with Edge Functions available at `http://127.0.0.1:54321/functions/v1`.
+
+```bash
+env SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SERVICE_ROLE_KEY=<local-service-role-jwt> \
+  ./node_modules/.bin/supabase functions serve collect-disclosures --no-verify-jwt
+```
+
+Result: PASS. Supabase Edge runtime served `collect-disclosures` using `supabase-edge-runtime-1.73.13`, compatible with Deno v2.1.4.
+
+```bash
+node -e "<invoke collect-disclosures twice with mocked fixture candidates>"
+```
+
+Result: PASS. First invocation returned HTTP 200 with one accepted PDF disclosure inserted and `jobCreated: true`, one missing-document disclosure inserted with no job, and one unrelated disclosure skipped by keyword. Second invocation returned HTTP 200 with the same accepted disclosure IDs, `inserted: false`, and `jobCreated: false`.
+
+```bash
+node -e "<query local disclosures and jobs after manual invocation>"
+```
+
+Result: PASS. Local DB showed the PDF disclosure as `parse_status = pending`, the missing-document disclosure as `parse_status = skipped`, `review_priority = high`, `last_parse_error = missing_document_url`, and only a `download_disclosure_pdf` job type.
 
 ## Phase-Specific Verification Notes
 

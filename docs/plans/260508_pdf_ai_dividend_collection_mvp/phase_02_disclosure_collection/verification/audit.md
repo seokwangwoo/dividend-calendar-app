@@ -16,7 +16,7 @@ Status: PASS
 - Reviewed verification evidence in `docs/plans/260508_pdf_ai_dividend_collection_mvp/phase_02_disclosure_collection/verification/verification.md`.
 - Confirmed required checks are recorded: `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:unit`, and `npm run test:integration`.
 - Confirmed the integration-test sandbox network failure and successful escalated re-run are documented.
-- Confirmed manual Edge invocation was explicitly justified as unavailable because `deno` is not installed, with equivalent mocked fixture verification documented.
+- Confirmed manual Edge invocation evidence was updated after serving `collect-disclosures` through local Supabase Edge runtime and invoking mocked fixture candidates twice.
 
 ### Notes
 - Implementation is limited to Phase 02 disclosure collection, classification, idempotent disclosure/job persistence, scheduler configuration, and tests.
