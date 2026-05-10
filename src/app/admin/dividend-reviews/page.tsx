@@ -1,24 +1,54 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
-import { listDividendEvents } from "@/features/admin/queries";
-import { approveDividendEvent, rejectDividendEvent } from "@/features/admin/actions";
-import type { DividendEventFilters } from "@/features/admin/queries";
+import { listDividendReviews } from "@/features/admin/review-queries";
+import type { DividendReviewFilters } from "@/features/admin/review-queries";
 
 function reviewStatusBadge(status: string) {
   if (status === "approved") return <Badge variant="success">承認済</Badge>;
   if (status === "rejected") return <Badge variant="danger">却下</Badge>;
+  if (status === "needs_manual_check") return <Badge variant="warning">要確認</Badge>;
   return <Badge variant="warning">保留中</Badge>;
 }
 
-function eventStatusLabel(status: string) {
+function priorityBadge(priority: string | undefined) {
+  if (priority === "urgent") return <Badge variant="danger">緊急</Badge>;
+  if (priority === "high") return <Badge variant="warning">高</Badge>;
+  if (priority === "low") return <Badge variant="neutral">低</Badge>;
+  return <Badge variant="neutral">通常</Badge>;
+}
+
+function eventTypeLabel(eventType: string | null | undefined) {
   const map: Record<string, string> = {
-    estimated: "予想",
-    confirmed: "確定",
-    paid: "支払済",
-    undecided: "未定"
+    interim: "中間",
+    year_end: "期末",
+    annual_total: "年間合計 ※参考",
+    special: "特別",
+    commemorative: "記念",
+    other: "その他"
   };
-  return map[status] ?? status;
+  return map[eventType ?? ""] ?? (eventType ?? "—");
+}
+
+function changeTypeLabel(changeType: string | null | undefined) {
+  const map: Record<string, string> = {
+    increase: "増額",
+    decrease: "減額",
+    no_dividend: "無配",
+    resumed: "復配",
+    special: "特別",
+    commemorative: "記念",
+    unchanged: "変化なし",
+    unknown: "不明"
+  };
+  return map[changeType ?? ""] ?? (changeType ?? "—");
+}
+
+function confidenceBadge(score: number | null) {
+  if (score == null) return <span className="text-muted">—</span>;
+  const pct = Math.round(score * 100);
+  const variant = score >= 0.8 ? "success" : score >= 0.5 ? "warning" : "danger";
+  return <Badge variant={variant}>{pct}%</Badge>;
 }
 
 export default async function DividendReviewsPage({
@@ -27,34 +57,76 @@ export default async function DividendReviewsPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const params = await searchParams;
-  const filters: DividendEventFilters = {
-    reviewStatus: params.reviewStatus,
+  const filters: DividendReviewFilters = {
+    status: params.status ?? "pending,needs_manual_check",
+    priority: params.priority,
+    disclosureType: params.disclosureType,
     ticker: params.ticker,
-    paymentYear: params.paymentYear ? Number(params.paymentYear) : undefined,
-    status: params.status
+    changeType: params.changeType
   };
 
-  const events = await listDividendEvents(filters);
+  const reviews = await listDividendReviews(filters);
+
+  const hasCustomFilter =
+    params.status !== undefined ||
+    params.priority !== undefined ||
+    params.disclosureType !== undefined ||
+    params.ticker !== undefined ||
+    params.changeType !== undefined;
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="配当イベント管理"
+        title="AI配当候補レビュー"
+        subtitle="AI抽出の配当候補を確認・承認・却下します。承認済みデータのみユーザー画面に表示されます。"
         actionHref="/admin/dividend-reviews/new"
-        actionLabel="新規作成"
+        actionLabel="手動作成"
       />
+
+      {/* Investment-data caution */}
+      <div className="rounded-lg border border-warn/30 bg-warn/5 px-4 py-3 text-sm text-warn">
+        このページに表示される値はAIによる抽出候補です。承認前に原文PDFおよび出典を必ずご確認ください。
+        「年間合計」種別はユーザー向け集計に含まれません（参考表示のみ）。
+      </div>
 
       {/* Filters */}
       <form method="GET" className="flex flex-wrap gap-3 text-sm">
         <select
-          name="reviewStatus"
-          defaultValue={params.reviewStatus ?? ""}
+          name="status"
+          defaultValue={params.status ?? "pending,needs_manual_check"}
           className="h-9 rounded-md border border-line bg-white px-3 text-sm"
         >
-          <option value="">すべてのステータス</option>
-          <option value="pending">保留中</option>
+          <option value="pending,needs_manual_check">保留中・要確認（デフォルト）</option>
+          <option value="pending">保留中のみ</option>
+          <option value="needs_manual_check">要確認のみ</option>
           <option value="approved">承認済</option>
-          <option value="rejected">却下</option>
+          <option value="rejected">却下済</option>
+        </select>
+
+        <select
+          name="priority"
+          defaultValue={params.priority ?? ""}
+          className="h-9 rounded-md border border-line bg-white px-3 text-sm"
+        >
+          <option value="">すべての優先度</option>
+          <option value="urgent">緊急</option>
+          <option value="high">高</option>
+          <option value="normal">通常</option>
+          <option value="low">低</option>
+        </select>
+
+        <select
+          name="disclosureType"
+          defaultValue={params.disclosureType ?? ""}
+          className="h-9 rounded-md border border-line bg-white px-3 text-sm"
+        >
+          <option value="">すべての開示種別</option>
+          <option value="dividend_forecast_revision">配当予想修正</option>
+          <option value="dividend_decision">配当決定</option>
+          <option value="earnings_release">決算短信</option>
+          <option value="earnings_revision">業績修正</option>
+          <option value="correction">訂正</option>
+          <option value="other">その他</option>
         </select>
 
         <input
@@ -64,24 +136,20 @@ export default async function DividendReviewsPage({
           className="h-9 rounded-md border border-line bg-white px-3 text-sm"
         />
 
-        <input
-          name="paymentYear"
-          defaultValue={params.paymentYear ?? ""}
-          placeholder="支払年 (例: 2026)"
-          className="h-9 rounded-md border border-line bg-white px-3 text-sm"
-          type="number"
-        />
-
         <select
-          name="status"
-          defaultValue={params.status ?? ""}
+          name="changeType"
+          defaultValue={params.changeType ?? ""}
           className="h-9 rounded-md border border-line bg-white px-3 text-sm"
         >
-          <option value="">すべての状態</option>
-          <option value="estimated">予想</option>
-          <option value="confirmed">確定</option>
-          <option value="paid">支払済</option>
-          <option value="undecided">未定</option>
+          <option value="">すべての変化種別</option>
+          <option value="increase">増額</option>
+          <option value="decrease">減額</option>
+          <option value="no_dividend">無配</option>
+          <option value="resumed">復配</option>
+          <option value="special">特別</option>
+          <option value="commemorative">記念</option>
+          <option value="unchanged">変化なし</option>
+          <option value="unknown">不明</option>
         </select>
 
         <button
@@ -91,7 +159,7 @@ export default async function DividendReviewsPage({
           絞り込む
         </button>
 
-        {Object.values(filters).some(Boolean) && (
+        {hasCustomFilter && (
           <Link
             href="/admin/dividend-reviews"
             className="flex h-9 items-center rounded-md border border-line px-4 text-sm text-muted"
@@ -102,105 +170,86 @@ export default async function DividendReviewsPage({
       </form>
 
       {/* Table */}
-      {events.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted">データがありません</p>
+      {reviews.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted">
+          対象の配当候補がありません
+        </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full text-sm">
             <thead className="border-b border-line bg-paper">
               <tr>
+                <th className="px-3 py-2 text-left font-medium text-muted">優先度</th>
                 <th className="px-3 py-2 text-left font-medium text-muted">銘柄</th>
-                <th className="px-3 py-2 text-left font-medium text-muted">決算年</th>
-                <th className="px-3 py-2 text-left font-medium text-muted">支払年</th>
-                <th className="px-3 py-2 text-left font-medium text-muted">支払月</th>
+                <th className="px-3 py-2 text-left font-medium text-muted">開示タイトル</th>
+                <th className="px-3 py-2 text-left font-medium text-muted">種別</th>
                 <th className="px-3 py-2 text-right font-medium text-muted">配当金</th>
+                <th className="px-3 py-2 text-right font-medium text-muted">前回</th>
+                <th className="px-3 py-2 text-left font-medium text-muted">変化</th>
+                <th className="px-3 py-2 text-left font-medium text-muted">信頼度</th>
                 <th className="px-3 py-2 text-left font-medium text-muted">状態</th>
-                <th className="px-3 py-2 text-left font-medium text-muted">検収</th>
-                <th className="px-3 py-2 text-left font-medium text-muted">出典</th>
                 <th className="px-3 py-2 text-left font-medium text-muted">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {events.map((event) => {
-                const approveAction = approveDividendEvent.bind(null, event.id);
-
-                async function rejectAction(formData: FormData) {
-                  "use server";
-                  const reason = String(formData.get("reason") ?? "");
-                  await rejectDividendEvent(event.id, reason);
-                }
+              {reviews.map((review) => {
+                const isAnnualTotal = review.event_type === "annual_total";
 
                 return (
-                  <tr key={event.id} className="hover:bg-paper/50">
+                  <tr
+                    key={review.id}
+                    className={`hover:bg-paper/50 ${isAnnualTotal ? "bg-paper/30" : ""}`}
+                  >
                     <td className="px-3 py-2">
-                      <Link
-                        href={`/admin/dividend-reviews/${event.id}`}
-                        className="font-medium text-brand hover:underline"
-                      >
-                        {event.stocks?.ticker ?? "—"}
-                      </Link>
-                      <div className="text-xs text-muted">{event.stocks?.name ?? "—"}</div>
-                    </td>
-                    <td className="px-3 py-2">{event.fiscal_year}</td>
-                    <td className="px-3 py-2">{event.payment_year ?? "—"}</td>
-                    <td className="px-3 py-2">
-                      {event.expected_payment_month ? `${event.expected_payment_month}月` : "未定"}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {event.dividend_per_share != null
-                        ? `¥${event.dividend_per_share}`
-                        : "未定"}
-                    </td>
-                    <td className="px-3 py-2">{eventStatusLabel(event.status)}</td>
-                    <td className="px-3 py-2">{reviewStatusBadge(event.review_status)}</td>
-                    <td className="px-3 py-2">
-                      {event.source_url ? (
-                        <a
-                          href={event.source_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-brand hover:underline"
-                        >
-                          {event.source_type ?? "リンク"}
-                        </a>
-                      ) : (
-                        <span className="text-muted">{event.source_type ?? "—"}</span>
-                      )}
+                      {priorityBadge(review.disclosures?.review_priority)}
                     </td>
                     <td className="px-3 py-2">
-                      {event.review_status === "pending" && (
-                        <div className="flex flex-col gap-1">
-                          <form action={approveAction}>
-                            <button
-                              type="submit"
-                              className="h-7 rounded bg-brand px-3 text-xs font-semibold text-white"
-                            >
-                              承認
-                            </button>
-                          </form>
-                          <form action={rejectAction} className="flex gap-1">
-                            <input
-                              name="reason"
-                              placeholder="却下理由"
-                              className="h-7 w-28 rounded border border-line px-2 text-xs"
-                            />
-                            <button
-                              type="submit"
-                              className="h-7 rounded border border-red-200 px-2 text-xs text-red-700"
-                            >
-                              却下
-                            </button>
-                          </form>
+                      <span className="font-medium">
+                        {review.stocks?.ticker ?? "—"}
+                      </span>
+                      <div className="text-xs text-muted">{review.stocks?.name ?? "—"}</div>
+                    </td>
+                    <td className="px-3 py-2 max-w-xs">
+                      <div className="truncate text-xs text-muted" title={review.disclosures?.title ?? ""}>
+                        {review.disclosures?.title ?? "—"}
+                      </div>
+                      {review.disclosures?.published_at && (
+                        <div className="text-xs text-muted">
+                          {new Date(review.disclosures.published_at).toLocaleDateString("ja-JP")}
                         </div>
                       )}
-                      {event.review_status !== "pending" && (
-                        <Link
-                          href={`/admin/dividend-reviews/${event.id}`}
-                          className="text-xs text-muted hover:underline"
-                        >
-                          詳細
-                        </Link>
-                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={isAnnualTotal ? "text-muted text-xs italic" : ""}>
+                        {eventTypeLabel(review.event_type)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {review.extracted_dividend_per_share != null
+                        ? `¥${review.extracted_dividend_per_share}`
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {review.previous_dividend_per_share != null
+                        ? `¥${review.previous_dividend_per_share}`
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      {changeTypeLabel(review.change_type)}
+                    </td>
+                    <td className="px-3 py-2">
+                      {confidenceBadge(review.confidence_score)}
+                    </td>
+                    <td className="px-3 py-2">
+                      {reviewStatusBadge(review.status)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/admin/dividend-reviews/${review.id}`}
+                        className="inline-flex h-7 items-center rounded border border-line px-2 text-xs text-brand hover:underline"
+                      >
+                        詳細・操作
+                      </Link>
                     </td>
                   </tr>
                 );
@@ -209,6 +258,11 @@ export default async function DividendReviewsPage({
           </table>
         </div>
       )}
+
+      <p className="text-xs text-muted">
+        {reviews.length}件表示 ·
+        年間合計（annual_total）はユーザー向け集計に含まれない参照専用データです
+      </p>
     </div>
   );
 }

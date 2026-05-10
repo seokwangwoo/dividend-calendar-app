@@ -253,3 +253,69 @@ export async function getNotificationCount(userId: string): Promise<number> {
   if (error) throw new Error(`getNotificationCount: ${error.message}`);
   return count ?? 0;
 }
+
+export async function createDisclosureWithReview(
+  stockId: string,
+  opts: {
+    disclosureOverrides?: Record<string, unknown>;
+    reviewOverrides?: Record<string, unknown>;
+  } = {}
+): Promise<{ disclosureId: string; reviewId: string }> {
+  const admin = createAdminClient();
+  const year = new Date().getFullYear();
+  const externalId = `e2e-review-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  const { data: disc, error: discErr } = await admin
+    .from("disclosures")
+    .insert({
+      stock_id: stockId,
+      external_id: externalId,
+      source_type: "tdnet",
+      title: "配当予想の修正 e2eテスト",
+      document_url: `https://example.com/${externalId}`,
+      published_at: new Date().toISOString(),
+      disclosure_type: "dividend_forecast_revision",
+      parse_status: "parsed",
+      review_priority: "normal",
+      ...(opts.disclosureOverrides ?? {})
+    })
+    .select("id")
+    .single();
+
+  if (discErr || !disc) throw new Error(`createDisclosureWithReview disclosure: ${discErr?.message}`);
+
+  const { data: rev, error: revErr } = await admin
+    .from("dividend_reviews")
+    .insert({
+      stock_id: stockId,
+      disclosure_id: disc.id,
+      extracted_dividend_per_share: 100,
+      previous_dividend_per_share: 80,
+      extracted_payment_date: `${year + 5}-09-25`,
+      extracted_payment_month: 9,
+      fiscal_year: year + 5,
+      event_type: "year_end",
+      change_type: "increase",
+      confidence_score: 0.85,
+      status: "pending",
+      evidence_text: "配当予想修正による増配",
+      raw_payload: { eventType: "year_end", fiscalYear: year + 5, eventStatus: "estimated" },
+      ...(opts.reviewOverrides ?? {})
+    })
+    .select("id")
+    .single();
+
+  if (revErr || !rev) throw new Error(`createDisclosureWithReview review: ${revErr?.message}`);
+
+  return { disclosureId: disc.id, reviewId: rev.id };
+}
+
+export async function cleanupDividendReviews(reviewIds: string[]): Promise<void> {
+  if (reviewIds.length === 0) return;
+  await createAdminClient().from("dividend_reviews").delete().in("id", reviewIds);
+}
+
+export async function cleanupDisclosures(disclosureIds: string[]): Promise<void> {
+  if (disclosureIds.length === 0) return;
+  await createAdminClient().from("disclosures").delete().in("id", disclosureIds);
+}
