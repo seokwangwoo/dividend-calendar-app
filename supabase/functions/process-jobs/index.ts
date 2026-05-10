@@ -11,6 +11,13 @@ import {
   type JsonRecord,
   type ProcessJobsClient
 } from "../_shared/process-jobs.ts";
+import {
+  executeParseDisclosurePdfAi,
+  type DisclosureForParse,
+  type DividendReviewInsert,
+  type OpenAIParseRequest,
+  type OpenAIParseResponse
+} from "../_shared/pdf-ai-parser.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -43,7 +50,8 @@ Deno.serve(async (req: Request) => {
   });
 
   const handlers = {
-    download_disclosure_pdf: createDownloadDisclosurePdfHandler(supabase)
+    download_disclosure_pdf: createDownloadDisclosurePdfHandler(supabase),
+    parse_disclosure_pdf_ai: createParseDisclosurePdfAiHandler(supabase)
   };
   const client = createSupabaseJobsClient(supabase, Object.keys(handlers));
 
@@ -237,4 +245,226 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// ---------------------------------------------------------------------------
+// parse_disclosure_pdf_ai handler
+// ---------------------------------------------------------------------------
+
+function createParseDisclosurePdfAiHandler(
+  client: ReturnType<typeof createClient>
+): JobHandler {
+  return {
+    async execute(job) {
+      await executeParseDisclosurePdfAi(job, {
+        fetchDisclosureForParse: (disclosureId) =>
+          fetchDisclosureForParse(client, disclosureId),
+
+        downloadPdf: async (storagePath) => {
+          const { data, error } = await client.storage
+            .from(DISCLOSURE_BUCKET)
+            .download(storagePath);
+          if (error) throw new JobHandlerError(`storage_download_failed:${error.message}`);
+          return new Uint8Array(await data.arrayBuffer());
+        },
+
+        callOpenAI: (request) => callOpenAIResponsesApi(request),
+
+        openaiModel: Deno.env.get("OPENAI_MODEL") ?? "gpt-4o",
+
+        upsertDividendReviews: async (rows) => {
+          if (rows.length === 0) return;
+          const { error } = await client.from("dividend_reviews").insert(rows);
+          if (error) throw error;
+        },
+
+        updateDisclosureParsed: async (disclosureId) => {
+          const { error } = await client
+            .from("disclosures")
+            .update({
+              parse_status: "parsed",
+              last_parse_error: null
+            })
+            .eq("id", disclosureId);
+          if (error) throw error;
+        },
+
+        updateDisclosureParseAttempt: async (disclosureId, attempt, lastError) => {
+          const updatePayload: Record<string, unknown> = {
+            ai_parse_attempts: attempt,
+            parse_status: "parsing"
+          };
+          if (lastError) updatePayload.last_parse_error = lastError;
+          const { error } = await client
+            .from("disclosures")
+            .update(updatePayload)
+            .eq("id", disclosureId);
+          if (error) throw error;
+        },
+
+        updateDisclosureFailedParse: async (disclosureId, lastError) => {
+          const { error } = await client
+            .from("disclosures")
+            .update({
+              parse_status: "failed",
+              last_parse_error: lastError
+            })
+            .eq("id", disclosureId);
+          if (error) throw error;
+        }
+      });
+    },
+
+    async onFinalFailure(job, error) {
+      const disclosureId = resolvePayloadString(
+        job.payload,
+        "disclosureId",
+        "disclosure_id"
+      );
+      if (!disclosureId) return;
+      const { error: updateError } = await client
+        .from("disclosures")
+        .update({
+          parse_status: "failed",
+          last_parse_error: error.message
+        })
+        .eq("id", disclosureId);
+      if (updateError) throw updateError;
+    }
+  };
+}
+
+async function fetchDisclosureForParse(
+  client: ReturnType<typeof createClient>,
+  disclosureId: string
+): Promise<DisclosureForParse> {
+  const { data, error } = await client
+    .from("disclosures")
+    .select(
+      "id, stock_id, external_id, title, disclosure_type, storage_path, published_at, ai_parse_attempts, raw_payload, stocks(id, ticker)"
+    )
+    .eq("id", disclosureId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    throw new JobHandlerError("invalid_payload:disclosure_not_found", {
+      retryable: false
+    });
+  }
+  return {
+    id: data.id,
+    stock_id: data.stock_id,
+    external_id: data.external_id,
+    title: data.title,
+    disclosure_type: data.disclosure_type,
+    storage_path: data.storage_path,
+    published_at: data.published_at,
+    ai_parse_attempts: Number(data.ai_parse_attempts ?? 0),
+    raw_payload: isRecord(data.raw_payload) ? data.raw_payload : {},
+    stocks: data.stocks as DisclosureForParse["stocks"]
+  };
+}
+
+async function callOpenAIResponsesApi(
+  request: OpenAIParseRequest
+): Promise<OpenAIParseResponse> {
+  const apiKey = Deno.env.get("OPENAI_API_KEY");
+  if (!apiKey) {
+    throw new JobHandlerError("missing_env:OPENAI_API_KEY", { retryable: false });
+  }
+
+  const model = request.model ?? Deno.env.get("OPENAI_MODEL") ?? "gpt-4o";
+
+  // Build the input content
+  const inputContent: unknown[] = [];
+
+  if (request.textExtractionMethod === "extracted_text" && request.extractedText) {
+    // Build the prompt with extracted text embedded
+    const promptText = request.extractedText;
+    const disclosureType = request.disclosureType;
+    const title = request.disclosureTitle;
+
+    // Re-build prompt with actual text
+    const { buildPromptForDisclosure } = await import("../_shared/pdf-ai-parser.ts");
+    const prompt = buildPromptForDisclosure(disclosureType, title, promptText);
+    inputContent.push({ type: "input_text", text: prompt });
+  } else if (request.pdfBytes) {
+    // Direct PDF fallback - encode as base64
+    const base64 = encodeBase64(request.pdfBytes);
+    inputContent.push({
+      type: "input_file",
+      filename: "disclosure.pdf",
+      file_data: `data:application/pdf;base64,${base64}`
+    });
+    // Add instruction text
+    const { buildPromptForDisclosure } = await import("../_shared/pdf-ai-parser.ts");
+    const prompt = buildPromptForDisclosure(
+      request.disclosureType,
+      request.disclosureTitle,
+      "[Extract dividend information from the attached PDF]"
+    );
+    inputContent.push({ type: "input_text", text: prompt });
+  } else {
+    throw new JobHandlerError("invalid_ai_request:no_text_or_pdf", {
+      retryable: false
+    });
+  }
+
+  const requestBody = {
+    model,
+    input: inputContent
+  };
+
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(60_000)
+    });
+  } catch (error) {
+    throw new JobHandlerError(
+      `openai_request_failed:network_or_timeout`,
+      { cause: error }
+    );
+  }
+
+  if (!response.ok) {
+    const retryable = response.status === 429 || response.status >= 500;
+    const body = await response.text().catch(() => "");
+    throw new JobHandlerError(
+      `openai_request_failed:http_${response.status}:${body.slice(0, 200)}`,
+      { retryable }
+    );
+  }
+
+  const responseData = await response.json();
+  // OpenAI Responses API: output is in responseData.output[0].content[0].text
+  const rawText =
+    responseData?.output?.[0]?.content?.[0]?.text ??
+    responseData?.output_text ??
+    "";
+
+  if (!rawText) {
+    throw new JobHandlerError("openai_response_empty_text", { retryable: false });
+  }
+
+  return {
+    rawText,
+    usage: responseData.usage
+  };
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
