@@ -1,265 +1,103 @@
-# Stock Master Import 운영 매뉴얼
+# Stock Master Import Operating Manual
 
-## 개요
+## Purpose
 
-JPX "List of TSE-listed Issues" 파일을 CSV로 변환하여 업로드하고, `parse-stock-master-csv` Edge Function을 호출하여 `stocks` 테이블을 갱신하는 절차입니다.
+This manual describes how to import the full JPX/TSE listed stock master into the `stocks` table using the `parse-stock-master-csv` Edge Function.
 
-갱신 주기: 월 1회 (관리자 수동 실행)
+## Prerequisites
 
----
+- Admin role in the application.
+- Access to Supabase Studio (Storage upload + Edge Function invocation).
+- JPX "List of TSE-listed Issues" XLS file (available from JPX website).
 
-## 1. JPX 파일 다운로드
+## Step 1: Download JPX Stock List
 
-### 1.1 다운로드 경로
+1. Visit the JPX website and download the latest "List of TSE-listed Issues" (上場銘柄一覧).
+2. Open the XLS file in Excel or LibreOffice Calc.
+3. Save/export as **CSV (UTF-8)** with English headers: `ticker,name,market_segment`.
+   - `ticker`: 4-digit stock code (e.g., `7203`).
+   - `name`: Company name in Japanese.
+   - `market_segment`: Market segment (e.g., `TSE Prime`, `TSE Standard`, `TSE Growth`).
+4. Verify the CSV has no duplicate `ticker` values.
 
-JPX 웹사이트에서 "List of TSE-listed Issues"를 다운로드합니다.
+## Step 2: Upload CSV to Supabase Storage
 
-- URL: https://www.jpx.co.jp/english/markets/statistics-equities/misc/01.html
-- 또는: https://www.jpx.co.jp/markets/statistics-equities/misc/01.html (일본어)
+1. Open Supabase Studio → Storage.
+2. Ensure the `imports` bucket exists (create it if needed, set to private).
+3. Upload the CSV to `stock-master/YYYYMM_list_of_tse_listed_issues.csv`.
+   - Example: `stock-master/202506_list_of_tse_listed_issues.csv`.
+4. Note the full file path: `imports/stock-master/202506_list_of_tse_listed_issues.csv`.
 
-### 1.2 파일 형식
+## Step 3: Dry-Run the Import
 
-- 원본: `.xlsx` (Excel)
-- 필요 컬럼: 코드(티커), 銘柄名(종목명), 市場区分(시장구분)
+1. In Supabase Studio, navigate to Edge Functions.
+2. Invoke `parse-stock-master-csv` with the following JSON body:
+   ```json
+   {
+     "filePath": "imports/stock-master/202506_list_of_tse_listed_issues.csv",
+     "dryRun": true
+   }
+   ```
+3. Review the response. It returns:
+   - `processedCount`: number of rows parsed.
+   - `insertedCount`, `updatedCount`, `delistedCount`: preview counts of what would happen (computed from existing DB state, no writes performed).
+   - `failedCount`: validation errors that would occur.
+   - `errors`: any validation errors.
 
----
+## Step 4: Execute the Import
 
-## 2. Excel → CSV 변환
+1. Invoke `parse-stock-master-csv` with `dryRun: false`:
+   ```json
+   {
+     "filePath": "imports/stock-master/202506_list_of_tse_listed_issues.csv",
+     "dryRun": false
+   }
+   ```
+2. The function will:
+   - Insert new stocks with `support_status = 'unsupported'`.
+   - Update existing stocks (preserving their `id` and `support_status` for supported stocks).
+   - Overwrite `name` and `market_segment` for all matched tickers.
+   - Mark tickers present in the DB but missing from the CSV as `support_status = 'delisted'`.
+   - Write a log entry to `stock_import_logs`.
 
-### 2.1 Excel에서 CSV 저장
+## Step 5: Verify the Import
 
-1. Excel에서 `.xlsx` 파일을 엽니다.
-2. **파일(File)** → **다른 이름으로 저장(Save As)** → **CSV UTF-8 (*.csv)** 선택
-3. 파일명: `YYYYMMDD_list_of_tse_listed_issues.csv` (예: `20260511_list_of_tse_listed_issues.csv`)
+1. Check `stock_import_logs` in Supabase Studio for the latest run.
+2. Query `stocks` to confirm row count >= 3,800.
+3. Verify a few known tickers exist with correct `market_segment`.
+4. Confirm existing `supported` stocks retained their `id` and `support_status`.
 
-> ⚠️ **주의**: 반드시 **CSV UTF-8** 형식으로 저장하세요. 일반 CSV는 Shift_JIS 인코딩으로 저장되어 한글이 깨질 수 있습니다.
+## Rollback Procedure
 
-### 2.2 CSV 헤더 변경
+If the import causes issues:
 
-저장된 CSV의 첫 행(헤더)을 다음으로 변경합니다:
+1. Identify the previous good CSV file in Storage.
+2. Re-invoke `parse-stock-master-csv` with the previous CSV path and `dryRun: false`.
+3. For catastrophic failure, restore from a database backup (if available).
 
-```csv
-ticker,name,market_segment
-```
+## Cadence
 
-예시:
+- Run once per month (recommended: first business day of the month).
+- Update the file name to reflect the current `YYYYMM`.
 
-```csv
-ticker,name,market_segment
-9433,KDDI,TSE Prime
-2914,日本たばこ産業,TSE Prime
-8306,三菱UFJフィナンシャル・グループ,TSE Prime
-```
+## Troubleshooting
 
-> ⚠️ **주의**: 헤더는 반드시 소문자 영어(`ticker,name,market_segment`)로 작성해야 합니다.
+| Issue | Cause | Fix |
+|---|---|---|
+| "Invalid CSV header" | Headers are not exactly `ticker,name,market_segment` | Re-export with correct headers |
+| "Duplicate tickers in CSV" | Same ticker appears multiple times | Deduplicate in the source file |
+| "Failed to download file" | Wrong bucket or path | Verify the full `filePath` in Storage |
+| Delisted count is unexpectedly high | JPX removed stocks or CSV is incomplete | Verify source file completeness |
 
----
+## Edge Function Invocation
 
-## 3. Supabase Storage에 업로드
-
-### 3.1 접속
-
-1. Supabase Studio (https://supabase.com/dashboard)에 로그인
-2. 해당 프로젝트 선택
-3. 왼쪽 메뉴 **Storage** 클릭
-
-### 3.2 버킷 선택
-
-- 버킷: `imports` (없으면 관리자가 미리 생성)
-- 경로: `stock-master/`
-
-### 3.3 파일 업로드
-
-1. `stock-master/` 폴더로 이동
-2. **Upload file** 클릭
-3. 변환한 CSV 파일 선택
-4. 업로드 완료 확인
-
-### 3.4 파일 경로 규칙
-
-```
-imports/stock-master/YYYYMMDD_list_of_tse_listed_issues.csv
-```
-
-예시:
-```
-imports/stock-master/20260511_list_of_tse_listed_issues.csv
-```
-
----
-
-## 4. Edge Function 호출
-
-### 4.1 호출 정보
-
-- **Function URL**: `{SUPABASE_URL}/functions/v1/parse-stock-master-csv`
+- **URL**: `https://<project-ref>.supabase.co/functions/v1/parse-stock-master-csv`
 - **Method**: `POST`
-- **Authentication**: `Bearer {SUPABASE_SERVICE_ROLE_KEY}` 또는 Admin JWT
+- **Headers**: `Authorization: Bearer <user-jwt>` (admin user required)
+- **Body**: `{ "filePath": string, "dryRun": boolean }`
 
-### 4.2 요청 본문 (Dry Run)
+## Security Notes
 
-먼저 dry-run 모드로 실행하여 변경 내용을 미리 확인합니다:
-
-```json
-{
-  "storagePath": "stock-master/20260511_list_of_tse_listed_issues.csv",
-  "dryRun": true
-}
-```
-
-curl 예시:
-
-```bash
-curl -X POST "{SUPABASE_URL}/functions/v1/parse-stock-master-csv" \
-  -H "Authorization: Bearer {SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "storagePath": "stock-master/20260511_list_of_tse_listed_issues.csv",
-    "dryRun": true
-  }'
-```
-
-### 4.3 Dry Run 응답 예시
-
-```json
-{
-  "dryRun": true,
-  "summary": {
-    "processed": 3847,
-    "toInsert": 12,
-    "toUpdate": 35,
-    "toDelist": 3
-  },
-  "preview": {
-    "inserts": [{ "ticker": "9999", "name": "新規上場株式会社", "market_segment": "TSE Growth" }],
-    "updates": [{ "ticker": "9433", "name": "KDDI", "market_segment": "TSE Prime" }],
-    "delists": [{ "ticker": "0001", "name": "廃止株式会社" }]
-  }
-}
-```
-
-> 미리보기를 확인하여 예상치 못한 대량 변경이 없는지 검증합니다.
-
-### 4.4 실제 실행
-
-Dry Run 결과가 정상이면 `dryRun: false`로 다시 호출:
-
-```json
-{
-  "storagePath": "stock-master/20260511_list_of_tse_listed_issues.csv",
-  "dryRun": false
-}
-```
-
-curl 예시:
-
-```bash
-curl -X POST "{SUPABASE_URL}/functions/v1/parse-stock-master-csv" \
-  -H "Authorization: Bearer {SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "storagePath": "stock-master/20260511_list_of_tse_listed_issues.csv",
-    "dryRun": false
-  }'
-```
-
-### 4.5 실제 실행 응답 예시
-
-```json
-{
-  "dryRun": false,
-  "summary": {
-    "processed": 3847,
-    "inserted": 12,
-    "updated": 35,
-    "delisted": 3,
-    "failed": 0,
-    "durationMs": 4500
-  },
-  "logId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-}
-```
-
----
-
-## 5. 실행 결과 확인
-
-### 5.1 stock_import_logs 테이블 조회
-
-Supabase Studio → SQL Editor에서:
-
-```sql
-select * from stock_import_logs
-order by created_at desc
-limit 5;
-```
-
-### 5.2 stocks 테이블 확인
-
-```sql
-select support_status, count(*) from stocks
-group by support_status;
-```
-
-예상 결과:
-```
- support_status | count
-----------------+-------
- supported      |    42
- unsupported    |  3802
- delisted       |     3
-```
-
-### 5.3 기존 데이터 무결성 확인
-
-```sql
--- 외래 키가 깨진 holdings가 있는지 확인
-select count(*) from holdings h
-left join stocks s on s.id = h.stock_id
-where s.id is null;
-```
-
-결과가 `0`이어야 합니다.
-
----
-
-## 6. 문제 발생 시 대응
-
-### 6.1 잘못된 CSV 업로드
-
-- **증상**: `failed_count > 0` 또는 예상보다 많은 `updated` 카운트
-- **대응**: 
-  1. 잘못된 CSV를 Storage에서 삭제
-  2. 올바른 CSV를 다시 업로드
-  3. Dry Run으로 재확인 후 실제 실행
-
-### 6.2 외래 키 제약 위반
-
-- **증상**: `insert` 또는 `update` 중 foreign key 오류
-- **대응**: 
-  1. `stock_import_logs.error_message` 확인
-  2. 해당 ticker가 `holdings`나 `dividend_events`에서 참조되고 있는지 확인
-  3. 필요 시 수동으로 `stocks` 테이블 직접 수정
-
-### 6.3 Rollback (이전 상태 복원)
-
-이전 달의 CSV 파일이 Storage에 남아있으면, 이전 파일로 다시 import하여 rollback:
-
-```bash
-curl -X POST "{SUPABASE_URL}/functions/v1/parse-stock-master-csv" \
-  -H "Authorization: Bearer {SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "storagePath": "stock-master/20260411_list_of_tse_listed_issues.csv",
-    "dryRun": false
-  }'
-```
-
-> ⚠️ Rollback은 이전 CSV가 Storage에 보관되어 있을 때만 가능합니다. Storage의 오래된 파일은 삭제하지 마세요.
-
----
-
-## 7. 연락처
-
-- 기술 문의: 개발 팀
-- 데이터 이상: 관리자
+- Only admin users can invoke this function.
+- The Edge Function uses the service role key for DB operations; never expose this key to the browser.
+- `stock_import_logs` is readable only by admins.
