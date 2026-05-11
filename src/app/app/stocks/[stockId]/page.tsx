@@ -95,7 +95,11 @@ export default async function StockDetailPage({ params }: PageProps) {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">配当スケジュール</h2>
         {dividendSchedule.length === 0 ? (
-          <p className="text-sm text-muted">配当スケジュールは登録されていません。</p>
+          <p className="text-sm text-muted">
+            {stock.expectedAnnualDividendPerShare == null
+              ? "配当データ確認中"
+              : "配当スケジュールは登録されていません。"}
+          </p>
         ) : (
           <Card className="divide-y divide-line">
             {dividendSchedule.map((evt, idx) => (
@@ -189,10 +193,20 @@ export default async function StockDetailPage({ params }: PageProps) {
       )}
 
       {/* Notification rule link */}
-      <div className="pt-2 text-center">
+      <div className="space-y-2 pt-2 text-center">
+        {stock.expectedAnnualDividendPerShare == null && (
+          <p className="text-sm text-muted">
+            配当データが確定後、通知を設定できます。
+          </p>
+        )}
         <Link
           href={`/app/stocks/${stockId}/notification-rule`}
-          className="inline-flex h-10 items-center justify-center rounded-md border border-line px-6 text-sm font-semibold text-ink hover:bg-paper"
+          aria-disabled={stock.expectedAnnualDividendPerShare == null}
+          className={`inline-flex h-10 items-center justify-center rounded-md border border-line px-6 text-sm font-semibold ${
+            stock.expectedAnnualDividendPerShare == null
+              ? "pointer-events-none bg-paper text-muted"
+              : "text-ink hover:bg-paper"
+          }`}
         >
           目標利回りを設定
         </Link>

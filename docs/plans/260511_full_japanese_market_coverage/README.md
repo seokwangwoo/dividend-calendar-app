@@ -69,6 +69,18 @@ Excluded from this plan:
 | Batch price refresh | Daily bulk update of `current_price` for all tickers |
 | Scaled collection | TDnet disclosure scanning expanded to all market tickers |
 
+## `support_status` Policy
+
+| Status | Meaning | Behavior |
+|---|---|---|
+| `supported` | Has at least one approved `dividend_events` row | Searchable, selectable, full dividend simulation |
+| `unsupported` | No approved dividend data yet | Searchable, selectable, empty dividend state shown |
+| `delisted` | Not present in latest JPX master CSV | Excluded from search, price refresh, and dividend collection; existing holdings show "上場廃止" badge |
+
+- Auto-promotion: when the first `dividend_event` for a stock is approved, `stocks.support_status` is automatically updated to `supported` via DB trigger.
+- Holdings: any non-delisted stock can be added to portfolio.
+- Notification rules: blocked if `expected_annual_dividend_per_share IS NULL` (regardless of `support_status`).
+
 ## Plan Completion Definition
 
 The plan is complete when:

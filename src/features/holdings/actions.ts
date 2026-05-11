@@ -29,7 +29,7 @@ async function resolveSupportedStocks(supabase: Awaited<ReturnType<typeof create
   if (error) throw new Error(error.message);
   const map = new Map<string, { id: string; name: string }>();
   for (const row of data ?? []) {
-    if (row.support_status === "supported" && row.ticker) {
+    if (row.support_status !== "delisted" && row.ticker) {
       map.set(row.ticker, { id: row.id, name: row.name ?? row.ticker });
     }
   }
@@ -118,7 +118,7 @@ export async function createHolding(formData: FormData): Promise<void> {
 
   const { stockId, quantity, averagePurchasePrice, accountType } = parsed.data;
 
-  // Verify stock is supported
+  // Verify stock exists and is not delisted
   const { data: stock, error: stockError } = await supabase
     .from("stocks")
     .select("id, support_status")
@@ -126,11 +126,11 @@ export async function createHolding(formData: FormData): Promise<void> {
     .single();
 
   if (stockError || !stock) {
-    throw new Error("Stock not found");
+    throw new Error("銘柄が見つかりません");
   }
 
-  if (stock.support_status !== "supported") {
-    throw new Error("This stock is not supported in the current MVP.");
+  if (stock.support_status === "delisted") {
+    throw new Error("この銘柄は上場廃止のため、ポートフォリオに追加できません。");
   }
 
   const { error } = await supabase.from("holdings").insert({

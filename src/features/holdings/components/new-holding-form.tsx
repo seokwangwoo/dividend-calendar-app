@@ -52,8 +52,7 @@ function StockSearchResult({
         type="button"
         variant="secondary"
         className="h-8 px-3 text-xs"
-        disabled={!isSupported}
-        onClick={() => isSupported && onSelect(stock)}
+        onClick={() => onSelect(stock)}
       >
         選択
       </Button>
@@ -78,27 +77,38 @@ function DividendCalcCard({
     currency: stock.currency
   });
 
+  const hasNoDividendData = stock.expected_annual_dividend_per_share == null;
+
   return (
     <Card className="space-y-3 p-4 bg-paper">
       <h3 className="text-sm font-semibold">配当シミュレーション（年間）</h3>
-      <div className="space-y-2 text-sm">
-        <div className="flex justify-between">
-          <span className="text-muted">税引前配当</span>
-          <span>{formatCurrencyJpy(calc.beforeTaxAmount)}</span>
+      {hasNoDividendData ? (
+        <div className="space-y-2 text-sm">
+          <p className="text-muted">配当データ確認中</p>
+          <p className="text-xs text-muted leading-relaxed">
+            この銘柄の配当データがまだ確認されていません。データが確定次第、シミュレーションが表示されます。
+          </p>
         </div>
-        <div className="flex justify-between">
-          <span className="text-muted">概算税額</span>
-          <span>−{formatCurrencyJpy(calc.estimatedTaxAmount)}</span>
+      ) : (
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted">税引前配当</span>
+            <span>{formatCurrencyJpy(calc.beforeTaxAmount)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted">概算税額</span>
+            <span>−{formatCurrencyJpy(calc.estimatedTaxAmount)}</span>
+          </div>
+          <div className="flex justify-between font-semibold">
+            <span>税引後配当</span>
+            <span className="text-brand">{formatCurrencyJpy(calc.afterTaxAmount)}</span>
+          </div>
+          <div className="flex justify-between border-t border-line pt-2">
+            <span className="text-muted">税引後利回り</span>
+            <span>{formatPercent(calc.afterTaxYield)}</span>
+          </div>
         </div>
-        <div className="flex justify-between font-semibold">
-          <span>税引後配当</span>
-          <span className="text-brand">{formatCurrencyJpy(calc.afterTaxAmount)}</span>
-        </div>
-        <div className="flex justify-between border-t border-line pt-2">
-          <span className="text-muted">税引後利回り</span>
-          <span>{formatPercent(calc.afterTaxYield)}</span>
-        </div>
-      </div>
+      )}
       <p className="text-xs text-muted leading-relaxed">{DISCLAIMER}</p>
     </Card>
   );

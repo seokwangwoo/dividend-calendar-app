@@ -111,6 +111,9 @@ function HoldingCard({
     totalAcquisitionCost: acquisitionCost
   });
 
+  const isDelisted = stock.support_status === "delisted";
+  const hasNoDividendData = calc.afterTaxAmount == null;
+
   return (
     <Link
       href={`/app/portfolio/${holding.id}/edit`}
@@ -122,6 +125,9 @@ function HoldingCard({
             <div className="flex items-center gap-2">
               <span className="font-medium">{stock.name}</span>
               <span className="text-xs text-muted">{stock.ticker}</span>
+              {isDelisted && (
+                <Badge variant="danger">上場廃止</Badge>
+              )}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Badge variant="neutral">
@@ -133,12 +139,18 @@ function HoldingCard({
             </div>
           </div>
           <div className="shrink-0 text-right">
-            <p className="font-semibold text-brand">
-              {formatCurrencyJpy(calc.afterTaxAmount)}
-            </p>
-            <p className="text-xs text-muted">
-              {formatPercent(afterTaxYield)}
-            </p>
+            {hasNoDividendData ? (
+              <p className="text-sm text-muted">配当データ確認中</p>
+            ) : (
+              <>
+                <p className="font-semibold text-brand">
+                  {formatCurrencyJpy(calc.afterTaxAmount)}
+                </p>
+                <p className="text-xs text-muted">
+                  {formatPercent(afterTaxYield)}
+                </p>
+              </>
+            )}
           </div>
         </div>
       </Card>

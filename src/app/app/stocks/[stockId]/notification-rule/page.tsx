@@ -42,6 +42,7 @@ export default async function NotificationRulePage({ params }: PageProps) {
   }
 
   const activeRule = rules.find((rule) => rule.status === "active");
+  const hasDividendData = stock.expected_annual_dividend_per_share != null;
 
   return (
     <div className="space-y-5">
@@ -63,6 +64,7 @@ export default async function NotificationRulePage({ params }: PageProps) {
               name="basis"
               defaultValue={activeRule?.basis ?? "before_tax_yield"}
               options={NOTIFICATION_RULE_BASIS_OPTIONS}
+              disabled={!hasDividendData}
             />
           </FormField>
 
@@ -72,6 +74,7 @@ export default async function NotificationRulePage({ params }: PageProps) {
               name="operator"
               defaultValue={activeRule?.operator ?? "gte"}
               options={NOTIFICATION_OPERATOR_OPTIONS}
+              disabled={!hasDividendData}
             />
           </FormField>
 
@@ -85,6 +88,7 @@ export default async function NotificationRulePage({ params }: PageProps) {
               defaultValue={activeRule ? String(activeRule.target_yield) : ""}
               placeholder="3.5"
               required
+              disabled={!hasDividendData}
             />
           </FormField>
 
@@ -92,6 +96,7 @@ export default async function NotificationRulePage({ params }: PageProps) {
             <Checkbox
               name="notifyInApp"
               defaultChecked={activeRule?.notify_in_app ?? true}
+              disabled={!hasDividendData}
             />
             アプリ内通知を受け取る
           </label>
@@ -99,6 +104,7 @@ export default async function NotificationRulePage({ params }: PageProps) {
             <Checkbox
               name="notifyEmail"
               defaultChecked={activeRule?.notify_email ?? false}
+              disabled={!hasDividendData}
             />
             メール通知を受け取る
           </label>
@@ -107,7 +113,13 @@ export default async function NotificationRulePage({ params }: PageProps) {
             {INVESTMENT_NEUTRAL_DISCLAIMER}
           </p>
 
-          <Button type="submit" className="w-full">
+          {!hasDividendData && (
+            <p className="text-sm text-muted">
+              配当データが確定後、通知を設定できます。
+            </p>
+          )}
+
+          <Button type="submit" className="w-full" disabled={!hasDividendData}>
             保存
           </Button>
         </form>
