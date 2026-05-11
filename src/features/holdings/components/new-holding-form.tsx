@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { formatCurrencyJpy, formatPercent } from "@/lib/formatting/number";
 import { calculateHoldingDividend } from "@/lib/dividends/calculations";
 import { createHolding } from "@/features/holdings/actions";
 import { ACCOUNT_TYPE_OPTIONS } from "@/lib/constants/dividends";
+import { useStockSearch } from "@/features/stocks/use-stock-search";
 import type { StockRow } from "@/features/stocks/queries";
 import type { AccountType } from "@/lib/constants/dividends";
 
@@ -38,9 +39,12 @@ function StockSearchResult({
       <div>
         <span className="text-sm font-medium">{stock.name}</span>
         <span className="ml-2 text-xs text-muted">{stock.ticker}</span>
+        {stock.market_segment && (
+          <span className="ml-2 text-xs text-muted">({stock.market_segment})</span>
+        )}
         {!isSupported && (
           <Badge variant="warning" className="ml-2">
-            現在MVP未対応
+            現在未対応
           </Badge>
         )}
       </div>
@@ -148,31 +152,25 @@ export function NewHoldingForm({
 }: {
   onSearch: (query: string) => Promise<StockRow[]>;
 }) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<StockRow[]>([]);
+  const {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    results: searchResults,
+    isLoading: isSearching,
+    clearResults
+  } = useStockSearch(onSearch);
+
   const [selectedStock, setSelectedStock] = useState<StockRow | null>(null);
   const [quantity, setQuantity] = useState("");
   const [averagePurchasePrice, setAveragePurchasePrice] = useState("");
   const [accountType, setAccountType] = useState<AccountType>("tokutei");
   const [error, setError] = useState<string | null>(null);
   const [completion, setCompletion] = useState<CompletionData | null>(null);
-  const [isSearching, startSearch] = useTransition();
   const [isSaving, startSave] = useTransition();
-
-  const handleSearch = useCallback(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    startSearch(async () => {
-      const results = await onSearch(searchQuery);
-      setSearchResults(results);
-    });
-  }, [searchQuery, onSearch]);
 
   const handleSelectStock = (stock: StockRow) => {
     setSelectedStock(stock);
-    setSearchResults([]);
+    clearResults();
     setSearchQuery(stock.name);
     setError(null);
   };
@@ -180,7 +178,7 @@ export function NewHoldingForm({
   const handleReset = () => {
     setSelectedStock(null);
     setSearchQuery("");
-    setSearchResults([]);
+    clearResults();
     setQuantity("");
     setAveragePurchasePrice("");
     setAccountType("tokutei");
@@ -237,32 +235,18 @@ export function NewHoldingForm({
       <Card className="space-y-4 p-5">
         {/* Stock search */}
         <FormField label="銘柄名またはコード" htmlFor="stock-search">
-          <div className="flex gap-2">
-            <Input
-              id="stock-search"
-              placeholder="KDDI または 9433"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                if (selectedStock) setSelectedStock(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleSearch();
-                }
-              }}
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              className="shrink-0"
-              onClick={handleSearch}
-              disabled={isSearching}
-            >
-              検索
-            </Button>
-          </div>
+          <Input
+            id="stock-search"
+            placeholder="KDDI または 9433"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              if (selectedStock) setSelectedStock(null);
+            }}
+          />
+          {isSearching && (
+            <p className="mt-1 text-xs text-muted">検索中…</p>
+          )}
         </FormField>
 
         {/* Search results */}

@@ -11,11 +11,14 @@ export async function searchStocks(query: string): Promise<StockRow[]> {
     return [];
   }
 
+  // Use prefix match (keyword%) to leverage GIN/B-tree indexes
+  const prefix = `${trimmed}%`;
+
   const { data, error } = await supabase
     .from("stocks")
     .select("*")
-    .or(`ticker.ilike.%${trimmed}%,name.ilike.%${trimmed}%,name_en.ilike.%${trimmed}%`)
-    .order("support_status", { ascending: true }) // supported first
+    .neq("support_status", "delisted")
+    .or(`ticker.ilike.${prefix},name.ilike.${prefix},name_en.ilike.${prefix}`)
     .order("ticker", { ascending: true })
     .limit(20);
 
