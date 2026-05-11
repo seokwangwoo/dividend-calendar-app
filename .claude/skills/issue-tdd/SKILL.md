@@ -86,7 +86,9 @@ node ../../scripts/issue-harness/index.js verify
 1. `eslint --fix` (Formatter)
 2. `eslint` (Lint)
 3. `tsc --noEmit` (Type check)
-4. `vitest run` (모든 유닛 테스트)
+4. `npm run test` (모든 유닛 테스트)
+5. `npm run test:integration` (통합 테스트)
+6. `npm run test:e2e` (E2E 테스트)
 
 모든 항목이 통과해야 합니다. 실패 시 해당 항목을 수정하고 `verify`를 다시 실행합니다.
 
@@ -107,7 +109,7 @@ node ../../scripts/issue-harness/index.js finish "fix: <이슈 요약>"
 1. **worktree로 이동**한 후 모든 작업을 수행합니다. 본 브랜치(main)는 건드리지 않습니다.
 2. **RED 단계에서 구현 코드를 수정하지 마세요**. 테스트만 수정합니다.
 3. **GREEN 단계에서 테스트를 수정하지 마세요**. 구현 코드만 수정합니다.
-4. **verify 실패 시** `finish`로 넘어가지 말고 해당 검증을 통과할 때까지 수정합니다.
+4. **verify 실패 시** `finish`로 넘어가지 말고 해당 검증을 통과할 때까지 수정합니다. 통합 테스트나 E2E 테스트 실패도 반드시 해결해야 합니다.
 5. **supabase deploy**가 프로젝트에 설정되어 있지 않으면 `finish`에서 자동 skip됩니다. 필요시 `package.json` scripts에 추가하세요.
 
 ## File Structure
