@@ -12,7 +12,7 @@
     "test:unit": "vitest run --reporter=verbose src",
     "test:integration": "RUN_REMOTE_TESTS=1 vitest run --reporter=verbose tests/integration",
     "test:e2e": "playwright test",
-    "issue:edit": "node scripts/issue-edit.js"
+    "issue:harness": "node scripts/issue-harness/index.js"
   },
   "dependencies": {
     "@supabase/ssr": "0.5.2",

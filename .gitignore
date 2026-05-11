@@ -11,3 +11,4 @@ test-results
 tsconfig.tsbuildinfo
 supabase/.temp
 .DS_Store
+.worktrees
