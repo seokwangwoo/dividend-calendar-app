@@ -9,6 +9,7 @@ export type JobRow = {
   attempts: number;
   max_attempts: number;
   last_error: string | null;
+  priority: number;
 };
 
 export type DisclosureForDownload = {

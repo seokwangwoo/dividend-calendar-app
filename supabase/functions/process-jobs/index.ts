@@ -74,12 +74,41 @@ function createSupabaseJobsClient(
 ): ProcessJobsClient {
   return {
     async listRunnableJobs({ batchSize, now }) {
+      // Check daily AI parse call cap before listing jobs
+      let skipParseJobs = false;
+      if (supportedTypes.includes("parse_disclosure_pdf_ai")) {
+        const dailyBudgetUsd = Number(Deno.env.get("DAILY_AI_PARSE_BUDGET_USD") ?? "5.0");
+        const dailyCallCap = Number(Deno.env.get("DAILY_AI_PARSE_CALL_CAP") ?? "250");
+        const todayStart = new Date(now);
+        todayStart.setHours(0, 0, 0, 0);
+
+        const { data: dailyStats, error: statsError } = await client
+          .from("disclosures")
+          .select("ai_parse_cost_usd")
+          .gte("updated_at", todayStart.toISOString())
+          .in("parse_status", ["parsed", "failed"])
+          .not("ai_parse_cost_usd", "is", null);
+
+        if (!statsError) {
+          const dailyCost = (dailyStats ?? []).reduce((sum, row) => sum + (row.ai_parse_cost_usd ?? 0), 0);
+          const dailyCalls = (dailyStats ?? []).length;
+          if (dailyCost >= dailyBudgetUsd || dailyCalls >= dailyCallCap) {
+            skipParseJobs = true;
+          }
+        }
+      }
+
+      const typesToRun = skipParseJobs
+        ? supportedTypes.filter((t) => t !== "parse_disclosure_pdf_ai")
+        : supportedTypes;
+
       const { data, error } = await client
         .from("jobs")
-        .select("id, type, status, payload, run_after, attempts, max_attempts, last_error")
+        .select("id, type, status, payload, run_after, attempts, max_attempts, last_error, priority")
         .eq("status", "pending")
-        .in("type", supportedTypes)
+        .in("type", typesToRun)
         .lte("run_after", now.toISOString())
+        .order("priority", { ascending: true })
         .order("run_after", { ascending: true })
         .limit(batchSize);
       if (error) throw error;
@@ -96,7 +125,7 @@ function createSupabaseJobsClient(
         })
         .eq("id", job.id)
         .eq("status", "pending")
-        .select("id, type, status, payload, run_after, attempts, max_attempts, last_error")
+        .select("id, type, status, payload, run_after, attempts, max_attempts, last_error, priority")
         .maybeSingle();
       if (error) throw error;
       return data ? normalizeJobRow(data) : null;
@@ -217,12 +246,94 @@ async function ensureParseJob(client: ReturnType<typeof createClient>, disclosur
   if (existingError) throw existingError;
   if (existing) return;
 
+  // SKIP_UNHELD_UNPARSED toggle: skip parse jobs for stocks with no active holdings
+  const skipUnheldUnparsed = Deno.env.get("SKIP_UNHELD_UNPARSED") === "true";
+  if (skipUnheldUnparsed) {
+    const { data: disclosure, error: dError } = await client
+      .from("disclosures")
+      .select("stock_id")
+      .eq("id", disclosureId)
+      .single();
+    if (!dError) {
+      if (!disclosure?.stock_id) {
+        // Unknown stock: skip creating parse job
+        return;
+      }
+      const { data: holdings, error: hError } = await client
+        .from("holdings")
+        .select("id")
+        .eq("stock_id", disclosure.stock_id)
+        .is("deleted_at", null)
+        .limit(1);
+      if (!hError && (holdings ?? []).length === 0) {
+        // No active holdings: skip creating parse job
+        return;
+      }
+    }
+  }
+
+  // Calculate priority based on stock holdings and dividend history
+  const priority = await resolveParsePriority(client, disclosureId);
+
   const { error } = await client.from("jobs").insert({
     type: "parse_disclosure_pdf_ai",
     payload: { disclosureId },
-    max_attempts: 3
+    max_attempts: 3,
+    priority
   });
   if (error) throw error;
+}
+
+async function resolveParsePriority(
+  client: ReturnType<typeof createClient>,
+  disclosureId: string
+): Promise<number> {
+  // Fetch the disclosure's stock_id
+  const { data: disclosure, error: dError } = await client
+    .from("disclosures")
+    .select("stock_id")
+    .eq("id", disclosureId)
+    .single();
+
+  if (dError || !disclosure?.stock_id) {
+    return 3; // Unknown stock = lowest priority
+  }
+
+  const stockId = disclosure.stock_id;
+
+  // Priority 1: stock has active holdings
+  const { data: holdings, error: hError } = await client
+    .from("holdings")
+    .select("id")
+    .eq("stock_id", stockId)
+    .is("deleted_at", null)
+    .limit(1);
+
+  if (!hError && (holdings ?? []).length > 0) {
+    return 1;
+  }
+
+  // Priority 2: supported stock with approved dividend history
+  const { data: stock, error: sError } = await client
+    .from("stocks")
+    .select("support_status")
+    .eq("id", stockId)
+    .single();
+
+  if (!sError && stock?.support_status === "supported") {
+    const { data: dividends, error: divError } = await client
+      .from("dividend_events")
+      .select("id")
+      .eq("stock_id", stockId)
+      .eq("review_status", "approved")
+      .limit(1);
+
+    if (!divError && (dividends ?? []).length > 0) {
+      return 2;
+    }
+  }
+
+  return 3;
 }
 
 function normalizeJobRow(row: JsonRecord): JobRow {
@@ -234,7 +345,8 @@ function normalizeJobRow(row: JsonRecord): JobRow {
     run_after: String(row.run_after),
     attempts: Number(row.attempts ?? 0),
     max_attempts: Number(row.max_attempts ?? 3),
-    last_error: typeof row.last_error === "string" ? row.last_error : null
+    last_error: typeof row.last_error === "string" ? row.last_error : null,
+    priority: Number(row.priority ?? 3)
   };
 }
 
@@ -311,6 +423,18 @@ function createParseDisclosurePdfAiHandler(
             .update({
               parse_status: "failed",
               last_parse_error: lastError
+            })
+            .eq("id", disclosureId);
+          if (error) throw error;
+        },
+
+        logAiParseCost: async (disclosureId, usage) => {
+          const { error } = await client
+            .from("disclosures")
+            .update({
+              ai_parse_input_tokens: usage.input_tokens,
+              ai_parse_output_tokens: usage.output_tokens,
+              ai_parse_cost_usd: usage.cost_usd
             })
             .eq("id", disclosureId);
           if (error) throw error;

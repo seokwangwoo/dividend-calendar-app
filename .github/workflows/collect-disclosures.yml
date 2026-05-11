@@ -2,8 +2,8 @@ name: Collect TDnet Disclosures
 
 on:
   schedule:
-    # 16:00, 18:00, and 22:00 JST.
-    - cron: "0 7,9,13 * * *"
+    # Hourly, 24 times daily
+    - cron: "0 * * * *"
   workflow_dispatch:
     inputs:
       date:
