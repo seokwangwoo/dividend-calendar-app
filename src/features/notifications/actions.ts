@@ -57,6 +57,21 @@ export async function saveNotificationRule(formData: FormData): Promise<void> {
     notifyEmail
   } = parsed.data;
 
+  // Validate stock has dividend data before allowing notification rules
+  const { data: stock, error: stockError } = await supabase
+    .from("stocks")
+    .select("expected_annual_dividend_per_share")
+    .eq("id", stockId)
+    .single();
+
+  if (stockError || !stock) {
+    throw new Error("Stock not found");
+  }
+
+  if (stock.expected_annual_dividend_per_share == null) {
+    throw new Error("この銘柄には配当データがないため、通知ルールを設定できません。");
+  }
+
   const payload = {
     basis,
     operator,
