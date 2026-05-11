@@ -1,6 +1,12 @@
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
-import { getParserDiagnosticSummary, LOW_CONFIDENCE_THRESHOLD } from "@/features/admin/diagnostics-queries";
+import {
+  getAdminDisclosureSummary,
+  getAdminReviewBacklog,
+  getParserDiagnosticSummary,
+  LOW_CONFIDENCE_THRESHOLD,
+  type AdminDisclosureSummaryRow,
+} from "@/features/admin/diagnostics-queries";
 
 type StatCardProps = {
   label: string;
@@ -13,7 +19,9 @@ function StatCard({ label, count, description, alertColor }: StatCardProps) {
   return (
     <div className="rounded-lg border border-line p-4">
       <dt className="text-xs text-muted">{label}</dt>
-      <dd className={`mt-1 text-2xl font-bold tabular-nums ${count > 0 && alertColor ? alertColor : "text-muted"}`}>
+      <dd
+        className={`mt-1 text-2xl font-bold tabular-nums ${count > 0 && alertColor ? alertColor : "text-muted"}`}
+      >
         {count}
       </dd>
       <p className="mt-1 text-xs text-muted">{description}</p>
@@ -21,10 +29,55 @@ function StatCard({ label, count, description, alertColor }: StatCardProps) {
   );
 }
 
+function DisclosureSummaryTable({ rows }: { rows: AdminDisclosureSummaryRow[] }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted">直近7日間のデータがありません。</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-line text-left text-xs text-muted">
+            <th className="pb-2 pr-4">日付</th>
+            <th className="pb-2 pr-4 text-right">収集</th>
+            <th className="pb-2 pr-4 text-right">解析済</th>
+            <th className="pb-2 pr-4 text-right">失敗</th>
+            <th className="pb-2 pr-4 text-right">スキップ</th>
+            <th className="pb-2 pr-4 text-right">AIコスト($)</th>
+            <th className="pb-2 pr-4 text-right">保留</th>
+            <th className="pb-2 pr-4 text-right">承認</th>
+            <th className="pb-2 text-right">拒否</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {rows.map((row) => (
+            <tr key={row.day} className="tabular-nums">
+              <td className="py-2 pr-4">{row.day}</td>
+              <td className="py-2 pr-4 text-right">{row.collected_count}</td>
+              <td className="py-2 pr-4 text-right">{row.parsed_count}</td>
+              <td className="py-2 pr-4 text-right text-danger">{row.failed_count}</td>
+              <td className="py-2 pr-4 text-right">{row.skipped_count}</td>
+              <td className="py-2 pr-4 text-right">{Number(row.total_ai_cost_usd).toFixed(4)}</td>
+              <td className="py-2 pr-4 text-right">{row.pending_reviews}</td>
+              <td className="py-2 pr-4 text-right">{row.approved_reviews}</td>
+              <td className="py-2 text-right">{row.rejected_reviews}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default async function DisclosuresPage() {
   let diagnostics = { parseErrorCount: 0, lowConfidenceReviewCount: 0, noDividendInfoCount: 0 };
+  let disclosureSummary: AdminDisclosureSummaryRow[] = [];
+  let backlog = { pending: 0, needs_manual_check: 0, total: 0 };
   try {
     diagnostics = await getParserDiagnosticSummary();
+    disclosureSummary = await getAdminDisclosureSummary();
+    backlog = await getAdminReviewBacklog();
   } catch {
     // Non-critical: diagnostics unavailable (e.g. during build or unauthenticated)
   }
@@ -32,13 +85,14 @@ export default async function DisclosuresPage() {
   const hasIssues =
     diagnostics.parseErrorCount > 0 ||
     diagnostics.lowConfidenceReviewCount > 0 ||
-    diagnostics.noDividendInfoCount > 0;
+    diagnostics.noDividendInfoCount > 0 ||
+    backlog.total > 0;
 
   return (
     <div className="space-y-5">
       <PageHeader title="公示データ" />
 
-      {/* Parser diagnostics */}
+      {/* Parser diagnostics + backlog */}
       <Card className="space-y-4 p-5">
         <h2 className="font-semibold">パーサー診断</h2>
         {hasIssues && (
@@ -46,7 +100,7 @@ export default async function DisclosuresPage() {
             要確認の項目があります。以下の件数を確認してください。
           </div>
         )}
-        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="解析失敗"
             count={diagnostics.parseErrorCount}
@@ -64,7 +118,19 @@ export default async function DisclosuresPage() {
             count={diagnostics.noDividendInfoCount}
             description="解析済みだが配当情報が見つからなかった公示。分類精度の参考値です。"
           />
+          <StatCard
+            label="レビュー滞留"
+            count={backlog.total}
+            description={`保留 ${backlog.pending} 件 / 要確認 ${backlog.needs_manual_check} 件`}
+            alertColor={backlog.total > 10 ? "text-warn" : undefined}
+          />
         </dl>
+      </Card>
+
+      {/* Daily disclosure summary */}
+      <Card className="space-y-4 p-5">
+        <h2 className="font-semibold">直近7日間の収集サマリー</h2>
+        <DisclosureSummaryTable rows={disclosureSummary} />
       </Card>
 
       {/* Collection flow info */}
