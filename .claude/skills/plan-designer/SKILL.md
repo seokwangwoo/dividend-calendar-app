@@ -251,55 +251,67 @@ Use `docs/plans/260505_mvp_1st_dev/` as the canonical example:
 
 When the user asks for a new plan:
 
-1. **Clarify scope**
-   - If the user promise, fixed stack, hard exclusions, or any other plan-critical detail is ambiguous or missing, **invoke the `grill-me` skill**.
-   - Interview the user relentlessly about every aspect of the plan until a shared understanding is reached. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one.
-   - For each question, provide your recommended answer.
-   - Ask the questions one at a time.
-   - If a question can be answered by exploring the codebase, explore the codebase instead of asking the user.
+1. **Create git worktree**
+    - Before starting any plan design work, create a dedicated git worktree for isolated plan authoring.
+    - Run: `git worktree add .worktrees/plan-design-<YYYYMMDD>_<short_kebab_name>`
+    - All subsequent file creation and editing must happen inside this worktree directory.
+    - This ensures the main working tree remains clean and allows safe experimentation.
 
-2. **Choose directory name**
-   - Format: `docs/plans/<YYYYMMDD>_<short_kebab_name>/`
-   - Use today's date.
+2. **Clarify scope**
+    - If the user promise, fixed stack, hard exclusions, or any other plan-critical detail is ambiguous or missing, **invoke the `grill-me` skill**.
+    - Interview the user relentlessly about every aspect of the plan until a shared understanding is reached. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one.
+    - For each question, provide your recommended answer.
+    - Ask the questions one at a time.
+    - If a question can be answered by exploring the codebase, explore the codebase instead of asking the user.
 
-3. **Draft README.md**
+3. **Choose directory name**
+    - Format: `docs/plans/<YYYYMMDD>_<short_kebab_name>/`
+    - Use today's date.
+
+4. **Draft README.md**
    - Fill all required sections.
    - List phases with links to the planned `plan.md` paths.
 
-4. **Draft phase plan.md files**
-   - Start with Phase 01.
-   - Ensure each phase's Prerequisites match the previous phase's Completion Criteria.
-   - Ensure every must-have feature appears in at least one phase.
-   - Keep each file under 500 lines.
+5. **Draft phase plan.md files**
+    - Start with Phase 01.
+    - Ensure each phase's Prerequisites match the previous phase's Completion Criteria.
+    - Ensure every must-have feature appears in at least one phase.
+    - Keep each file under 500 lines.
 
-5. **Cross-check**
-   - Verify that no phase implements excluded scope.
-   - Verify that phase folder names sort correctly.
-   - Verify that README links point to `phase_XX_name/plan.md`.
+6. **Cross-check**
+    - Verify that no phase implements excluded scope.
+    - Verify that phase folder names sort correctly.
+    - Verify that README links point to `phase_XX_name/plan.md`.
 
-6. **Mandatory `grill-me` review**
-   - After the initial plan draft is complete, **you MUST invoke the `grill-me` skill** to interview the user about the plan.
-   - The `grill-me` process is not optional — it is a required step before the plan can be considered final.
-   - During `grill-me`, walk down every branch of the design tree: architecture decisions, data flow, edge cases, operational concerns, and inter-phase dependencies.
-   - For each question, provide your recommended answer and ask the user to confirm or override.
-   - If a question can be answered by exploring the codebase, explore the codebase instead of asking the user.
+7. **Mandatory `grill-me` review**
+    - After the initial plan draft is complete, **you MUST invoke the `grill-me` skill** to interview the user about the plan.
+    - The `grill-me` process is not optional — it is a required step before the plan can be considered final.
+    - During `grill-me`, walk down every branch of the design tree: architecture decisions, data flow, edge cases, operational concerns, and inter-phase dependencies.
+    - For each question, provide your recommended answer and ask the user to confirm or override.
+    - If a question can be answered by exploring the codebase, explore the codebase instead of asking the user.
 
-7. **Update plan files based on `grill-me` outcomes**
-   - As the user answers questions during `grill-me`, **immediately edit the generated plan files** (`README.md`, `phase_*/plan.md`) to reflect the resolved decisions.
-   - Do not wait until the end — update files incrementally as each branch is resolved.
-   - Track all modifications so the plan remains consistent throughout the interview.
+8. **Update plan files based on `grill-me` outcomes**
+    - As the user answers questions during `grill-me`, **immediately edit the generated plan files** (`README.md`, `phase_*/plan.md`) to reflect the resolved decisions.
+    - Do not wait until the end — update files incrementally as each branch is resolved.
+    - Track all modifications so the plan remains consistent throughout the interview.
 
-8. **Update existing specification documents**
-   - After `grill-me` is complete and all ambiguities are resolved, **update existing specification documents** (`docs/*.md`) to reflect the new plan's decisions.
-   - Documents that typically need updates:
-     - `docs/dividend_app_mvp_backend_spec.md` — schema changes, API changes, index changes
-     - `docs/dividend_app_wireframe.md` — UI/UX changes, new screens, updated flows
-     - `docs/dividend_calendar_mvp_plan.md` — scope changes, feature additions/removals
-     - `docs/issue/decision/*.md` — decision records that are superseded or extended
-   - The plan itself should reference the updated specs, and the specs should reference the new plan.
+9. **Update existing specification documents**
+    - After `grill-me` is complete and all ambiguities are resolved, **update existing specification documents** (`docs/*.md`) to reflect the new plan's decisions.
+    - Documents that typically need updates:
+      - `docs/dividend_app_mvp_backend_spec.md` — schema changes, API changes, index changes
+      - `docs/dividend_app_wireframe.md` — UI/UX changes, new screens, updated flows
+      - `docs/dividend_calendar_mvp_plan.md` — scope changes, feature additions/removals
+      - `docs/issue/decision/*.md` — decision records that are superseded or extended
+    - The plan itself should reference the updated specs, and the specs should reference the new plan.
 
-9. **Final report**
-   - List all created and modified files.
-   - Summarize phase count and total estimated scope.
-   - Highlight any assumptions or blockers that need user confirmation before execution begins.
-   - Confirm that the plan is ready for the `phase_executor` to consume.
+10. **Final report**
+    - List all created and modified files.
+    - Summarize phase count and total estimated scope.
+    - Highlight any assumptions or blockers that need user confirmation before execution begins.
+    - Confirm that the plan is ready for the `phase_executor` to consume.
+
+11. **Delete git worktree**
+    - After the final report is delivered and all plan files are committed (or staged), delete the git worktree to clean up.
+    - Run: `git worktree remove .worktrees/plan-design-<YYYYMMDD>_<short_kebab_name>`
+    - Also prune the worktree reference: `git worktree prune`
+    - Confirm the worktree no longer appears in `git worktree list`.
