@@ -59,6 +59,27 @@ Deno.serve(async (req: Request) => {
     auth: { persistSession: false, autoRefreshToken: false }
   });
 
+  // Queue depth guard: pause collection if pending jobs exceed threshold
+  const maxQueueDepth = Number(Deno.env.get("MAX_DISCLOSURE_QUEUE_DEPTH") ?? "500");
+  const { count: pendingCount, error: countError } = await client
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending")
+    .in("type", ["download_disclosure_pdf", "parse_disclosure_pdf_ai"]);
+
+  if (countError) {
+    return jsonResponse({ error: `Failed to check queue depth: ${countError.message}` }, 500);
+  }
+
+  if ((pendingCount ?? 0) >= maxQueueDepth) {
+    return jsonResponse({
+      message: "Queue depth guard triggered",
+      pendingJobs: pendingCount,
+      maxQueueDepth,
+      results: []
+    });
+  }
+
   const body = await req.json().catch(() => ({}));
   const normalizedInputs = Array.isArray(body.disclosures)
     ? body.disclosures
@@ -161,9 +182,35 @@ async function persistCandidate(
   const disclosureId = existing?.id ?? (await insertDisclosure(client, disclosurePayload));
 
   if (existing?.id) {
+    // When updating an existing disclosure, preserve parse-related state
+    // unless the document_url availability changes
+    const { data: current } = await client
+      .from("disclosures")
+      .select("parse_status, review_priority, last_parse_error, document_url")
+      .eq("id", existing.id)
+      .single();
+
+    const docUrlChanged = current && current.document_url !== candidate.documentUrl;
+    const updatePayload = docUrlChanged
+      ? disclosurePayload
+      : {
+          stock_id: stockId,
+          external_id: candidate.externalId,
+          source_type: candidate.sourceType,
+          title: candidate.title,
+          document_url: candidate.documentUrl,
+          published_at: candidate.publishedAt,
+          disclosure_type: candidate.disclosureType,
+          raw_payload: disclosurePayload.raw_payload,
+          // Preserve existing parse state when document_url hasn't changed
+          parse_status: current?.parse_status,
+          review_priority: current?.review_priority,
+          last_parse_error: current?.last_parse_error
+        };
+
     const { error } = await client
       .from("disclosures")
-      .update(disclosurePayload)
+      .update(updatePayload)
       .eq("id", existing.id);
     if (error) throw error;
   }

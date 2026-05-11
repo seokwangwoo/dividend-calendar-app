@@ -49,7 +49,11 @@ export type DividendReviewFilters = {
   priority?: string;
   disclosureType?: string;
   ticker?: string;
+  tickerFrom?: string;
+  tickerTo?: string;
   changeType?: string;
+  dateFrom?: string;
+  dateTo?: string;
 };
 
 const REVIEW_SELECT = `
@@ -127,6 +131,14 @@ export async function listDividendReviews(
     query = query.eq("change_type", filters.changeType);
   }
 
+  if (filters.dateFrom) {
+    query = query.gte("created_at", filters.dateFrom);
+  }
+
+  if (filters.dateTo) {
+    query = query.lte("created_at", filters.dateTo);
+  }
+
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
@@ -136,6 +148,15 @@ export async function listDividendReviews(
   if (filters.ticker) {
     const t = filters.ticker.toLowerCase();
     results = results.filter((r) => r.stocks?.ticker.toLowerCase().includes(t));
+  }
+
+  if (filters.tickerFrom || filters.tickerTo) {
+    results = results.filter((r) => {
+      const ticker = r.stocks?.ticker ?? "";
+      if (filters.tickerFrom && ticker < filters.tickerFrom) return false;
+      if (filters.tickerTo && ticker > filters.tickerTo) return false;
+      return true;
+    });
   }
 
   if (filters.disclosureType) {

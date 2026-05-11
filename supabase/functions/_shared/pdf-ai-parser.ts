@@ -27,6 +27,10 @@ export type AiParseDependencies = {
     disclosureId: string,
     lastError: string
   ): Promise<void>;
+  logAiParseCost(
+    disclosureId: string,
+    usage: { input_tokens: number; output_tokens: number; cost_usd: number }
+  ): Promise<void>;
   /** OpenAI model name to use for text-only prompts. Required to avoid Deno.env in shared module. */
   openaiModel?: string;
   /** OpenAI model name to use when sending PDFs directly. */
@@ -1792,6 +1796,15 @@ export async function executeParseDisclosurePdfAi(
         : "[PDF bytes will be passed directly]"
   });
 
+  // Estimate input tokens before calling (conservative: 1 token per 2 chars for Japanese)
+  const estimatedInputTokens = Math.ceil(prompt.length / 2);
+  if (estimatedInputTokens > 50000) {
+    throw new JobHandlerError(
+      `excessive_tokens:estimated_${estimatedInputTokens}_tokens`,
+      { retryable: false }
+    );
+  }
+
   // Call OpenAI
   let aiResponse: OpenAIParseResponse;
   try {
@@ -1815,6 +1828,25 @@ export async function executeParseDisclosurePdfAi(
       { cause: error }
     );
   }
+
+  // Log tokens and cost
+  const inputTokens = aiResponse.usage?.input_tokens ?? 0;
+  const outputTokens = aiResponse.usage?.output_tokens ?? 0;
+  const modelUsed =
+    textExtraction.method === "direct_pdf_fallback"
+      ? deps.openaiPdfModel ?? "gpt-4o-mini"
+      : deps.openaiModel ?? "gpt-4o";
+
+  // Approximate cost per 1M tokens (OpenAI pricing as of 2025-05)
+  const costPerMInput = modelUsed.includes("gpt-4o-mini") ? 0.15 : 2.5;
+  const costPerMOutput = modelUsed.includes("gpt-4o-mini") ? 0.6 : 10.0;
+  const costUsd = (inputTokens * costPerMInput + outputTokens * costPerMOutput) / 1_000_000;
+
+  await deps.logAiParseCost(disclosureId, {
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    cost_usd: costUsd
+  });
 
   // Parse JSON from AI response
   let parsedOutput: unknown;

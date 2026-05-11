@@ -26,6 +26,9 @@ export type Database = {
           review_priority: Database["public"]["Enums"]["disclosure_review_priority"];
           ai_parse_attempts: number;
           last_parse_error: string | null;
+          ai_parse_input_tokens: number | null;
+          ai_parse_output_tokens: number | null;
+          ai_parse_cost_usd: number | null;
           raw_payload: Json;
           created_at: string;
           updated_at: string;
@@ -46,6 +49,9 @@ export type Database = {
           review_priority?: Database["public"]["Enums"]["disclosure_review_priority"];
           ai_parse_attempts?: number;
           last_parse_error?: string | null;
+          ai_parse_input_tokens?: number | null;
+          ai_parse_output_tokens?: number | null;
+          ai_parse_cost_usd?: number | null;
           raw_payload?: Json;
           created_at?: string;
           updated_at?: string;
@@ -65,6 +71,9 @@ export type Database = {
           review_priority?: Database["public"]["Enums"]["disclosure_review_priority"];
           ai_parse_attempts?: number;
           last_parse_error?: string | null;
+          ai_parse_input_tokens?: number | null;
+          ai_parse_output_tokens?: number | null;
+          ai_parse_cost_usd?: number | null;
           raw_payload?: Json;
           updated_at?: string;
         };
@@ -357,6 +366,7 @@ export type Database = {
           attempts: number;
           max_attempts: number;
           last_error: string | null;
+          priority: number;
           created_at: string;
           updated_at: string;
         };
@@ -369,6 +379,7 @@ export type Database = {
           attempts?: number;
           max_attempts?: number;
           last_error?: string | null;
+          priority?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -380,6 +391,7 @@ export type Database = {
           attempts?: number;
           max_attempts?: number;
           last_error?: string | null;
+          priority?: number;
           updated_at?: string;
         };
       };
