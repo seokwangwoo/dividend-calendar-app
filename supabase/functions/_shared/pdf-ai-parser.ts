@@ -27,8 +27,10 @@ export type AiParseDependencies = {
     disclosureId: string,
     lastError: string
   ): Promise<void>;
-  /** OpenAI model name to use (e.g. "gpt-4o"). Required to avoid Deno.env in shared module. */
+  /** OpenAI model name to use for text-only prompts. Required to avoid Deno.env in shared module. */
   openaiModel?: string;
+  /** OpenAI model name to use when sending PDFs directly. */
+  openaiPdfModel?: string;
 };
 
 export type DisclosureForParse = {
@@ -359,13 +361,118 @@ const EARNINGS_NON_DIVIDEND_HEADINGS = [
 /** Minimum character count for text to be considered usable */
 const MIN_USABLE_TEXT_LENGTH = 50;
 
+type PdfTextExtractionResult = {
+  text: string;
+  method: "pdfjs" | "legacy" | "none";
+};
+
+type PdfJsModule = {
+  getDocument: (params: { data: Uint8Array; useWorkerFetch: boolean }) => {
+    promise: Promise<{
+      numPages: number;
+      getPage(pageNumber: number): Promise<{
+        getTextContent(options: { disableCombineTextItems: boolean }): Promise<{
+          items: unknown[];
+        }>;
+      }>;
+    }>;
+  };
+};
+
+let pdfJsModulePromise: Promise<PdfJsModule> | null = null;
+
 /**
  * Extracts text from a PDF byte array.
- * Uses a lightweight approach: scans the raw PDF stream for BT/ET (text object)
- * markers and extracts string literals. This is a minimal implementation suitable
- * for Japanese TDnet PDFs that embed text streams.
+ * Prefers PDF.js page text extraction so it can handle compressed streams and
+ * object streams that the legacy raw regex extractor misses.
  */
-export function extractTextFromPdf(pdfBytes: Uint8Array): string {
+export async function extractTextFromPdf(pdfBytes: Uint8Array): Promise<PdfTextExtractionResult> {
+  const pdfjsText = await extractTextWithPdfjs(pdfBytes);
+  if (pdfjsText.trim().length > 0) {
+    return { text: pdfjsText, method: "pdfjs" };
+  }
+
+  const legacyText = extractTextFromPdfLegacy(pdfBytes);
+  if (legacyText.trim().length > 0) {
+    return { text: legacyText, method: "legacy" };
+  }
+
+  return { text: "", method: "none" };
+}
+
+async function extractTextWithPdfjs(pdfBytes: Uint8Array): Promise<string> {
+  try {
+    const pdfjsLib = await loadPdfJsModule();
+    const loadingTask = pdfjsLib.getDocument({
+      data: pdfBytes,
+      useWorkerFetch: false
+    });
+    const pdf = await loadingTask.promise;
+    const pageTexts: string[] = [];
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent({
+        disableCombineTextItems: false
+      });
+
+      const pageLines: string[] = [];
+      for (const item of content.items) {
+        if (!isTextContentItem(item)) continue;
+        const text = item.str?.trim();
+        if (!text) continue;
+        pageLines.push(text);
+        if (item.hasEOL) {
+          pageLines.push("\n");
+        } else {
+          pageLines.push(" ");
+        }
+      }
+
+      const pageText = pageLines.join("").replace(/[ \t]+\n/g, "\n").replace(/\s+\n/g, "\n").trim();
+      if (pageText.length > 0) {
+        pageTexts.push(pageText);
+      }
+    }
+
+    return pageTexts.join("\n\n").trim();
+  } catch {
+    return "";
+  }
+}
+
+async function loadPdfJsModule(): Promise<PdfJsModule> {
+  if (!pdfJsModulePromise) {
+    pdfJsModulePromise = (async () => {
+      const specifiers = typeof Deno !== "undefined"
+        ? ["npm:pdfjs-dist/legacy/build/pdf.mjs", "pdfjs-dist/legacy/build/pdf.mjs"]
+        : ["pdfjs-dist/legacy/build/pdf.mjs", "npm:pdfjs-dist/legacy/build/pdf.mjs"];
+
+      let lastError: unknown;
+      for (const specifier of specifiers) {
+        try {
+          return (await import(specifier)) as PdfJsModule;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError instanceof Error
+        ? lastError
+        : new Error("Failed to load pdfjs-dist");
+    })();
+  }
+
+  return pdfJsModulePromise;
+}
+
+function isTextContentItem(
+  item: unknown
+): item is { str: string; hasEOL?: boolean | undefined } {
+  return typeof item === "object" && item !== null && "str" in item && typeof (item as { str?: unknown }).str === "string";
+}
+
+function extractTextFromPdfLegacy(pdfBytes: Uint8Array): string {
   try {
     // Decode the raw PDF bytes as Latin-1 to preserve byte values
     const raw = new TextDecoder("latin1").decode(pdfBytes);
@@ -535,8 +642,8 @@ export function isTextUsable(text: string): boolean {
  * @param pdfBytes Raw PDF bytes.
  * @param disclosureType Optional disclosure type for smarter section trimming.
  */
-export function prepareTextForAI(pdfBytes: Uint8Array, disclosureType?: string): TextExtractionResult {
-  const rawText = extractTextFromPdf(pdfBytes);
+export async function prepareTextForAI(pdfBytes: Uint8Array, disclosureType?: string): Promise<TextExtractionResult> {
+  const { text: rawText } = await extractTextFromPdf(pdfBytes);
   const earningsRelease =
     disclosureType === "earnings_release" || disclosureType === "earnings_revision";
   const { trimmedText, sectionTrimmed } = trimToDividendSections(rawText, { earningsRelease });
@@ -1129,7 +1236,7 @@ export async function executeParseDisclosurePdfAi(
   const disclosureType = disclosure.disclosure_type ?? "other";
 
   // Extract text / determine input method, passing disclosure type for smarter section trimming
-  const textExtraction = prepareTextForAI(pdfBytes, disclosureType);
+  const textExtraction = await prepareTextForAI(pdfBytes, disclosureType);
   const promptText =
     textExtraction.method === "extracted_text"
       ? textExtraction.text
@@ -1143,13 +1250,18 @@ export async function executeParseDisclosurePdfAi(
   // Call OpenAI
   let aiResponse: OpenAIParseResponse;
   try {
+    const model =
+      textExtraction.method === "direct_pdf_fallback"
+        ? deps.openaiPdfModel ?? "gpt-4o-mini"
+        : deps.openaiModel ?? "gpt-4o";
+
     aiResponse = await deps.callOpenAI({
       disclosureTitle: disclosure.title,
       disclosureType,
       extractedText: textExtraction.method === "extracted_text" ? textExtraction.text : null,
       pdfBytes: textExtraction.method === "direct_pdf_fallback" ? pdfBytes : null,
       textExtractionMethod: textExtraction.method,
-      model: deps.openaiModel ?? "gpt-4o"
+      model
     });
   } catch (error) {
     throw new JobHandlerError(

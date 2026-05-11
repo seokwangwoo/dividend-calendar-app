@@ -25,7 +25,8 @@ import {
   type AiDividendEvent,
   type AiParseOutput,
   type DisclosureForParse,
-  type DividendReviewInsert
+  type DividendReviewInsert,
+  type OpenAIParseRequest
 } from "../../../supabase/functions/_shared/pdf-ai-parser";
 import { type JobRow } from "../../../supabase/functions/_shared/process-jobs";
 
@@ -618,7 +619,7 @@ describe("trimToDividendSections", () => {
 });
 
 describe("prepareTextForAI", () => {
-  it("returns extracted_text method when PDF has usable text content (ASCII test proxy)", () => {
+  it("returns extracted_text method when PDF has usable text content (ASCII test proxy)", async () => {
     // PDF text extraction uses latin1 decoding internally.
     // We encode a PDF with ASCII text in a BT...ET block to test the extraction path.
     // The Japanese char check in isTextUsable requires at least one Japanese character,
@@ -639,23 +640,23 @@ describe("prepareTextForAI", () => {
     // Instead, verify that a PDF with no text produces direct_pdf_fallback,
     // and use the isTextUsable tests to cover the usability check logic.
     const pdfBytes = new TextEncoder().encode(pdfHeader + `BT (${dividendText})Tj ET`);
-    const result = prepareTextForAI(pdfBytes);
+    const result = await prepareTextForAI(pdfBytes);
     // ASCII-only text triggers direct_pdf_fallback (no Japanese chars)
     expect(result.method).toBe("direct_pdf_fallback");
     expect(result.fallbackReason).toBeTruthy();
   });
 
-  it("falls back to direct_pdf_fallback for empty extraction (no text objects)", () => {
+  it("falls back to direct_pdf_fallback for empty extraction (no text objects)", async () => {
     // Minimal PDF with no text objects
     const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
-    const result = prepareTextForAI(pdfBytes);
+    const result = await prepareTextForAI(pdfBytes);
     expect(result.method).toBe("direct_pdf_fallback");
     expect(result.fallbackReason).toBeTruthy();
   });
 
-  it("falls back to direct_pdf_fallback for empty_text_extraction reason when no text found", () => {
+  it("falls back to direct_pdf_fallback for empty_text_extraction reason when no text found", async () => {
     const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
-    const result = prepareTextForAI(pdfBytes);
+    const result = await prepareTextForAI(pdfBytes);
     expect(result.fallbackReason).toBe("empty_text_extraction");
   });
 });
@@ -706,11 +707,13 @@ describe("executeParseDisclosurePdfAi", () => {
     parseAttempts: number[];
     parsedIds: string[];
     failedIds: string[];
+    openaiRequests: OpenAIParseRequest[];
   }> = {}) {
     const reviews: DividendReviewInsert[] = [];
     const parseAttempts: number[] = [];
     const parsedIds: string[] = [];
     const failedIds: string[] = [];
+    const openaiRequests: OpenAIParseRequest[] = overrides.openaiRequests ?? [];
     const disclosure = overrides.disclosure ?? makeDisclosure();
     const aiOutput = overrides.aiOutput ?? makeAiOutput();
 
@@ -722,10 +725,13 @@ describe("executeParseDisclosurePdfAi", () => {
     const deps = {
       fetchDisclosureForParse: async () => disclosure,
       downloadPdf: async () => pdfBytes,
-      callOpenAI: async () => ({
-        rawText: JSON.stringify(aiOutput),
-        usage: { input_tokens: 100, output_tokens: 200 }
-      }),
+      callOpenAI: async (request: OpenAIParseRequest) => {
+        openaiRequests.push(request);
+        return {
+          rawText: JSON.stringify(aiOutput),
+          usage: { input_tokens: 100, output_tokens: 200 }
+        };
+      },
       upsertDividendReviews: async (rows: DividendReviewInsert[]) => {
         reviews.push(...rows);
       },
@@ -740,7 +746,7 @@ describe("executeParseDisclosurePdfAi", () => {
       }
     };
 
-    return { deps, reviews, parseAttempts, parsedIds, failedIds };
+    return { deps, reviews, parseAttempts, parsedIds, failedIds, openaiRequests };
   }
 
   it("completes successfully: increments parse attempts, creates reviews, marks parsed", async () => {
@@ -910,7 +916,7 @@ describe("executeParseDisclosurePdfAi", () => {
   });
 
   it("uses direct PDF fallback when text extraction fails (reflected in raw_payload)", async () => {
-    const { deps, reviews } = makeMockDeps();
+    const { deps, reviews, openaiRequests } = makeMockDeps();
     // Override downloadPdf to return bytes with no extractable text
     deps.downloadPdf = async () =>
       new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // PDF signature only, no text
@@ -919,6 +925,7 @@ describe("executeParseDisclosurePdfAi", () => {
     expect(reviews).toHaveLength(1);
     const summary = (reviews[0].raw_payload as Record<string, unknown>).disclosure_ai_summary as Record<string, unknown>;
     expect(summary.text_extraction_method).toBe("direct_pdf_fallback");
+    expect(openaiRequests[0]?.model).toBe("gpt-4o-mini");
   });
 
   it("marks disclosure as parsed on success", async () => {

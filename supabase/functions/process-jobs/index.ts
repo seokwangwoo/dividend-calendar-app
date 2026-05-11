@@ -273,6 +273,7 @@ function createParseDisclosurePdfAiHandler(
         callOpenAI: (request) => callOpenAIResponsesApi(request),
 
         openaiModel: Deno.env.get("OPENAI_MODEL") ?? "gpt-4o",
+        openaiPdfModel: Deno.env.get("OPENAI_PDF_MODEL") ?? "gpt-4o-mini",
 
         upsertDividendReviews: async (rows) => {
           if (rows.length === 0) return;
@@ -380,17 +381,18 @@ async function callOpenAIResponsesApi(
 
   // Build the input content
   const inputContent: unknown[] = [];
+  let promptText = "";
 
   if (request.textExtractionMethod === "extracted_text" && request.extractedText) {
     // Build the prompt with extracted text embedded
-    const promptText = request.extractedText;
+    promptText = request.extractedText;
     const disclosureType = request.disclosureType;
     const title = request.disclosureTitle;
 
     // Re-build prompt with actual text
     const { buildPromptForDisclosure } = await import("../_shared/pdf-ai-parser.ts");
-    const prompt = buildPromptForDisclosure(disclosureType, title, promptText);
-    inputContent.push({ type: "input_text", text: prompt });
+    promptText = buildPromptForDisclosure(disclosureType, title, promptText);
+    inputContent.push({ type: "input_text", text: promptText });
   } else if (request.pdfBytes) {
     // Direct PDF fallback - encode as base64
     const base64 = encodeBase64(request.pdfBytes);
@@ -401,12 +403,12 @@ async function callOpenAIResponsesApi(
     });
     // Add instruction text
     const { buildPromptForDisclosure } = await import("../_shared/pdf-ai-parser.ts");
-    const prompt = buildPromptForDisclosure(
+    promptText = buildPromptForDisclosure(
       request.disclosureType,
       request.disclosureTitle,
       "[Extract dividend information from the attached PDF]"
     );
-    inputContent.push({ type: "input_text", text: prompt });
+    inputContent.push({ type: "input_text", text: promptText });
   } else {
     throw new JobHandlerError("invalid_ai_request:no_text_or_pdf", {
       retryable: false
@@ -415,7 +417,12 @@ async function callOpenAIResponsesApi(
 
   const requestBody = {
     model,
-    input: inputContent
+    input: [
+      {
+        role: "user",
+        content: inputContent
+      }
+    ]
   };
 
   let response: Response;

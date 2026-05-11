@@ -42,6 +42,16 @@ async function invokeCollectDisclosures(
   });
 }
 
+async function invokeRecentCollectDisclosures(
+  request: typeof test.prototype.request,
+  limit: number
+) {
+  return request.post(`${FUNCTION_BASE_URL}/collect-disclosures`, {
+    headers: await getServiceRoleHeader(),
+    data: { mode: "recent", limit }
+  });
+}
+
 async function invokeProcessJobs(request: typeof test.prototype.request) {
   return request.post(`${FUNCTION_BASE_URL}/process-jobs`, {
     headers: await getServiceRoleHeader(),
@@ -177,6 +187,57 @@ test.describe("system pipeline", () => {
       .filter("payload->>disclosureId", "eq", disclosureId);
     jobIds.push(...(jobs ?? []).map((j) => j.id));
     expect(jobs).toHaveLength(1);
+  });
+
+  test("recent mode fetches Yanoshin and returns structured JSON", async ({
+    request
+  }) => {
+    test.setTimeout(120000);
+
+    const response = await invokeRecentCollectDisclosures(request, 10);
+    expect(response.status()).toBe(200);
+
+    const body = (await response.json()) as {
+      sourceUrl?: string | null;
+      results?: Array<{
+        externalId: string;
+        disclosureId?: string;
+        inserted?: boolean;
+        jobCreated?: boolean;
+        skipped?: string;
+        error?: string;
+      }>;
+    };
+
+    expect(body.sourceUrl).toMatch(
+      /^https:\/\/webapi\.yanoshin\.jp\/webapi\/tdnet\/list\/recent\.json2\?/
+    );
+    expect(Array.isArray(body.results)).toBe(true);
+
+    const createdDisclosureIds = body.results
+      ?.filter((result) => result.inserted && result.disclosureId)
+      .map((result) => result.disclosureId as string) ?? [];
+    disclosureIds.push(...createdDisclosureIds);
+
+    if (createdDisclosureIds.length > 0) {
+      const admin = createAdminClient();
+      const { data: jobs } = await admin
+        .from("jobs")
+        .select("id")
+        .filter("payload->>disclosureId", "in", `(${createdDisclosureIds.join(",")})`);
+      jobIds.push(...(jobs ?? []).map((job) => job.id));
+    }
+
+    expect(
+      body.results?.every(
+        (result) =>
+          typeof result.externalId === "string" &&
+          (result.inserted === true ||
+            result.inserted === false ||
+            typeof result.skipped === "string" ||
+            typeof result.error === "string")
+      )
+    ).toBe(true);
   });
 
   test("missing document_url disclosure is skipped and no job created", async ({

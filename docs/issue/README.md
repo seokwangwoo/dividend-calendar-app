@@ -26,6 +26,7 @@ docs/issue/
 | 이슈 | 유형 | 해결일 |
 |------|------|--------|
 | [홈/포트폴리오 배당 금액 불일치](archive/20260506-home-portfolio-dividend-mismatch.md) | bug | 2026-05-07 |
+| [TDnet PDF 텍스트 추출 개선 및 OpenAI fallback 입력 방식 수정 필요](archive/20260511-tdnet-pdf-text-extraction-openai-fallback.md) | bug | 2026-05-11 |
 
 ## 설계 결정 (ADRs)
 
