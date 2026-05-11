@@ -41,13 +41,22 @@ test.beforeAll(async () => {
   kddi = await getStockByTicker("9433");
   jt = await getStockByTicker("2914");
 
+  // Defensive cleanup: remove any orphaned e2e events from previous crashed runs
+  // so that accumulated stale events don't inflate dividend totals.
+  const admin = createAdminClient();
+  await admin
+    .from("dividend_events")
+    .delete()
+    .in("stock_id", [kddi.id, jt.id])
+    .eq("source_type", "e2e")
+    .eq("payment_year", CURRENT_YEAR);
+
   user = await createConfirmedUser("e2e-verify-portfolio");
 
   // User A holdings per phase plan
   await createHolding(user.id, kddi.id, 100, 4300, "nisa");
   await createHolding(user.id, jt.id, 100, 3800, "tokutei");
 
-  const admin = createAdminClient();
   const { data: kddiEventData } = await admin
     .from("dividend_events")
     .insert({

@@ -17,7 +17,7 @@ export async function searchStocks(query: string): Promise<StockRow[]> {
   const { data, error } = await supabase
     .from("stocks")
     .select("*")
-    .neq("support_status", "delisted")
+    .in("support_status", ["supported", "unsupported"])
     .or(`ticker.ilike.${prefix},name.ilike.${prefix},name_en.ilike.${prefix}`)
     .order("ticker", { ascending: true })
     .limit(20);

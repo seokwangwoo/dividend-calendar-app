@@ -68,7 +68,7 @@ test("normal user can complete core portfolio, calendar, notification, and setti
 
   await page.goto("/app/portfolio/new");
   await page.getByLabel("銘柄名またはコード").fill("9433");
-  await page.getByRole("button", { name: "検索" }).click();
+  // Search is auto-triggered after debounce — wait for results to appear
   const kddiResult = page.locator("div").filter({ hasText: /KDDI.*9433/ }).first();
   await kddiResult.getByRole("button", { name: "選択" }).click();
   await page.getByLabel("保有数量").fill("100");

@@ -92,11 +92,14 @@ test("calendar year navigation changes amounts", async ({ page }) => {
   const currentYear = new Date().getFullYear();
   await expect(page.getByText(`${currentYear}年`, { exact: true })).toBeVisible();
 
-  // Navigate to next year
+  // Navigate two years forward to reach a year with no approved events
+  // (currentYear+1 / 2027 has real KDDI tdnet data in the DB, so skip it)
   await page.getByRole("button", { name: "›" }).click();
   await expect(page.getByText(`${currentYear + 1}年`, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "›" }).click();
+  await expect(page.getByText(`${currentYear + 2}年`, { exact: true })).toBeVisible();
 
-  // Next year should show empty state (no events for next year)
+  // Two years out should show empty state (no approved events for KDDI/JT in that year)
   await expect(page.getByText("該当する配当予定はありません")).toBeVisible();
 
   // Navigate back via full page reload to ensure fresh server data

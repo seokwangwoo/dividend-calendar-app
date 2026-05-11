@@ -73,7 +73,9 @@ test("full pipeline from disclosure to user reflection", async ({ page }) => {
   await login(page, adminUser.email, adminUser.password);
   await page.goto("/admin/dividend-reviews");
   await expect(page.getByText("AI配当候補レビュー")).toBeVisible();
-  await expect(page.locator("tbody tr")).toHaveCount(2);
+  // Verify the two created reviews appear in the list (other pending reviews may also exist)
+  await expect(page.locator(`a[href="/admin/dividend-reviews/${revYearEnd}"]`)).toBeVisible();
+  await expect(page.locator(`a[href="/admin/dividend-reviews/${revAnnualTotal}"]`)).toBeVisible();
 
   await page.goto(`/admin/dividend-reviews/${revYearEnd}`);
   await expect(page.getByRole("heading", { name: "AI抽出値" })).toBeVisible();

@@ -53,8 +53,8 @@ test("list shows pending and needs-manual-check by default", async ({ page }) =>
   await login(page, adminUser.email, adminUser.password);
   await page.goto("/admin/dividend-reviews");
 
-  await expect(page.locator("tbody").getByText("保留中")).toBeVisible();
-  await expect(page.locator("tbody").getByText("要確認")).toBeVisible();
+  await expect(page.locator("tbody").getByText("保留中").first()).toBeVisible();
+  await expect(page.locator("tbody").getByText("要確認").first()).toBeVisible();
   await expect(page.locator("tbody").getByText("承認済")).not.toBeVisible();
 
   await page.locator("select[name='status']").selectOption("approved");

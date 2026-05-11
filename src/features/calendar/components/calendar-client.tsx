@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { formatCurrencyJpy } from "@/lib/formatting/number";
@@ -55,6 +55,8 @@ export function CalendarClient({
   const [monthDetail, setMonthDetail] = useState<MonthDetail | null>(null);
   const [loadingCalendar, setLoadingCalendar] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  // Generation counter to discard stale responses when requests are fired rapidly
+  const calendarGenRef = useRef(0);
 
   const supabase = createClient();
 
@@ -65,6 +67,7 @@ export function CalendarClient({
       newAccountType: string,
       newCalendarBasis: string
     ) => {
+      const gen = ++calendarGenRef.current;
       setLoadingCalendar(true);
       try {
         const { data, error } = await supabase.rpc("get_dividend_calendar", {
@@ -73,6 +76,8 @@ export function CalendarClient({
           p_account_type: newAccountType,
           p_calendar_basis: newCalendarBasis
         });
+        // Discard result if a newer request has already been issued
+        if (gen !== calendarGenRef.current) return;
         if (error) throw error;
         setCalendar(
           (data ?? []).map((row: { month: number; amount: number | null; event_count: number }) => ({
@@ -84,7 +89,9 @@ export function CalendarClient({
         setSelectedMonth(null);
         setMonthDetail(null);
       } finally {
-        setLoadingCalendar(false);
+        if (gen === calendarGenRef.current) {
+          setLoadingCalendar(false);
+        }
       }
     },
     [supabase]

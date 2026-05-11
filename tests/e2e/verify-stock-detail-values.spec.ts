@@ -9,10 +9,14 @@ import {
 } from "./helpers";
 
 const CURRENT_YEAR = new Date().getFullYear();
+const HOLDING_QUANTITY = 100;
 
 let user: Awaited<ReturnType<typeof createConfirmedUser>>;
 let kddi: Awaited<ReturnType<typeof getStockByTicker>>;
 const createdEventIds: string[] = [];
+
+// Computed in beforeAll: expected annual dividend based on approved events for CURRENT_YEAR
+let expectedAnnualDividendPerShare = 0;
 
 async function login(page: Page, email: string, password: string) {
   await page.goto("/auth/login");
@@ -44,8 +48,22 @@ test.beforeAll(async () => {
   // User A holding: KDDI 100 shares NISA avg 4300
   await createHolding(user.id, kddi.id, 100, 4300, "nisa");
 
-  // Approved dividend event with source metadata
   const admin = createAdminClient();
+
+  // Clean up any leftover approved events from previous interrupted runs
+  // (events that can be deleted — those with FK references may survive the delete).
+  const { data: staleEvents } = await admin
+    .from("dividend_events")
+    .select("id")
+    .eq("stock_id", kddi.id)
+    .eq("payment_year", CURRENT_YEAR)
+    .eq("review_status", "approved")
+    .not("source_url", "like", "https://www.release.tdnet.info%");
+  if (staleEvents && staleEvents.length > 0) {
+    await deleteDividendEvents(staleEvents.map((e) => e.id as string));
+  }
+
+  // Year-end event: ¥150/share with source metadata for the source section test
   const { data: eventData } = await admin
     .from("dividend_events")
     .insert({
@@ -65,6 +83,21 @@ test.beforeAll(async () => {
     .select("id")
     .single();
   if (eventData) createdEventIds.push(eventData.id as string);
+
+  // Compute expected annual DPS from all approved events for CURRENT_YEAR after setup,
+  // so the test stays correct even when persistent seed events exist alongside our own.
+  const { data: approvedEvents } = await admin
+    .from("dividend_events")
+    .select("dividend_per_share")
+    .eq("stock_id", kddi.id)
+    .eq("payment_year", CURRENT_YEAR)
+    .eq("review_status", "approved")
+    .not("dividend_per_share", "is", null);
+  expectedAnnualDividendPerShare =
+    (approvedEvents ?? []).reduce(
+      (sum, e) => sum + Number(e.dividend_per_share),
+      0
+    );
 });
 
 test.afterAll(async () => {
@@ -94,13 +127,13 @@ test("stock detail shows user holdings with exact values", async ({ page }) => {
   const holdingsSection = page.locator("section").filter({ hasText: "保有情報" }).first();
   await expect(holdingsSection).toBeVisible();
 
-  // NISA holding: quantity 100
-  // annual before_tax = (seed 140 + e2e 150) * 100 = 29,000
-  // annual after_tax = 29,000 (NISA)
+  // NISA holding: quantity 100, tax rate 0%
+  // expectedAnnualDividendPerShare is computed in beforeAll from all approved events for CURRENT_YEAR.
+  const expectedAnnual = expectedAnnualDividendPerShare * HOLDING_QUANTITY;
   await expect(holdingsSection.getByText("NISA").first()).toBeVisible();
   await expect(holdingsSection.getByText("100株").first()).toBeVisible();
-  await expect(holdingsSection.getByText(`税引後年間 ${formatJpy(29000)}`).first()).toBeVisible();
-  await expect(holdingsSection.getByText(`税引前 ${formatJpy(29000)}`).first()).toBeVisible();
+  await expect(holdingsSection.getByText(`税引後年間 ${formatJpy(expectedAnnual)}`).first()).toBeVisible();
+  await expect(holdingsSection.getByText(`税引前 ${formatJpy(expectedAnnual)}`).first()).toBeVisible();
 });
 
 test("stock detail shows dividend schedule with status labels", async ({ page }) => {

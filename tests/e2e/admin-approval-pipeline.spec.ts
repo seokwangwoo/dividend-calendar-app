@@ -98,22 +98,19 @@ test("month-only review requires payment_year override before approval", async (
   await expect(page).toHaveURL(/\/admin\/dividend-reviews$/);
 
   const admin = createAdminClient();
-  const { data: eventRow } = await admin
-    .from("dividend_events")
-    .select("payment_year")
-    .eq("stock_id", kddi.id)
-    .eq("event_type", "year_end")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
-  expect(eventRow?.payment_year).toBe(new Date().getFullYear() + 1);
-
   const { data: reviewRow } = await admin
     .from("dividend_reviews")
     .select("created_dividend_event_id")
     .eq("id", rev)
     .single();
   if (reviewRow?.created_dividend_event_id) eventIds.push(reviewRow.created_dividend_event_id as string);
+
+  const { data: eventRow } = await admin
+    .from("dividend_events")
+    .select("payment_year")
+    .eq("id", reviewRow!.created_dividend_event_id)
+    .single();
+  expect(eventRow?.payment_year).toBe(new Date().getFullYear() + 1);
 });
 
 test("approval with override values persists correctly", async ({ page }) => {

@@ -34,13 +34,31 @@ function formatJpy(amount: number | null): string {
   }).format(amount);
 }
 
-// Calculate helper event payment date (now + 7 days)
-const helperPaymentDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-const helperDateText = `${helperPaymentDate.getFullYear()}年${String(helperPaymentDate.getMonth() + 1).padStart(2, "0")}月${String(helperPaymentDate.getDate()).padStart(2, "0")}日`;
+// Calculate helper event payment date (now + 7 days) — KDDI event date
+// Use UTC date string to match what createApprovedDividendEvent stores via toISOString().slice(0, 10)
+const helperPaymentDateStr = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  .toISOString()
+  .slice(0, 10); // "YYYY-MM-DD" in UTC
+const [hYear, hMonth, hDay] = helperPaymentDateStr.split("-");
+const helperDateText = `${hYear}年${hMonth}月${hDay}日`;
+
+// JT event payment date (now + 14 days) — must be later than KDDI so KDDI is shown as next dividend
+const jtPaymentDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
 test.beforeAll(async () => {
   kddi = await getStockByTicker("9433");
   jt = await getStockByTicker("2914");
+
+  // Pre-cleanup: remove any stale e2e events from previous interrupted runs
+  const admin = createAdminClient();
+  const { data: staleEvents } = await admin
+    .from("dividend_events")
+    .select("id")
+    .in("stock_id", [kddi.id, jt.id])
+    .eq("source_type", "e2e");
+  if (staleEvents && staleEvents.length > 0) {
+    await deleteDividendEvents(staleEvents.map((e) => e.id as string));
+  }
 
   userA = await createConfirmedUser("e2e-verify-home");
 
@@ -48,23 +66,24 @@ test.beforeAll(async () => {
   await createHolding(userA.id, kddi.id, 100, 4300, "nisa");
   await createHolding(userA.id, jt.id, 100, 3800, "tokutei");
 
-  // Create approved dividend events for current year
-  const admin = createAdminClient();
-
   // KDDI event via helper (expected_payment_date = now + 7 days)
   const kddiEventId = await createApprovedDividendEvent(kddi.id);
   createdEventIds.push(kddiEventId);
 
-  // JT event in current month
+  // JT event — payment date is now + 14 days (later than KDDI's now + 7 days)
+  const jtPaymentDateStr = jtPaymentDate.toISOString().slice(0, 10);
+  const jtPaymentMonth = jtPaymentDate.getMonth() + 1;
+  const jtPaymentYear = jtPaymentDate.getFullYear();
   const { data: jtEventData } = await admin
     .from("dividend_events")
     .insert({
       stock_id: jt.id,
       fiscal_year: CURRENT_YEAR,
+      payment_year: jtPaymentYear,
       event_type: "year_end",
       dividend_per_share: 194,
-      expected_payment_month: CURRENT_MONTH,
-      expected_payment_date: `${CURRENT_YEAR}-${String(CURRENT_MONTH).padStart(2, "0")}-15`,
+      expected_payment_month: jtPaymentMonth,
+      expected_payment_date: jtPaymentDateStr,
       status: "confirmed",
       review_status: "approved",
       source_type: "e2e",

@@ -43,8 +43,18 @@ test.beforeAll(async () => {
   await createHolding(user.id, kddi.id, 100, 4300, "nisa");
   await createHolding(user.id, jt.id, 100, 3800, "tokutei");
 
-  // Create approved events for KDDI in current month
   const admin = createAdminClient();
+
+  // Remove any stale e2e events for these stocks from previous failed runs
+  // to prevent duplicate events corrupting test assertions
+  await admin
+    .from("dividend_events")
+    .delete()
+    .in("stock_id", [kddi.id, jt.id])
+    .eq("source_type", "e2e")
+    .eq("payment_year", CURRENT_YEAR);
+
+  // Create approved events for KDDI in current month
   const { data: kddiEvent } = await admin
     .from("dividend_events")
     .insert({
