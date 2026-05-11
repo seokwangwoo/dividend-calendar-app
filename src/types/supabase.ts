@@ -679,7 +679,8 @@ export type Database = {
         | "download_disclosure_pdf"
         | "parse_disclosure_pdf_ai"
         | "approve_dividend_review"
-        | "evaluate_notification_rules";
+        | "evaluate_notification_rules"
+        | "refresh_stock_prices";
     };
     CompositeTypes: Record<string, never>;
   };

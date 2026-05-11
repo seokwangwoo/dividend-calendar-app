@@ -4,15 +4,80 @@ on:
   schedule:
     - cron: "0 15 * * 1-5" # 15:00 UTC = 00:00 JST on weekdays
   workflow_dispatch:
+    inputs:
+      run_date:
+        description: "Run date in YYYY-MM-DD format (defaults to today JST)"
+        required: false
+        type: string
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - name: Invoke refresh-stock-prices Edge Function
+      - name: Invoke process-price-refresh in a loop
+        env:
+          SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          INPUT_RUN_DATE: ${{ inputs.run_date }}
         run: |
-          curl -sSf -X POST \
-            "${{ secrets.SUPABASE_URL }}/functions/v1/refresh-stock-prices" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{}' || exit 1
+          set -euo pipefail
+          node <<'NODE'
+          const runDate = process.env.INPUT_RUN_DATE || new Date().toLocaleDateString('ja-JP', {
+            timeZone: 'Asia/Tokyo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          }).replace(/\//g, '-');
+
+          async function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+          }
+
+          let remainingJobs = 1;
+          let iterations = 0;
+          let consecutiveErrors = 0;
+          const maxIterations = 200; // safety limit (~55min at 10s sleep + processing)
+          const maxConsecutiveErrors = 3;
+
+          while (remainingJobs > 0 && iterations < maxIterations) {
+            iterations++;
+            const response = await fetch(`${process.env.SUPABASE_FUNCTION_URL}/process-price-refresh`, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({ run_date: runDate })
+            });
+
+            const data = await response.json().catch(() => ({}));
+            console.log(JSON.stringify(data));
+
+            if (!response.ok) {
+              console.error(`HTTP ${response.status}: ${data.error || 'unknown error'}`);
+              consecutiveErrors++;
+              if (consecutiveErrors >= maxConsecutiveErrors) {
+                console.error(`Reached ${maxConsecutiveErrors} consecutive errors. Failing.`);
+                process.exit(1);
+              }
+              // Force another iteration to retry
+              remainingJobs = 1;
+              await sleep(10000);
+              continue;
+            }
+
+            consecutiveErrors = 0;
+            remainingJobs = data.result?.remainingJobs ?? 0;
+
+            if (remainingJobs > 0) {
+              await sleep(10000); // 10 seconds between invocations
+            }
+          }
+
+          if (remainingJobs > 0) {
+            console.error(`Reached max iterations (${maxIterations}) with ${remainingJobs} jobs remaining`);
+            process.exit(1);
+          }
+
+          console.log("Price refresh complete.");
+          NODE
