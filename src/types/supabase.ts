@@ -450,13 +450,33 @@ export type Database = {
           name: string;
           name_en: string | null;
           currency: string;
-          support_status: "supported" | "unsupported";
+          support_status: "supported" | "unsupported" | "delisted";
+          market_segment: string | null;
           current_price: number | null;
           price_updated_at: string | null;
           expected_annual_dividend_per_share: number | null;
           expected_dividend_yield: number | null;
           created_at: string;
           updated_at: string;
+        };
+        Insert: never;
+        Update: never;
+      };
+      stock_import_logs: {
+        Row: {
+          id: string;
+          file_path: string;
+          dry_run: boolean;
+          processed_count: number;
+          inserted_count: number;
+          updated_count: number;
+          delisted_count: number;
+          failed_count: number;
+          status: "running" | "success" | "failed";
+          error_message: string | null;
+          started_at: string;
+          completed_at: string | null;
+          created_at: string;
         };
         Insert: never;
         Update: never;
