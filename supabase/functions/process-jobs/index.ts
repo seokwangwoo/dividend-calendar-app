@@ -344,7 +344,7 @@ async function fetchDisclosureForParse(
   const { data, error } = await client
     .from("disclosures")
     .select(
-      "id, stock_id, external_id, title, disclosure_type, storage_path, published_at, ai_parse_attempts, raw_payload, stocks(id, ticker)"
+      "id, stock_id, external_id, title, source_type, document_url, disclosure_type, storage_path, published_at, ai_parse_attempts, raw_payload, stocks(id, ticker, name)"
     )
     .eq("id", disclosureId)
     .maybeSingle();
@@ -360,6 +360,8 @@ async function fetchDisclosureForParse(
     stock_id: data.stock_id,
     external_id: data.external_id,
     title: data.title,
+    source_type: data.source_type,
+    document_url: data.document_url,
     disclosure_type: data.disclosure_type,
     storage_path: data.storage_path,
     published_at: data.published_at,
@@ -381,19 +383,11 @@ async function callOpenAIResponsesApi(
 
   // Build the input content
   const inputContent: unknown[] = [];
-  let promptText = "";
+  if (request.prompt) {
+    inputContent.push({ type: "input_text", text: request.prompt });
+  }
 
-  if (request.textExtractionMethod === "extracted_text" && request.extractedText) {
-    // Build the prompt with extracted text embedded
-    promptText = request.extractedText;
-    const disclosureType = request.disclosureType;
-    const title = request.disclosureTitle;
-
-    // Re-build prompt with actual text
-    const { buildPromptForDisclosure } = await import("../_shared/pdf-ai-parser.ts");
-    promptText = buildPromptForDisclosure(disclosureType, title, promptText);
-    inputContent.push({ type: "input_text", text: promptText });
-  } else if (request.pdfBytes) {
+  if (request.textExtractionMethod === "direct_pdf_fallback" && request.pdfBytes) {
     // Direct PDF fallback - encode as base64
     const base64 = encodeBase64(request.pdfBytes);
     inputContent.push({
@@ -401,15 +395,7 @@ async function callOpenAIResponsesApi(
       filename: "disclosure.pdf",
       file_data: `data:application/pdf;base64,${base64}`
     });
-    // Add instruction text
-    const { buildPromptForDisclosure } = await import("../_shared/pdf-ai-parser.ts");
-    promptText = buildPromptForDisclosure(
-      request.disclosureType,
-      request.disclosureTitle,
-      "[Extract dividend information from the attached PDF]"
-    );
-    inputContent.push({ type: "input_text", text: promptText });
-  } else {
+  } else if (request.textExtractionMethod !== "extracted_text") {
     throw new JobHandlerError("invalid_ai_request:no_text_or_pdf", {
       retryable: false
     });

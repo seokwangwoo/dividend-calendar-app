@@ -67,16 +67,38 @@ function makeDisclosure(overrides: Partial<DisclosureForParse> = {}): Disclosure
 }
 
 function makeAiEvent(overrides: Partial<AiDividendEvent> = {}): AiDividendEvent {
+  const legacyEventType = overrides.event_type ?? "year_end";
+  const fiscalPeriod =
+    legacyEventType === "interim"
+      ? "interim"
+      : legacyEventType === "annual_total"
+        ? "annual"
+        : legacyEventType === "special" || legacyEventType === "commemorative"
+          ? "unknown"
+          : "year_end";
+  const dividendType =
+    legacyEventType === "special"
+      ? "special"
+      : legacyEventType === "commemorative"
+        ? "commemorative"
+        : "ordinary";
+
   return {
-    event_type: "year_end",
+    fiscal_year: 2026,
+    fiscal_period: fiscalPeriod,
+    dividend_type: dividendType,
+    event_type: legacyEventType,
     status: "confirmed",
     dividend_per_share: 120,
     previous_dividend_per_share: 100,
     change_type: "increase",
+    currency: "JPY",
     record_date: "2026-03-31",
     ex_dividend_date: null,
     expected_payment_date: "2026-06-25",
     expected_payment_month: 6,
+    payment_date_text: null,
+    reason: null,
     evidence_text: "期末配当予想を1株当たり120円に修正いたします。",
     confidence_score: 0.9,
     components: null,
@@ -86,6 +108,14 @@ function makeAiEvent(overrides: Partial<AiDividendEvent> = {}): AiDividendEvent 
 
 function makeAiOutput(overrides: Partial<AiParseOutput> = {}): AiParseOutput {
   return {
+    stock_ticker: "9433",
+    stock_name: "株式会社テスト",
+    source: {
+      source_type: "tdnet",
+      source_url: "https://example.com/disclosure.pdf",
+      source_published_at: "2026-05-10T06:30:00.000Z",
+      disclosure_title: "配当予想の修正に関するお知らせ"
+    },
     ticker: "9433",
     company_name: "株式会社テスト",
     disclosure_title: "配当予想の修正に関するお知らせ",
@@ -110,16 +140,17 @@ describe("validateAiOutput", () => {
   });
 
   it("rejects non-JPY currency", () => {
-    const result = validateAiOutput(makeAiOutput({ currency: "USD" }), null);
+    const output = makeAiOutput();
+    output.events[0].currency = "USD" as "JPY";
+    const result = validateAiOutput(output, null);
     expect(result.valid).toBe(false);
     expect((result as { valid: false; error: string }).error).toMatch(/invalid_currency/);
   });
 
   it("rejects missing currency", () => {
     const output = makeAiOutput();
-    const raw = { ...output };
-    delete (raw as Record<string, unknown>).currency;
-    const result = validateAiOutput(raw, null);
+    delete (output.events[0] as Record<string, unknown>).currency;
+    const result = validateAiOutput(output, null);
     expect(result.valid).toBe(false);
     expect((result as { valid: false; error: string }).error).toMatch(/invalid_currency/);
   });
@@ -812,7 +843,37 @@ describe("executeParseDisclosurePdfAi", () => {
   it("throws non-retryable error for invalid AI output schema", async () => {
     const { deps } = makeMockDeps();
     deps.callOpenAI = async () => ({
-      rawText: JSON.stringify({ currency: "USD", events: [], warnings: [], needs_manual_check: false, disclosure_title: "test", disclosure_type: "other" }),
+      rawText: JSON.stringify({
+        stock_ticker: "9433",
+        stock_name: "株式会社テスト",
+        source: {
+          source_type: "tdnet",
+          source_url: "https://example.com/a.pdf",
+          source_published_at: "2026-05-10T06:30:00.000Z",
+          disclosure_title: "test"
+        },
+        events: [
+          {
+            fiscal_year: 2026,
+            fiscal_period: "year_end",
+            dividend_type: "ordinary",
+            status: "confirmed",
+            change_type: "increase",
+            dividend_per_share: 120,
+            previous_dividend_per_share: 100,
+            currency: "USD",
+            record_date: null,
+            ex_dividend_date: null,
+            expected_payment_date: null,
+            expected_payment_month: null,
+            payment_date_text: null,
+            reason: null,
+            evidence_text: "test",
+            confidence_score: 0.9
+          }
+        ],
+        warnings: []
+      }),
       usage: {}
     });
 

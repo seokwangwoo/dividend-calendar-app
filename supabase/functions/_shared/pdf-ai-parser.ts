@@ -39,16 +39,27 @@ export type DisclosureForParse = {
   external_id: string | null;
   title: string;
   disclosure_type: string | null;
+  source_type?: string | null;
+  document_url?: string | null;
   storage_path: string | null;
   published_at: string | null;
   ai_parse_attempts: number;
   raw_payload: JsonRecord;
-  stocks?: { ticker: string | null; id: string | null } | { ticker: string | null; id: string | null }[] | null;
+  stocks?: {
+    ticker: string | null;
+    name?: string | null;
+    id: string | null;
+  } | {
+    ticker: string | null;
+    name?: string | null;
+    id: string | null;
+  }[] | null;
 };
 
 export type OpenAIParseRequest = {
   disclosureTitle: string;
   disclosureType: string;
+  prompt: string;
   extractedText: string | null;
   pdfBytes: Uint8Array | null;
   textExtractionMethod: "extracted_text" | "direct_pdf_fallback";
@@ -83,14 +94,6 @@ export type DividendReviewInsert = {
 // AI response schema types
 // ---------------------------------------------------------------------------
 
-export type AiEventType =
-  | "interim"
-  | "year_end"
-  | "annual_total"
-  | "special"
-  | "commemorative"
-  | "other";
-
 export type AiChangeType =
   | "increase"
   | "decrease"
@@ -99,18 +102,63 @@ export type AiChangeType =
   | "special"
   | "commemorative"
   | "unchanged"
+  | "forecast_revision"
+  | "data_update"
+  | "none"
+  | "unknown";
+
+export type AiEventType =
+  | "interim"
+  | "year_end"
+  | "annual_total"
+  | "special"
+  | "commemorative"
+  | "other";
+
+export type AiFiscalPeriod =
+  | "interim"
+  | "year_end"
+  | "q1"
+  | "q2"
+  | "q3"
+  | "q4"
+  | "annual"
+  | "unknown";
+
+export type AiDividendType =
+  | "ordinary"
+  | "special"
+  | "commemorative"
+  | "mixed"
+  | "no_dividend"
+  | "unknown";
+
+export type AiEventStatus =
+  | "estimated"
+  | "forecast"
+  | "revised_forecast"
+  | "resolved"
+  | "confirmed"
+  | "paid"
+  | "undecided"
   | "unknown";
 
 export type AiDividendEvent = {
-  event_type: AiEventType;
-  status: "confirmed" | "estimated" | "undecided";
+  event_type?: AiEventType;
+  fiscal_year: number | null;
+  fiscal_period: AiFiscalPeriod;
+  dividend_type: AiDividendType;
+  status: AiEventStatus;
+  change_type: AiChangeType;
   dividend_per_share: number | null;
   previous_dividend_per_share: number | null;
-  change_type: AiChangeType;
+  currency: "JPY";
   record_date: string | null;
   ex_dividend_date: string | null;
   expected_payment_date: string | null;
   expected_payment_month: number | null;
+  payment_date_text: string | null;
+  reason: string | null;
   evidence_text: string;
   confidence_score: number;
   components?: {
@@ -121,15 +169,24 @@ export type AiDividendEvent = {
 };
 
 export type AiParseOutput = {
-  ticker: string | null;
-  company_name: string | null;
-  disclosure_title: string;
-  disclosure_type: string;
-  fiscal_year: number | null;
-  currency: "JPY" | string;
+  stock_ticker: string;
+  stock_name: string | null;
+  source: {
+    source_type: "tdnet" | "edinet" | "company_ir" | "manual" | "unknown";
+    source_url: string | null;
+    source_published_at: string | null;
+    disclosure_title: string | null;
+  };
   events: AiDividendEvent[];
   warnings: string[];
-  needs_manual_check: boolean;
+  // Legacy fields retained for compatibility with older outputs during rollout.
+  ticker?: string | null;
+  company_name?: string | null;
+  disclosure_title?: string;
+  disclosure_type?: string;
+  fiscal_year?: number | null;
+  currency?: "JPY" | string;
+  needs_manual_check?: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -153,13 +210,41 @@ const VALID_CHANGE_TYPES = new Set<string>([
   "special",
   "commemorative",
   "unchanged",
+  "forecast_revision",
+  "data_update",
+  "none",
   "unknown"
 ]);
 
 const VALID_STATUS_VALUES = new Set<string>([
-  "confirmed",
   "estimated",
-  "undecided"
+  "forecast",
+  "revised_forecast",
+  "resolved",
+  "confirmed",
+  "paid",
+  "undecided",
+  "unknown"
+]);
+
+const VALID_FISCAL_PERIODS = new Set<string>([
+  "interim",
+  "year_end",
+  "q1",
+  "q2",
+  "q3",
+  "q4",
+  "annual",
+  "unknown"
+]);
+
+const VALID_DIVIDEND_TYPES = new Set<string>([
+  "ordinary",
+  "special",
+  "commemorative",
+  "mixed",
+  "no_dividend",
+  "unknown"
 ]);
 
 /**
@@ -174,126 +259,179 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 // Prompt templates
 // ---------------------------------------------------------------------------
 
-function buildDividendDisclosurePrompt(title: string, text: string): string {
-  return `You are a specialized Japanese corporate disclosure analyst. Extract dividend information from the following Japanese corporate announcement.
+export type DisclosurePromptContext = {
+  stockTicker: string | null;
+  stockName: string | null;
+  disclosureTitle: string | null;
+  publishedAt: string | null;
+  sourceUrl: string | null;
+  sourceType: string | null;
+};
 
-Disclosure title: ${title}
+function buildDividendExtractionPrompt(text: string, context: DisclosurePromptContext): string {
+  const sourceType = context.sourceType ?? "unknown";
+  const stockTicker = context.stockTicker ?? "unknown";
+  const stockName = context.stockName ?? "null";
+  const disclosureTitle = context.disclosureTitle ?? "null";
+  const publishedAt = context.publishedAt ?? "null";
+  const sourceUrl = context.sourceUrl ?? "null";
 
-Announcement text:
+  return `당신은 일본 상장사 공시에서 배당 정보를 추출하는 전문 데이터 추출 AI입니다.
+
+목표는 공시 원문에서 배당 관련 이벤트를 찾아, 앱 DB에 저장 가능한 JSON 형식으로 변환하는 것입니다.
+
+중요 원칙:
+1. 공시 1개에서 배당 이벤트가 여러 개 나올 수 있습니다.
+2. 중간배당, 기말배당, 특별배당, 기념배당, 무배, 복배, 배당예상 수정 등을 각각 별도 이벤트로 분리해야 합니다.
+3. "예상", "수정 예상", "확정", "결의", "지급 완료", "미정"을 반드시 구분해야 합니다.
+4. 추정하지 말고, 공시 원문에 근거가 있는 값만 추출하세요.
+5. 원문에 없는 값은 null로 둡니다.
+6. 금액 단위는 반드시 1주당 배당금 기준으로 추출하세요.
+7. 일본어 표현을 기준으로 판단하되, 최종 출력은 지정된 enum 값을 사용하세요.
+8. 같은 공시 안에 "중間配当の決定"과 "期末配当予想の修正"이 함께 있으면 최소 2개의 이벤트로 분리하세요.
+9. 표 안의 "当期実績", "前回予想", "今回予想", "修正予想", "前期実績"을 구분하세요.
+10. 과거 실적과 미래 예상이 함께 있을 경우, 사용자 캘린더에 영향을 주는 미래/현재 이벤트를 우선 추출하되, 확정된 당기 배당도 이벤트로 추출하세요.
+
+입력으로 제공되는 공시 정보:
+- stock_ticker: ${stockTicker}
+- stock_name: ${stockName}
+- disclosure_title: ${disclosureTitle}
+- published_at: ${publishedAt}
+- source_url: ${sourceUrl}
+- source_type: ${sourceType}
+- disclosure_text:
 ${text}
 
-Extract all dividend-related events. Focus on:
-- 配当予想の修正 (dividend forecast revisions)
-- 剰余金の配当 (dividend decisions)
-- 記念配当 (commemorative dividends)
-- 特別配当 (special dividends)
-- 増配/減配/無配/復配 (increases, decreases, no-dividend, resumed dividends)
-- 基準日 (record date)
-- 支払予定日 (expected payment date)
-- 特別配当・記念配当のある場合は普通配当との内訳も記録すること
+추출해야 할 배당 이벤트 필드:
 
-Important rules:
-- Do NOT calculate ex_dividend_date from record_date. Only include ex_dividend_date if it is explicitly stated in the text.
-- Use explicit null for unknown values.
-- Accept only JPY currency.
-- Report confidence_score between 0.0 and 1.0.
-- When special or commemorative dividends are part of the same declared event, include them as components of the payable interim or year_end event rather than as separate events.
-
-Return JSON matching this schema exactly:
 {
-  "ticker": string | null,
-  "company_name": string | null,
-  "disclosure_title": string,
-  "disclosure_type": string,
-  "fiscal_year": number | null,
-  "currency": "JPY",
+  "stock_ticker": string,
+  "stock_name": string | null,
+  "source": {
+    "source_type": "tdnet" | "edinet" | "company_ir" | "manual" | "unknown",
+    "source_url": string | null,
+    "source_published_at": string | null,
+    "disclosure_title": string | null
+  },
   "events": [
     {
-      "event_type": "interim" | "year_end" | "annual_total" | "special" | "commemorative" | "other",
-      "status": "confirmed" | "estimated" | "undecided",
+      "fiscal_year": number | null,
+      "fiscal_period": "interim" | "year_end" | "q1" | "q2" | "q3" | "q4" | "annual" | "unknown",
+      "dividend_type": "ordinary" | "special" | "commemorative" | "mixed" | "no_dividend" | "unknown",
+      "status": "estimated" | "forecast" | "revised_forecast" | "resolved" | "confirmed" | "paid" | "undecided" | "unknown",
+      "change_type": "increase" | "decrease" | "unchanged" | "no_dividend" | "resumed" | "special" | "commemorative" | "forecast_revision" | "data_update" | "none" | "unknown",
       "dividend_per_share": number | null,
       "previous_dividend_per_share": number | null,
-      "change_type": "increase" | "decrease" | "no_dividend" | "resumed" | "special" | "commemorative" | "unchanged" | "unknown",
-      "record_date": "YYYY-MM-DD" | null,
-      "ex_dividend_date": "YYYY-MM-DD" | null,
-      "expected_payment_date": "YYYY-MM-DD" | null,
+      "currency": "JPY",
+      "record_date": string | null,
+      "ex_dividend_date": string | null,
+      "expected_payment_date": string | null,
       "expected_payment_month": number | null,
+      "payment_date_text": string | null,
+      "reason": string | null,
       "evidence_text": string,
-      "confidence_score": number,
-      "components": {
-        "ordinary": number | null,
-        "special": number | null,
-        "commemorative": number | null
-      } | null
+      "confidence_score": number
     }
   ],
-  "warnings": string[],
-  "needs_manual_check": boolean
-}`;
+  "warnings": string[]
 }
 
-function buildEarningsReleasePrompt(title: string, text: string): string {
-  return `You are a specialized Japanese corporate disclosure analyst. Extract dividend information from the following Japanese earnings release (決算短信).
+판단 기준:
 
-Disclosure title: ${title}
+1. fiscal_period 판단
+- "中間配当", "第2四半期末", "第2四半期" → "interim"
+- "期末配当", "期末" → "year_end"
+- "第1四半期末" → "q1"
+- "第2四半期末" → "q2" 또는 앱 기준상 중간배당이면 "interim"
+- "第3四半期末" → "q3"
+- "第4四半期末" → "q4"
+- "年間配当", "合計"만 있고 개별 기간이 없으면 "annual"
+- 판단 불가 → "unknown"
 
-Earnings release text:
-${text}
+2. dividend_type 판단
+- 일반 배당만 있으면 "ordinary"
+- "特別配当" → "special"
+- "記念配当" → "commemorative"
+- 보통배당과 특별/기념배당이 함께 있으면 "mixed"
+- "無配" 또는 배당금 0원이 명시되면 "no_dividend"
+- 판단 불가 → "unknown"
 
-Extract ONLY dividend-related information. Focus specifically on:
-- 配当の状況 (dividend summary section)
-- 1株当たり配当金 (dividend per share table)
-- 年間配当金 (annual dividend total)
-- 中間配当 (interim dividend)
-- 期末配当 (year-end dividend)
+3. status 판단
+- "配当予想", "予想" → "forecast"
+- 앱 또는 데이터 제공자가 추정한 값이면 "estimated"
+- "配当予想の修正", "修正予想", "前回予想から修正" → "revised_forecast"
+- "剰余金の配当", "取締役会決議", "決定" → "resolved" 또는 "confirmed"
+- "支払開始日"이 지났거나 "支払済"로 명시되면 "paid"
+- "未定" → "undecided"
+- 판단 불가 → "unknown"
 
-IGNORE all other financial metrics (revenue, profit, etc.).
+4. change_type 판단
+- previous_dividend_per_share와 dividend_per_share를 비교합니다.
+- 새 금액 > 이전 금액 → "increase"
+- 새 금액 < 이전 금액 → "decrease"
+- 새 금액 = 이전 금액 → "unchanged"
+- 새 금액이 0 또는 무배 전환 → "no_dividend"
+- 이전이 0 또는 무배였고 새 금액이 0보다 크면 → "resumed"
+- 특별배당 발생 → "special"
+- 기념배당 발생 → "commemorative"
+- 금액 비교가 불가능하지만 예상 수정 공시이면 → "forecast_revision"
+- 날짜나 지급월만 변경되었으면 → "data_update"
+- 변경 없음 → "none"
+- 판단 불가 → "unknown"
 
-Important rules:
-- Do NOT calculate ex_dividend_date from record_date. Only include ex_dividend_date if it is explicitly stated in the text.
-- annual_total rows are reference-only and should still be included.
-- Use explicit null for unknown values.
-- Accept only JPY currency.
-- Report confidence_score between 0.0 and 1.0.
+5. 금액 추출 규칙
+- 반드시 1주당 배당금만 추출하세요.
+- "1株当たり配当金", "１株当たり配当金", "円銭" 등의 표를 우선 사용하세요.
+- "15円00銭"은 15.00으로 변환하세요.
+- "0円00銭"은 0으로 변환하세요.
+- "未定"은 null로 두고 status를 "undecided"로 설정하세요.
+- 연간 합계만 있는 경우 fiscal_period를 "annual"로 두세요.
+- 중간/기말이 분리되어 있으면 각각 별도 이벤트로 추출하세요.
 
-Return JSON matching this schema exactly:
-{
-  "ticker": string | null,
-  "company_name": string | null,
-  "disclosure_title": string,
-  "disclosure_type": "earnings_release",
-  "fiscal_year": number | null,
-  "currency": "JPY",
-  "events": [
-    {
-      "event_type": "interim" | "year_end" | "annual_total" | "special" | "commemorative" | "other",
-      "status": "confirmed" | "estimated" | "undecided",
-      "dividend_per_share": number | null,
-      "previous_dividend_per_share": number | null,
-      "change_type": "increase" | "decrease" | "no_dividend" | "resumed" | "special" | "commemorative" | "unchanged" | "unknown",
-      "record_date": "YYYY-MM-DD" | null,
-      "ex_dividend_date": "YYYY-MM-DD" | null,
-      "expected_payment_date": "YYYY-MM-DD" | null,
-      "expected_payment_month": number | null,
-      "evidence_text": string,
-      "confidence_score": number,
-      "components": null
-    }
-  ],
-  "warnings": string[],
-  "needs_manual_check": boolean
-}`;
+6. 날짜 추출 규칙
+- "基準日" → record_date
+- "権利落ち日" 또는 명확한 ex-dividend date → ex_dividend_date
+- "支払開始予定日", "効力発生日", "支払開始日" → expected_payment_date
+- 정확한 날짜가 없고 "6月下旬", "12月予定"처럼 월만 있으면 expected_payment_month에 월 숫자를 넣고 payment_date_text에 원문을 넣으세요.
+- 날짜는 YYYY-MM-DD 형식으로 출력하세요.
+- 연도가 애매하면 fiscal_year, published_at, 원문 문맥을 보고 판단하되, 확실하지 않으면 null로 두고 warnings에 이유를 쓰세요.
+
+7. evidence_text 규칙
+- 각 이벤트마다 판단 근거가 되는 원문 일부를 반드시 넣으세요.
+- 너무 길게 복사하지 말고 핵심 문장 또는 표 행만 넣으세요.
+- evidence_text만 봐도 왜 해당 이벤트가 생성되었는지 알 수 있어야 합니다.
+
+8. confidence_score 기준
+- 0.90 이상: 표와 문구가 명확하고 금액/기간/상태가 모두 확실함
+- 0.70 ~ 0.89: 대부분 확실하지만 일부 날짜나 기간이 애매함
+- 0.50 ~ 0.69: 배당 관련 내용은 있으나 기간/상태 판단이 불완전함
+- 0.50 미만: 배당 이벤트 가능성은 있으나 검수 필요성이 높음
+
+출력 규칙:
+- 반드시 JSON만 출력하세요.
+- 설명 문장을 JSON 밖에 쓰지 마세요.
+- Markdown 코드블록을 쓰지 마세요.
+- events가 없으면 빈 배열을 반환하세요.
+- 불확실한 내용은 warnings에 적으세요.
+- enum에 없는 값을 만들지 마세요.`;
 }
 
-export function buildPromptForDisclosure(
-  disclosureType: string,
-  title: string,
-  text: string
-): string {
-  if (disclosureType === "earnings_release" || disclosureType === "earnings_revision") {
-    return buildEarningsReleasePrompt(title, text);
-  }
-  return buildDividendDisclosurePrompt(title, text);
+export function buildPromptForDisclosure(params: {
+  context: DisclosurePromptContext;
+  text: string;
+}): string {
+  return buildDividendExtractionPrompt(params.text, params.context);
+}
+
+function buildPromptForLegacyDisclosure(title: string, text: string): string {
+  return buildDividendExtractionPrompt(text, {
+    stockTicker: null,
+    stockName: null,
+    disclosureTitle: title,
+    publishedAt: null,
+    sourceUrl: null,
+    sourceType: "unknown"
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -689,6 +827,280 @@ export type ValidationResult =
   | { valid: true; output: AiParseOutput; warnings: string[] }
   | { valid: false; error: string };
 
+function normalizeSourceType(value: unknown): AiParseOutput["source"]["source_type"] | null {
+  if (
+    value === "tdnet" ||
+    value === "edinet" ||
+    value === "company_ir" ||
+    value === "manual" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function normalizeString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function normalizeNullableString(value: unknown): string | null {
+  return value === null || value === undefined ? null : normalizeString(value);
+}
+
+function normalizeFiscalPeriod(value: unknown): AiFiscalPeriod | null {
+  if (
+    value === "interim" ||
+    value === "year_end" ||
+    value === "q1" ||
+    value === "q2" ||
+    value === "q3" ||
+    value === "q4" ||
+    value === "annual" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function normalizeDividendType(value: unknown): AiDividendType | null {
+  if (
+    value === "ordinary" ||
+    value === "special" ||
+    value === "commemorative" ||
+    value === "mixed" ||
+    value === "no_dividend" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function normalizeEventStatus(value: unknown): AiEventStatus | null {
+  if (
+    value === "estimated" ||
+    value === "forecast" ||
+    value === "revised_forecast" ||
+    value === "resolved" ||
+    value === "confirmed" ||
+    value === "paid" ||
+    value === "undecided" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function mapLegacyEventTypeToFiscalPeriod(eventType: unknown): AiFiscalPeriod {
+  switch (eventType) {
+    case "interim":
+      return "interim";
+    case "year_end":
+      return "year_end";
+    case "annual_total":
+      return "annual";
+    case "special":
+    case "commemorative":
+    case "other":
+      return "unknown";
+    default:
+      return "unknown";
+  }
+}
+
+function mapLegacyEventTypeToDividendType(eventType: unknown): AiDividendType {
+  switch (eventType) {
+    case "special":
+      return "special";
+    case "commemorative":
+      return "commemorative";
+    case "no_dividend":
+      return "no_dividend";
+    case "interim":
+    case "year_end":
+    case "annual_total":
+    case "other":
+      return "ordinary";
+    default:
+      return "unknown";
+  }
+}
+
+function normalizeEvent(rawEvent: unknown): AiDividendEvent | null {
+  if (!isRecord(rawEvent)) return null;
+
+  if (rawEvent.event_type !== undefined) {
+    const legacyEventType = String(rawEvent.event_type);
+    const legacyValidTypes = new Set([
+      "interim",
+      "year_end",
+      "annual_total",
+      "special",
+      "commemorative",
+      "other"
+    ]);
+    if (!legacyValidTypes.has(legacyEventType)) return null;
+  }
+
+  const fiscalPeriod =
+    rawEvent.event_type !== undefined
+      ? mapLegacyEventTypeToFiscalPeriod(rawEvent.event_type)
+      : normalizeFiscalPeriod(rawEvent.fiscal_period) ??
+        mapLegacyEventTypeToFiscalPeriod(rawEvent.event_type);
+  const dividendType =
+    rawEvent.event_type !== undefined
+      ? mapLegacyEventTypeToDividendType(rawEvent.event_type)
+      : normalizeDividendType(rawEvent.dividend_type) ??
+        mapLegacyEventTypeToDividendType(rawEvent.event_type);
+  const status = normalizeEventStatus(rawEvent.status);
+
+  const currency = rawEvent.currency === "JPY" ? "JPY" : null;
+  const confidenceScore = typeof rawEvent.confidence_score === "number" ? rawEvent.confidence_score : null;
+
+  if (!fiscalPeriod || !dividendType || !status || !currency || confidenceScore === null) {
+    return null;
+  }
+
+  const components = isRecord(rawEvent.components)
+    ? {
+        ordinary: typeof rawEvent.components.ordinary === "number" ? rawEvent.components.ordinary : null,
+        special: typeof rawEvent.components.special === "number" ? rawEvent.components.special : null,
+        commemorative:
+          typeof rawEvent.components.commemorative === "number" ? rawEvent.components.commemorative : null
+      }
+    : undefined;
+
+  return {
+    fiscal_year:
+      rawEvent.fiscal_year === null || rawEvent.fiscal_year === undefined
+        ? null
+        : typeof rawEvent.fiscal_year === "number" && Number.isInteger(rawEvent.fiscal_year)
+          ? rawEvent.fiscal_year
+          : null,
+    fiscal_period: fiscalPeriod,
+    dividend_type: dividendType,
+    status,
+    change_type: VALID_CHANGE_TYPES.has(String(rawEvent.change_type))
+      ? (rawEvent.change_type as AiChangeType)
+      : "unknown",
+    dividend_per_share:
+      rawEvent.dividend_per_share === null || rawEvent.dividend_per_share === undefined
+        ? null
+        : typeof rawEvent.dividend_per_share === "number" && rawEvent.dividend_per_share >= 0
+          ? rawEvent.dividend_per_share
+          : null,
+    previous_dividend_per_share:
+      rawEvent.previous_dividend_per_share === null ||
+      rawEvent.previous_dividend_per_share === undefined
+        ? null
+        : typeof rawEvent.previous_dividend_per_share === "number" &&
+            rawEvent.previous_dividend_per_share >= 0
+          ? rawEvent.previous_dividend_per_share
+          : null,
+    currency,
+    record_date: normalizeNullableString(rawEvent.record_date),
+    ex_dividend_date: normalizeNullableString(rawEvent.ex_dividend_date),
+    expected_payment_date: normalizeNullableString(rawEvent.expected_payment_date),
+    expected_payment_month:
+      rawEvent.expected_payment_month === null || rawEvent.expected_payment_month === undefined
+        ? null
+        : typeof rawEvent.expected_payment_month === "number" &&
+            Number.isInteger(rawEvent.expected_payment_month) &&
+            rawEvent.expected_payment_month >= 1 &&
+            rawEvent.expected_payment_month <= 12
+          ? rawEvent.expected_payment_month
+          : null,
+    payment_date_text: normalizeNullableString(rawEvent.payment_date_text),
+    reason: normalizeNullableString(rawEvent.reason),
+    evidence_text: typeof rawEvent.evidence_text === "string" ? rawEvent.evidence_text : "",
+    confidence_score: confidenceScore,
+    components:
+      components !== undefined
+        ? components
+        : rawEvent.components === null
+          ? null
+          : undefined
+  };
+}
+
+function normalizeAiOutput(raw: Record<string, unknown>): AiParseOutput | null {
+  const stockTicker =
+    normalizeString(raw.stock_ticker) ??
+    normalizeString(raw.ticker) ??
+    null;
+  if (!stockTicker) return null;
+
+  const sourceRecord = isRecord(raw.source) ? raw.source : null;
+  const source: AiParseOutput["source"] = {
+    source_type:
+      normalizeSourceType(sourceRecord?.source_type) ??
+      normalizeSourceType(raw.source_type) ??
+      "unknown",
+    source_url:
+      normalizeNullableString(sourceRecord?.source_url) ??
+      normalizeNullableString(raw.source_url),
+    source_published_at:
+      normalizeNullableString(sourceRecord?.source_published_at) ??
+      normalizeNullableString(raw.source_published_at) ??
+      normalizeNullableString(raw.published_at),
+    disclosure_title:
+      normalizeNullableString(sourceRecord?.disclosure_title) ??
+      normalizeNullableString(raw.disclosure_title)
+  };
+
+  const eventsRaw = Array.isArray(raw.events) ? raw.events : null;
+  if (!eventsRaw) return null;
+  const events: AiDividendEvent[] = [];
+  for (const event of eventsRaw) {
+    const normalized = normalizeEvent(event);
+    if (!normalized) return null;
+    events.push(normalized);
+  }
+
+  const warnings = Array.isArray(raw.warnings)
+    ? raw.warnings.filter((item): item is string => typeof item === "string")
+    : null;
+  if (!warnings) return null;
+
+  return {
+    stock_ticker: stockTicker,
+    stock_name:
+      normalizeNullableString(raw.stock_name) ??
+      normalizeNullableString(raw.company_name),
+    source,
+    events,
+    warnings,
+    ticker: normalizeNullableString(raw.ticker),
+    company_name: normalizeNullableString(raw.company_name),
+    disclosure_title: normalizeNullableString(raw.disclosure_title) ?? undefined,
+    disclosure_type: normalizeNullableString(raw.disclosure_type) ?? undefined,
+    fiscal_year:
+      raw.fiscal_year === null || raw.fiscal_year === undefined
+        ? undefined
+        : typeof raw.fiscal_year === "number" && Number.isInteger(raw.fiscal_year)
+          ? raw.fiscal_year
+          : undefined,
+    currency: normalizeNullableString(raw.currency) === "JPY" ? "JPY" : undefined,
+    needs_manual_check:
+      typeof raw.needs_manual_check === "boolean" ? raw.needs_manual_check : undefined
+  };
+}
+
+function mapFiscalPeriodToReviewEventType(
+  fiscalPeriod: AiFiscalPeriod,
+  dividendType: AiDividendType
+): "interim" | "year_end" | "annual_total" | "special" | "commemorative" | "other" {
+  if (dividendType === "special") return "special";
+  if (dividendType === "commemorative") return "commemorative";
+  if (fiscalPeriod === "interim" || fiscalPeriod === "q2") return "interim";
+  if (fiscalPeriod === "year_end") return "year_end";
+  if (fiscalPeriod === "annual") return "annual_total";
+  return "other";
+}
+
 export function validateAiOutput(
   raw: unknown,
   disclosureTicker: string | null
@@ -697,100 +1109,100 @@ export function validateAiOutput(
     return { valid: false, error: "ai_output_not_an_object" };
   }
 
-  // Validate currency - only JPY for MVP
-  if (raw.currency !== "JPY") {
-    return {
-      valid: false,
-      error: `ai_output_invalid_currency:${raw.currency ?? "missing"}`
-    };
-  }
-
-  // Validate required top-level fields
-  if (typeof raw.disclosure_title !== "string") {
-    return { valid: false, error: "ai_output_missing_disclosure_title" };
-  }
-  if (typeof raw.disclosure_type !== "string") {
-    return { valid: false, error: "ai_output_missing_disclosure_type" };
-  }
   if (!Array.isArray(raw.events)) {
     return { valid: false, error: "ai_output_events_not_array" };
   }
   if (!Array.isArray(raw.warnings)) {
     return { valid: false, error: "ai_output_warnings_not_array" };
   }
-  if (typeof raw.needs_manual_check !== "boolean") {
-    return { valid: false, error: "ai_output_missing_needs_manual_check" };
-  }
 
-  const validationWarnings: string[] = [];
-
-  // Check ticker mismatch (warning, not failure)
-  if (disclosureTicker && typeof raw.ticker === "string" && raw.ticker !== disclosureTicker) {
-    validationWarnings.push(
-      `ticker_mismatch:ai_said_${raw.ticker}_disclosure_is_${disclosureTicker}`
-    );
-  }
-
-  // Validate fiscal_year
-  if (raw.fiscal_year !== null && raw.fiscal_year !== undefined) {
-    if (typeof raw.fiscal_year !== "number" || !Number.isInteger(raw.fiscal_year)) {
-      return { valid: false, error: "ai_output_invalid_fiscal_year" };
-    }
-  }
-
-  // Validate each event
   for (let i = 0; i < raw.events.length; i++) {
     const event = raw.events[i];
     if (!isRecord(event)) {
       return { valid: false, error: `ai_output_event_${i}_not_object` };
     }
 
-    if (!VALID_EVENT_TYPES.has(String(event.event_type))) {
+    const hasLegacyEventType = event.event_type !== undefined;
+    if (hasLegacyEventType) {
+      const legacyEventType = String(event.event_type);
+      const legacyValidTypes = new Set([
+        "interim",
+        "year_end",
+        "annual_total",
+        "special",
+        "commemorative",
+        "other"
+      ]);
+      if (!legacyValidTypes.has(legacyEventType)) {
+        return {
+          valid: false,
+          error: `ai_output_event_${i}_invalid_event_type:${event.event_type}`
+        };
+      }
+    }
+
+    const currency = event.currency;
+    if (currency !== "JPY") {
       return {
         valid: false,
-        error: `ai_output_event_${i}_invalid_event_type:${event.event_type}`
+        error: `ai_output_event_${i}_invalid_currency:${currency ?? "missing"}`
       };
     }
 
-    if (!VALID_STATUS_VALUES.has(String(event.status))) {
+    if (
+      event.status !== "estimated" &&
+      event.status !== "forecast" &&
+      event.status !== "revised_forecast" &&
+      event.status !== "resolved" &&
+      event.status !== "confirmed" &&
+      event.status !== "paid" &&
+      event.status !== "undecided" &&
+      event.status !== "unknown"
+    ) {
       return {
         valid: false,
         error: `ai_output_event_${i}_invalid_status:${event.status}`
       };
     }
 
-    if (!VALID_CHANGE_TYPES.has(String(event.change_type))) {
+    if (
+      event.change_type !== "increase" &&
+      event.change_type !== "decrease" &&
+      event.change_type !== "no_dividend" &&
+      event.change_type !== "resumed" &&
+      event.change_type !== "special" &&
+      event.change_type !== "commemorative" &&
+      event.change_type !== "unchanged" &&
+      event.change_type !== "forecast_revision" &&
+      event.change_type !== "data_update" &&
+      event.change_type !== "none" &&
+      event.change_type !== "unknown"
+    ) {
       return {
         valid: false,
         error: `ai_output_event_${i}_invalid_change_type:${event.change_type}`
       };
     }
 
-    // Validate dividend amounts (must be non-negative or null)
-    if (event.dividend_per_share !== null && event.dividend_per_share !== undefined) {
-      if (typeof event.dividend_per_share !== "number" || event.dividend_per_share < 0) {
-        return {
-          valid: false,
-          error: `ai_output_event_${i}_invalid_dividend_per_share`
-        };
-      }
+    if (
+      event.dividend_per_share !== null &&
+      (typeof event.dividend_per_share !== "number" || event.dividend_per_share < 0)
+    ) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_dividend_per_share`
+      };
     }
     if (
       event.previous_dividend_per_share !== null &&
-      event.previous_dividend_per_share !== undefined
+      (typeof event.previous_dividend_per_share !== "number" ||
+        event.previous_dividend_per_share < 0)
     ) {
-      if (
-        typeof event.previous_dividend_per_share !== "number" ||
-        event.previous_dividend_per_share < 0
-      ) {
-        return {
-          valid: false,
-          error: `ai_output_event_${i}_invalid_previous_dividend_per_share`
-        };
-      }
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_previous_dividend_per_share`
+      };
     }
-
-    // Validate confidence score
     if (typeof event.confidence_score !== "number") {
       return {
         valid: false,
@@ -803,37 +1215,133 @@ export function validateAiOutput(
         error: `ai_output_event_${i}_confidence_out_of_range:${event.confidence_score}`
       };
     }
-
-    // Validate date formats
     for (const dateField of ["record_date", "ex_dividend_date", "expected_payment_date"] as const) {
       const val = event[dateField];
-      if (val !== null && val !== undefined) {
-        if (typeof val !== "string" || !DATE_RE.test(val)) {
-          return {
-            valid: false,
-            error: `ai_output_event_${i}_invalid_${dateField}:${val}`
-          };
-        }
-      }
-    }
-
-    // Validate expected_payment_month
-    if (event.expected_payment_month !== null && event.expected_payment_month !== undefined) {
-      if (
-        typeof event.expected_payment_month !== "number" ||
-        !Number.isInteger(event.expected_payment_month) ||
-        event.expected_payment_month < 1 ||
-        event.expected_payment_month > 12
-      ) {
+      if (val !== null && val !== undefined && !DATE_RE.test(val)) {
         return {
           valid: false,
-          error: `ai_output_event_${i}_invalid_expected_payment_month:${event.expected_payment_month}`
+          error: `ai_output_event_${i}_invalid_${dateField}:${val}`
         };
       }
     }
+    if (
+      event.expected_payment_month !== null &&
+      (typeof event.expected_payment_month !== "number" ||
+        !Number.isInteger(event.expected_payment_month) ||
+        event.expected_payment_month < 1 ||
+        event.expected_payment_month > 12)
+    ) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_expected_payment_month:${event.expected_payment_month}`
+      };
+    }
+    if (typeof event.evidence_text !== "string" || event.evidence_text.trim().length === 0) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_missing_evidence_text`
+      };
+    }
+  }
 
-    // Validate evidence_text
-    if (typeof event.evidence_text !== "string") {
+  const normalized = normalizeAiOutput(raw);
+  if (!normalized) {
+    return { valid: false, error: "ai_output_missing_required_fields" };
+  }
+
+  const validationWarnings: string[] = [];
+
+  // Check ticker mismatch (warning, not failure)
+  if (disclosureTicker) {
+    const candidateTickers = new Set<string>();
+    if (typeof raw.stock_ticker === "string") candidateTickers.add(raw.stock_ticker);
+    if (typeof raw.ticker === "string") candidateTickers.add(raw.ticker);
+    if (candidateTickers.size === 0 && normalized.stock_ticker) {
+      candidateTickers.add(normalized.stock_ticker);
+    }
+    for (const candidate of candidateTickers) {
+      if (candidate !== disclosureTicker) {
+        validationWarnings.push(
+          `ticker_mismatch:ai_said_${candidate}_disclosure_is_${disclosureTicker}`
+        );
+        break;
+      }
+    }
+  }
+
+  // Validate each event
+  for (let i = 0; i < normalized.events.length; i++) {
+    const event = normalized.events[i];
+    if (!VALID_FISCAL_PERIODS.has(String(event.fiscal_period))) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_fiscal_period:${event.fiscal_period}`
+      };
+    }
+    if (!VALID_DIVIDEND_TYPES.has(String(event.dividend_type))) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_dividend_type:${event.dividend_type}`
+      };
+    }
+    if (!VALID_CHANGE_TYPES.has(String(event.change_type))) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_change_type:${event.change_type}`
+      };
+    }
+    if (!VALID_STATUS_VALUES.has(String(event.status))) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_status:${event.status}`
+      };
+    }
+    if (!VALID_EVENT_TYPES.has(mapFiscalPeriodToReviewEventType(event.fiscal_period, event.dividend_type))) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_review_event_type`
+      };
+    }
+    if (event.dividend_per_share !== null && typeof event.dividend_per_share !== "number") {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_dividend_per_share`
+      };
+    }
+    if (event.previous_dividend_per_share !== null && typeof event.previous_dividend_per_share !== "number") {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_previous_dividend_per_share`
+      };
+    }
+    if (typeof event.confidence_score !== "number" || event.confidence_score < 0 || event.confidence_score > 1) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_confidence_score:${event.confidence_score}`
+      };
+    }
+    for (const dateField of ["record_date", "ex_dividend_date", "expected_payment_date"] as const) {
+      const val = event[dateField];
+      if (val !== null && val !== undefined && !DATE_RE.test(val)) {
+        return {
+          valid: false,
+          error: `ai_output_event_${i}_invalid_${dateField}:${val}`
+        };
+      }
+    }
+    if (
+      event.expected_payment_month !== null &&
+      (typeof event.expected_payment_month !== "number" ||
+        !Number.isInteger(event.expected_payment_month) ||
+        event.expected_payment_month < 1 ||
+        event.expected_payment_month > 12)
+    ) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_expected_payment_month:${event.expected_payment_month}`
+      };
+    }
+    if (typeof event.evidence_text !== "string" || event.evidence_text.trim().length === 0) {
       return {
         valid: false,
         error: `ai_output_event_${i}_missing_evidence_text`
@@ -843,7 +1351,7 @@ export function validateAiOutput(
 
   return {
     valid: true,
-    output: raw as unknown as AiParseOutput,
+    output: normalized,
     warnings: validationWarnings
   };
 }
@@ -889,7 +1397,7 @@ export function adjustEventConfidenceAndPriority(
   }
 
   // No-dividend: always urgent
-  if (event.change_type === "no_dividend") {
+  if (event.change_type === "no_dividend" || event.dividend_type === "no_dividend") {
     priority = "urgent";
   }
 
@@ -899,7 +1407,13 @@ export function adjustEventConfidenceAndPriority(
   }
 
   // Special or commemorative breakdowns need review
-  if (event.components && (event.components.special !== null || event.components.commemorative !== null)) {
+  if (event.dividend_type === "special" || event.dividend_type === "commemorative" || event.dividend_type === "mixed") {
+    if (priority === "normal" || priority === "low") priority = "high";
+  }
+  if (
+    event.components &&
+    (event.components.special !== null || event.components.commemorative !== null)
+  ) {
     if (priority === "normal" || priority === "low") priority = "high";
   }
 
@@ -941,10 +1455,22 @@ function isPayableEventType(eventType: string): boolean {
   return eventType === "interim" || eventType === "year_end" || eventType === "other";
 }
 
+function deriveReviewEventType(event: AiDividendEvent): "interim" | "year_end" | "annual_total" | "special" | "commemorative" | "other" {
+  return mapFiscalPeriodToReviewEventType(event.fiscal_period, event.dividend_type);
+}
+
 function resolveStockId(disclosure: DisclosureForParse): string | null {
   if (disclosure.stock_id) return disclosure.stock_id;
   const stock = Array.isArray(disclosure.stocks) ? disclosure.stocks[0] : disclosure.stocks;
   return stock?.id ?? null;
+}
+
+function resolveDisclosureStockName(disclosure: DisclosureForParse): string | null {
+  const stock = Array.isArray(disclosure.stocks) ? disclosure.stocks[0] : disclosure.stocks;
+  const stockName = stock?.name;
+  if (typeof stockName === "string" && stockName.trim()) return stockName.trim();
+  const raw = disclosure.raw_payload?.stock_name ?? disclosure.raw_payload?.company_name;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
 }
 
 function buildReviewRawPayload(params: {
@@ -956,6 +1482,7 @@ function buildReviewRawPayload(params: {
   disclosureLevel: {
     ticker: string | null;
     companyName: string | null;
+    source: AiParseOutput["source"];
     fiscalYear: number | null;
     disclosureType: string;
     needsManualCheck: boolean;
@@ -974,7 +1501,9 @@ function buildReviewRawPayload(params: {
 
   return {
     event_index: eventIndex,
-    event_type: event.event_type,
+    event_type: deriveReviewEventType(event),
+    fiscal_period: event.fiscal_period,
+    dividend_type: event.dividend_type,
     status: event.status,
     change_type: event.change_type,
     raw_confidence_score: event.confidence_score,
@@ -983,6 +1512,8 @@ function buildReviewRawPayload(params: {
     warnings,
     is_payable: isPayable,
     components: event.components ?? null,
+    payment_date_text: event.payment_date_text,
+    reason: event.reason,
     record_date: event.record_date ?? null,
     ex_dividend_date: event.ex_dividend_date ?? null,
     expected_payment_date: event.expected_payment_date ?? null,
@@ -1000,6 +1531,7 @@ function buildReviewRawPayload(params: {
     disclosure_ai_summary: {
       ticker: disclosureLevel.ticker,
       company_name: disclosureLevel.companyName,
+      source: disclosureLevel.source,
       fiscal_year: disclosureLevel.fiscalYear,
       disclosure_type: disclosureLevel.disclosureType,
       needs_manual_check: disclosureLevel.needsManualCheck,
@@ -1028,20 +1560,22 @@ export function buildReviewRows(params: {
 
   const disclosureType = disclosure.disclosure_type ?? aiOutput.disclosure_type ?? "other";
   const isCorrection = isCorrectionDisclosure(disclosure.title, disclosureType);
+  const reviewDisclosureTitle = aiOutput.source.disclosure_title ?? disclosure.title;
 
   const disclosureLevelMeta = {
-    ticker: aiOutput.ticker,
-    companyName: aiOutput.company_name,
-    fiscalYear: aiOutput.fiscal_year,
-    disclosureType: aiOutput.disclosure_type,
-    needsManualCheck: aiOutput.needs_manual_check,
+    ticker: aiOutput.stock_ticker ?? aiOutput.ticker ?? resolveDisclosureTicker(disclosure),
+    companyName: aiOutput.stock_name ?? aiOutput.company_name ?? resolveDisclosureStockName(disclosure),
+    source: aiOutput.source,
+    fiscalYear: aiOutput.fiscal_year ?? null,
+    disclosureType,
+    needsManualCheck: aiOutput.needs_manual_check ?? false,
     totalEventsInResponse: aiOutput.events.length,
     textExtractionMethod: textExtraction.method,
     sectionTrimmed: textExtraction.sectionTrimmed,
     fallbackReason: textExtraction.fallbackReason,
     openaiUsage,
     isCorrection,
-    disclosureTitle: disclosure.title
+    disclosureTitle: reviewDisclosureTitle
   };
 
   const combinedWarnings = [
@@ -1053,7 +1587,8 @@ export function buildReviewRows(params: {
   for (let i = 0; i < aiOutput.events.length; i++) {
     const event = aiOutput.events[i];
     const adjusted = adjustEventConfidenceAndPriority(event, combinedWarnings);
-    const isPayable = isPayableEventType(event.event_type);
+    const reviewEventType = deriveReviewEventType(event);
+    const isPayable = isPayableEventType(reviewEventType) && event.dividend_type !== "no_dividend";
 
     // Correction disclosures always route to at least high priority
     let effectivePriority = adjusted.reviewPriority;
@@ -1079,8 +1614,8 @@ export function buildReviewRows(params: {
     rows.push({
       stock_id: stockId,
       disclosure_id: disclosure.id,
-      fiscal_year: aiOutput.fiscal_year,
-      event_type: event.event_type,
+      fiscal_year: event.fiscal_year ?? aiOutput.fiscal_year ?? null,
+      event_type: reviewEventType,
       extracted_dividend_per_share: event.dividend_per_share ?? null,
       previous_dividend_per_share: event.previous_dividend_per_share ?? null,
       extracted_payment_date: event.expected_payment_date ?? null,
@@ -1117,7 +1652,7 @@ export function buildNoEventsManualCheckRow(params: {
   return {
     stock_id: stockId,
     disclosure_id: disclosure.id,
-    fiscal_year: aiOutput.fiscal_year,
+    fiscal_year: aiOutput.fiscal_year ?? null,
     event_type: null,
     extracted_dividend_per_share: null,
     previous_dividend_per_share: null,
@@ -1139,8 +1674,9 @@ export function buildNoEventsManualCheckRow(params: {
       section_trimmed: textExtraction.sectionTrimmed,
       fallback_reason: textExtraction.fallbackReason,
       openai_usage: openaiUsage ?? null,
-      disclosure_type: aiOutput.disclosure_type,
-      needs_manual_check: aiOutput.needs_manual_check
+      disclosure_type: disclosure.disclosure_type ?? aiOutput.disclosure_type ?? null,
+      needs_manual_check: aiOutput.needs_manual_check ?? false,
+      source: aiOutput.source
     }
   };
 }
@@ -1234,18 +1770,27 @@ export async function executeParseDisclosurePdfAi(
 
   // Build prompt
   const disclosureType = disclosure.disclosure_type ?? "other";
+  const stockTicker = resolveDisclosureTicker(disclosure);
+  const stockName = resolveDisclosureStockName(disclosure);
+  const sourceType =
+    normalizeSourceType(disclosure.source_type) ?? normalizeSourceType(disclosure.raw_payload?.source_type) ?? "unknown";
 
   // Extract text / determine input method, passing disclosure type for smarter section trimming
   const textExtraction = await prepareTextForAI(pdfBytes, disclosureType);
-  const promptText =
-    textExtraction.method === "extracted_text"
-      ? textExtraction.text
-      : "[PDF bytes will be passed directly]";
-  const prompt = buildPromptForDisclosure(
-    disclosureType,
-    disclosure.title,
-    promptText
-  );
+  const prompt = buildPromptForDisclosure({
+    context: {
+      stockTicker,
+      stockName,
+      disclosureTitle: disclosure.title,
+      publishedAt: disclosure.published_at,
+      sourceUrl: disclosure.document_url ?? null,
+      sourceType
+    },
+    text:
+      textExtraction.method === "extracted_text"
+        ? textExtraction.text
+        : "[PDF bytes will be passed directly]"
+  });
 
   // Call OpenAI
   let aiResponse: OpenAIParseResponse;
@@ -1256,6 +1801,7 @@ export async function executeParseDisclosurePdfAi(
         : deps.openaiModel ?? "gpt-4o";
 
     aiResponse = await deps.callOpenAI({
+      prompt,
       disclosureTitle: disclosure.title,
       disclosureType,
       extractedText: textExtraction.method === "extracted_text" ? textExtraction.text : null,
@@ -1355,6 +1901,3 @@ function resolveDisclosureTicker(disclosure: DisclosureForParse): string | null 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-
-// Re-export the prompt building for use in tests (avoids _unused_ warning)
-export { buildDividendDisclosurePrompt, buildEarningsReleasePrompt };
