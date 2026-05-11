@@ -23,7 +23,7 @@ MVP 1st는 일본 국내 배당 투자자가 이메일 계정으로 로그인해
 | Next.js App Router, TypeScript, Tailwind 기반 웹앱 | 포함 | 01 | 네이티브 앱은 제외 |
 | 이메일/비밀번호 인증, 로그아웃, 비밀번호 재설정 | 포함 | 02 | Supabase Auth 기준 |
 | 인증된 앱 shell과 하단 탭 | 포함 | 01 | 홈, 포트폴리오, 캘린더, 알림, 설정 |
-| 일본 주식 검색과 지원/미지원 표시 | 포함 | 02, 03 | `/app/stocks/search`로 종목 상세 진입, 30~50개 seed, unsupported row 포함 |
+| 일본 주식 검색과 지원/미지원 표시 | 포함 | 02, 03 | `/app/stocks/search`로 종목 상세 진입, 35개 seed, unsupported row 포함 |
 | 보유 종목 CRUD와 동일 종목 복수 계좌 등록 | 포함 | 03 | soft delete 기준 |
 | NISA/特定口座/一般口座 세전/세후 계산 | 포함 | 03, 07 | `nisa`, `tokutei`, `general`, 세율 0%/20.315% |
 | 홈 요약, 월별 캘린더, 종목 상세 | 포함 | 04 | 승인된 배당 데이터만 사용자 화면에 사용 |

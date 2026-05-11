@@ -254,6 +254,7 @@ create table stocks (
   name_en text,
   currency text not null default 'JPY',
   support_status text not null default 'unsupported',
+  market_segment text,
   current_price numeric(18,2),
   price_updated_at timestamptz,
   expected_annual_dividend_per_share numeric(18,2),
@@ -266,7 +267,8 @@ create table stocks (
 | 컬럼 | 설명 |
 |---|---|
 | ticker | 예: 9433 |
-| support_status | supported, unsupported |
+| support_status | supported, unsupported, delisted |
+| market_segment | TSE Prime, TSE Standard, TSE Growth 등 |
 | current_price | 현재 주가 |
 | expected_annual_dividend_per_share | 예상 연간 주당 배당 |
 
@@ -479,6 +481,38 @@ create table jobs (
 | approve_dividend_review | 승인된 review를 `dividend_events`에 upsert하고 알림 평가 job 생성 |
 | evaluate_notification_rules | 목표수익률 조건 평가 |
 | send_email_notification | 이메일 알림 발송 |
+| refresh_stock_prices | 주가 일괄 갱신 (chunk 단위, `process-price-refresh` 전용) |
+
+---
+
+## 6.11 stock_import_logs
+
+종목 마스터(JPX "List of TSE-listed Issues") import 이력을 기록합니다.
+
+```sql
+create table stock_import_logs (
+  id uuid primary key default gen_random_uuid(),
+  file_path text not null,
+  dry_run boolean not null default false,
+  processed_count int not null default 0,
+  inserted_count int not null default 0,
+  updated_count int not null default 0,
+  delisted_count int not null default 0,
+  failed_count int not null default 0,
+  status text not null check (status in ('running', 'success', 'failed')),
+  error_message text,
+  started_at timestamptz not null default now(),
+  completed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+```
+
+| 컬럼 | 설명 |
+|---|---|
+| file_path | 업로드된 CSV 파일 경로 |
+| dry_run | 미리보기 모드 여부 |
+| delisted_count | 상장 폐지로 처리된 종목 수 |
+| status | running, success, failed |
 
 ---
 
@@ -497,6 +531,7 @@ create table jobs (
 | dividend_events | 승인된 데이터만 조회 가능. pending/rejected는 사용자 화면과 알림 생성에서 제외 |
 | dividend_reviews | admin만 접근 |
 | disclosures | admin만 전체 접근, 사용자는 제한 조회 |
+| stock_import_logs | admin만 조회 |
 
 ---
 
@@ -569,8 +604,8 @@ MVP에서는 REST API 서버를 직접 만들지 않고, 아래 3가지 방식�
 |---|---|---|
 | 내 설정 조회 | user_settings | select |
 | 내 설정 수정 | user_settings | update |
-| 종목 검색 | stocks | select |
-| 보유 종목 등록 | holdings | insert |
+| 종목 검색 | stocks | `ilike 'keyword%'`, `limit 20`, `support_status != 'delisted'` |
+| 보유 종목 등록 | holdings | insert (unsupported 종목도 추가 가능) |
 | 보유 종목 수정 | holdings | update |
 | 보유 종목 삭제 | holdings | update deleted_at |
 | 알림 조건 생성 | notification_rules | insert |
@@ -600,10 +635,12 @@ MVP에서는 REST API 서버를 직접 만들지 않고, 아래 3가지 방식�
 | approve-dividend-review | 관리자 검수 승인 |
 | reject-dividend-review | 관리자 검수 거절 |
 | collect-disclosures | Yanoshin/TDnet 공시 후보 수집 및 다운로드 job 생성 |
-| process-jobs | `jobs` claim/retry/dispatch 중앙 runner. Phase별로 PDF 다운로드, AI 파싱, 승인 후 알림 평가 handler를 추가한다. |
+| process-jobs | `jobs` claim/retry/dispatch 중앙 runner. PDF 다운로드, AI 파싱, 승인 후 알림 평가 handler를 처리한다. |
+| process-price-refresh | `jobs` table 기반 주가 일괄 갱신 runner. chunk 단위(50개 티커)로 Stooq API를 호출한다. |
 | evaluate-notification-rules | 목표수익률 알림 조건 평가 |
 | send-email-notification | 이메일 알림 발송 |
-| refresh-stock-prices | 주가 데이터 갱신 |
+| refresh-stock-prices | (Legacy) 주가 데이터 갱신. `process-price-refresh`로 대첸 예정. |
+| parse-stock-master-csv | JPX 종목 마스터 CSV를 파싱하여 `stocks` 테이블을 upsert한다. |
 
 ---
 
@@ -1126,6 +1163,11 @@ MVP 초기에는 Redis 없이도 충분합니다.
 create index idx_stocks_ticker on stocks(ticker);
 create index idx_stocks_name on stocks(name);
 create index idx_stocks_support_status on stocks(support_status);
+create index idx_stocks_market_segment on stocks(market_segment);
+
+-- Full-market search: pg_trgm GIN index for prefix matching
+create extension if not exists pg_trgm;
+create index idx_stocks_name_trgm on stocks using gin(name gin_trgm_ops);
 
 create index idx_holdings_user_id on holdings(user_id);
 create index idx_holdings_user_stock on holdings(user_id, stock_id);
@@ -1161,7 +1203,7 @@ create index idx_jobs_status_run_after on jobs(status, run_after);
 | 3 | Auth 설정 |
 | 4 | DB 테이블 생성 |
 | 5 | RLS 설정 |
-| 6 | stocks seed 데이터 입력 |
+| 6 | JPX 종목 마스터 CSV 업로드 및 `stocks` 테이블 갱신 |
 | 7 | holdings CRUD 구현 |
 | 8 | 세후 배당 계산 RPC 구현 |
 | 9 | 홈 요약 RPC 구현 |
@@ -1183,6 +1225,7 @@ create index idx_jobs_status_run_after on jobs(status, run_after);
 | 6 | `process-jobs` 기반 PDF 다운로드/AI 파싱 job 처리 |
 | 7 | dividend_reviews 승인 Edge Function |
 | 8 | 승인 후 배당 변경 알림 생성 |
+| 9 | `process-price-refresh` 전체 시장 주가 갱신 |
 
 ---
 

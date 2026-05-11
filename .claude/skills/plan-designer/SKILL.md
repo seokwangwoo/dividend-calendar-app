@@ -277,7 +277,29 @@ When the user asks for a new plan:
    - Verify that phase folder names sort correctly.
    - Verify that README links point to `phase_XX_name/plan.md`.
 
-6. **Report**
-   - List created files.
+6. **Mandatory `grill-me` review**
+   - After the initial plan draft is complete, **you MUST invoke the `grill-me` skill** to interview the user about the plan.
+   - The `grill-me` process is not optional — it is a required step before the plan can be considered final.
+   - During `grill-me`, walk down every branch of the design tree: architecture decisions, data flow, edge cases, operational concerns, and inter-phase dependencies.
+   - For each question, provide your recommended answer and ask the user to confirm or override.
+   - If a question can be answered by exploring the codebase, explore the codebase instead of asking the user.
+
+7. **Update plan files based on `grill-me` outcomes**
+   - As the user answers questions during `grill-me`, **immediately edit the generated plan files** (`README.md`, `phase_*/plan.md`) to reflect the resolved decisions.
+   - Do not wait until the end — update files incrementally as each branch is resolved.
+   - Track all modifications so the plan remains consistent throughout the interview.
+
+8. **Update existing specification documents**
+   - After `grill-me` is complete and all ambiguities are resolved, **update existing specification documents** (`docs/*.md`) to reflect the new plan's decisions.
+   - Documents that typically need updates:
+     - `docs/dividend_app_mvp_backend_spec.md` — schema changes, API changes, index changes
+     - `docs/dividend_app_wireframe.md` — UI/UX changes, new screens, updated flows
+     - `docs/dividend_calendar_mvp_plan.md` — scope changes, feature additions/removals
+     - `docs/issue/decision/*.md` — decision records that are superseded or extended
+   - The plan itself should reference the updated specs, and the specs should reference the new plan.
+
+9. **Final report**
+   - List all created and modified files.
    - Summarize phase count and total estimated scope.
    - Highlight any assumptions or blockers that need user confirmation before execution begins.
+   - Confirm that the plan is ready for the `phase_executor` to consume.
