@@ -14,19 +14,17 @@ docs/issue/
 
 ## 미해결 이슈 (Open)
 
-> 아래 4개 이슈는 모두 `docs/plans/20260512_mvp_gap_close`에서 처리됩니다. Phase 실행 완료 후 archive로 이동됩니다.
-
 | 이슈 | 우선순위 | 유형 | 생성일 | 처리 플랜 |
 |------|---------|------|--------|----------|
-| [알림 평가 yield 불일치](active/20260510-notification-evaluation-yield-mismatch.md) | medium | bug | 2026-05-10 | Phase 01 |
-| [캘린더 기준 전환 UI가 MVP 정책과 충돌](active/20260510-calendar-basis-switch-mvp-scope-mismatch.md) | high | bug | 2026-05-10 | Phase 01 |
-| [알림 기준 UI가 MVP 단일 기준 정책과 충돌](active/20260510-notification-rule-basis-mvp-scope-mismatch.md) | high | bug | 2026-05-10 | Phase 01 |
 | [종목 검색 라우트 누락](active/20260510-missing-stock-search-route-for-alert-entry.md) | high | feature | 2026-05-10 | Phase 02 |
 
 ## 해결된 이슈 (Recently Resolved)
 
 | 이슈 | 유형 | 해결일 |
 |------|------|--------|
+| [캘린더 기준 전환 UI가 MVP 정책과 충돌](archive/20260510-calendar-basis-switch-mvp-scope-mismatch.md) | bug | 2026-05-12 |
+| [알림 기준 UI가 MVP 단일 기준 정책과 충돌](archive/20260510-notification-rule-basis-mvp-scope-mismatch.md) | bug | 2026-05-12 |
+| [알림 평가 yield 불일치](archive/20260510-notification-evaluation-yield-mismatch.md) | bug | 2026-05-12 |
 | [홈/포트폴리오 배당 금액 불일치](archive/20260506-home-portfolio-dividend-mismatch.md) | bug | 2026-05-07 |
 | [TDnet PDF 텍스트 추출 개선 및 OpenAI fallback 입력 방식 수정 필요](archive/20260511-tdnet-pdf-text-extraction-openai-fallback.md) | bug | 2026-05-11 |
 

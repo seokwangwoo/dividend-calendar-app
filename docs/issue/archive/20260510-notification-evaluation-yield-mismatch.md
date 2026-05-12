@@ -1,5 +1,6 @@
 ---
-status: open
+status: resolved
+resolved: 2026-05-12
 type: bug
 created: 2026-05-10
 priority: medium

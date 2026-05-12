@@ -5,15 +5,14 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import {
-  NOTIFICATION_OPERATORS,
-  NOTIFICATION_RULE_BASES
+  NOTIFICATION_OPERATORS
 } from "@/features/notifications/constants";
 
 const ruleSchema = z
   .object({
     stockId: z.string().uuid(),
     ruleId: z.string().uuid().optional(),
-    basis: z.enum(NOTIFICATION_RULE_BASES),
+    basis: z.literal("before_tax_yield"),
     operator: z.enum(NOTIFICATION_OPERATORS),
     targetYield: z.coerce.number().positive("Target yield must be greater than zero"),
     notifyInApp: z.boolean(),
