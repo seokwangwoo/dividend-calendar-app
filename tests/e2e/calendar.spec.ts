@@ -103,3 +103,15 @@ test("clicking a month row reveals its dividend detail", async ({ page }) => {
   // Detail shows before-tax and after-tax totals
   await expect(page.getByText("税引後合計")).toBeVisible();
 });
+
+test("calendar has no calendar-date-basis switch buttons (MVP locks to payment month)", async ({
+  page
+}) => {
+  await login(page, user.email, user.password);
+  await page.goto("/app/calendar");
+
+  // MVP locks the calendar to payment-month view — these buttons must not exist
+  await expect(page.getByRole("button", { name: "権利確定日" })).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "除権日" })).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "支払月" })).not.toBeVisible();
+});
