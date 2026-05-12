@@ -58,16 +58,39 @@ const DEFAULT_TEXT_EXTRACTION: TextExtractionResult = {
 };
 
 function makeAiEvent(overrides: Partial<AiDividendEvent> = {}): AiDividendEvent {
+  const eventType = overrides.event_type ?? "year_end";
+  const fiscalPeriod =
+    eventType === "interim"
+      ? "interim"
+      : eventType === "annual_total"
+        ? "annual"
+        : eventType === "special" || eventType === "commemorative"
+          ? "unknown"
+          : "year_end";
+  const dividendType =
+    eventType === "special"
+      ? "special"
+      : eventType === "commemorative"
+        ? "commemorative"
+        : "ordinary";
+
   return {
-    event_type: "year_end",
+    fiscal_year: 2026,
+    fiscal_month: 3,
+    fiscal_period: fiscalPeriod,
+    dividend_type: dividendType,
+    event_type: eventType,
     status: "confirmed",
     dividend_per_share: 50,
     previous_dividend_per_share: 40,
     change_type: "increase",
+    currency: "JPY",
     record_date: "2026-03-31",
     ex_dividend_date: null,
-    expected_payment_date: "2026-06-25",
+    expected_payment_year: 2026,
     expected_payment_month: 6,
+    payment_date_text: null,
+    reason: null,
     evidence_text: "期末配当予想を修正いたします。",
     confidence_score: 0.88,
     components: null,
@@ -77,6 +100,14 @@ function makeAiEvent(overrides: Partial<AiDividendEvent> = {}): AiDividendEvent 
 
 function makeAiOutput(overrides: Partial<AiParseOutput> = {}): AiParseOutput {
   return {
+    stock_ticker: "9433",
+    stock_name: "株式会社テスト",
+    source: {
+      source_type: "tdnet",
+      source_url: "https://example.com/disclosure.pdf",
+      source_published_at: "2026-05-10T06:30:00.000Z",
+      disclosure_title: "配当予想の修正に関するお知らせ"
+    },
     ticker: "9433",
     company_name: "株式会社テスト",
     disclosure_title: "配当予想の修正に関するお知らせ",
@@ -679,9 +710,9 @@ describe("Fixture: missing or short evidence text (confidence tuning)", () => {
 // ---------------------------------------------------------------------------
 
 describe("Fixture: missing payment date (confidence tuning)", () => {
-  it("reduces confidence when both payment date and payment month are null", () => {
+  it("reduces confidence when both payment year and payment month are null", () => {
     const event = makeAiEvent({
-      expected_payment_date: null,
+      expected_payment_year: null,
       expected_payment_month: null,
       confidence_score: 0.85
     });
@@ -689,16 +720,16 @@ describe("Fixture: missing payment date (confidence tuning)", () => {
     expect(result.adjustedConfidence).toBeLessThan(0.85);
   });
 
-  it("does not penalize when only payment month is known (no full date)", () => {
+  it("does not penalize when only payment month is known (no full year)", () => {
     const event = makeAiEvent({
-      expected_payment_date: null,
+      expected_payment_year: null,
       expected_payment_month: 6,
       confidence_score: 0.85
     });
     const result = adjustEventConfidenceAndPriority(event, []);
-    // Has month, so no penalty for missing payment date
+    // Has month, so no penalty for missing payment year
     const baseline = makeAiEvent({
-      expected_payment_date: "2026-06-25",
+      expected_payment_year: 2026,
       expected_payment_month: 6,
       confidence_score: 0.85
     });

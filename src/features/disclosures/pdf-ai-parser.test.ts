@@ -16,6 +16,7 @@ import {
   adjustEventConfidenceAndPriority,
   buildReviewRows,
   buildNoEventsManualCheckRow,
+  deriveExpectedPaymentYearMonth,
   executeParseDisclosurePdfAi,
   isStrongDividendDisclosure,
   isTextUsable,
@@ -85,6 +86,7 @@ function makeAiEvent(overrides: Partial<AiDividendEvent> = {}): AiDividendEvent 
 
   return {
     fiscal_year: 2026,
+    fiscal_month: 3,
     fiscal_period: fiscalPeriod,
     dividend_type: dividendType,
     event_type: legacyEventType,
@@ -95,7 +97,7 @@ function makeAiEvent(overrides: Partial<AiDividendEvent> = {}): AiDividendEvent 
     currency: "JPY",
     record_date: "2026-03-31",
     ex_dividend_date: null,
-    expected_payment_date: "2026-06-25",
+    expected_payment_year: 2026,
     expected_payment_month: 6,
     payment_date_text: null,
     reason: null,
@@ -360,9 +362,9 @@ describe("adjustEventConfidenceAndPriority", () => {
     expect(result.adjustedConfidence).toBeLessThan(0.8);
   });
 
-  it("reduces confidence for missing payment date and month", () => {
+  it("reduces confidence for missing payment year and month", () => {
     const event = makeAiEvent({
-      expected_payment_date: null,
+      expected_payment_year: null,
       expected_payment_month: null,
       confidence_score: 0.8
     });
@@ -392,7 +394,7 @@ describe("adjustEventConfidenceAndPriority", () => {
     const event = makeAiEvent({
       confidence_score: 0.1,
       dividend_per_share: null,
-      expected_payment_date: null,
+      expected_payment_year: null,
       expected_payment_month: null,
       evidence_text: "x" // short evidence
     });
@@ -774,6 +776,9 @@ describe("executeParseDisclosurePdfAi", () => {
       },
       updateDisclosureFailedParse: async (id: string) => {
         failedIds.push(id);
+      },
+      logAiParseCost: async () => {
+        // no-op for tests
       }
     };
 
@@ -864,8 +869,9 @@ describe("executeParseDisclosurePdfAi", () => {
             currency: "USD",
             record_date: null,
             ex_dividend_date: null,
-            expected_payment_date: null,
+            expected_payment_year: null,
             expected_payment_month: null,
+            fiscal_month: null,
             payment_date_text: null,
             reason: null,
             evidence_text: "test",
@@ -1096,5 +1102,97 @@ describe("regression: one disclosure with multiple AI events creates multiple re
       (r) => (r.raw_payload as Record<string, unknown>).event_index as number
     );
     expect(new Set(indices).size).toBe(3); // All unique
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Section 8: deriveExpectedPaymentYearMonth inference logic
+// ---------------------------------------------------------------------------
+
+describe("deriveExpectedPaymentYearMonth", () => {
+  it("returns null when fiscal_month is null", () => {
+    const result = deriveExpectedPaymentYearMonth({
+      fiscal_year: 2026,
+      fiscal_month: null,
+      event_type: "year_end"
+    });
+    expect(result).toEqual({ year: null, month: null });
+  });
+
+  it("returns null when fiscal_year is null", () => {
+    const result = deriveExpectedPaymentYearMonth({
+      fiscal_year: null,
+      fiscal_month: 3,
+      event_type: "year_end"
+    });
+    expect(result).toEqual({ year: null, month: null });
+  });
+
+  it("returns null for special/commemorative/annual_total event types", () => {
+    expect(deriveExpectedPaymentYearMonth({ fiscal_year: 2026, fiscal_month: 3, event_type: "special" }))
+      .toEqual({ year: null, month: null });
+    expect(deriveExpectedPaymentYearMonth({ fiscal_year: 2026, fiscal_month: 3, event_type: "commemorative" }))
+      .toEqual({ year: null, month: null });
+    expect(deriveExpectedPaymentYearMonth({ fiscal_year: 2026, fiscal_month: 3, event_type: "annual_total" }))
+      .toEqual({ year: null, month: null });
+  });
+
+  it("year_end: fiscal_month=3 → payment_month=6, same year", () => {
+    const result = deriveExpectedPaymentYearMonth({ fiscal_year: 2026, fiscal_month: 3, event_type: "year_end" });
+    expect(result).toEqual({ year: 2026, month: 6 });
+  });
+
+  it("year_end: fiscal_month=9 → payment_month=12, same year", () => {
+    const result = deriveExpectedPaymentYearMonth({ fiscal_year: 2026, fiscal_month: 9, event_type: "year_end" });
+    expect(result).toEqual({ year: 2026, month: 12 });
+  });
+
+  it("year_end: fiscal_month=12 → payment_month=3, next year", () => {
+    const result = deriveExpectedPaymentYearMonth({ fiscal_year: 2026, fiscal_month: 12, event_type: "year_end" });
+    expect(result).toEqual({ year: 2027, month: 3 });
+  });
+
+  it("year_end: fiscal_month=6 → payment_month=9, same year", () => {
+    const result = deriveExpectedPaymentYearMonth({ fiscal_year: 2026, fiscal_month: 6, event_type: "year_end" });
+    expect(result).toEqual({ year: 2026, month: 9 });
+  });
+
+  it("year_end: fiscal_month=11 → payment_month=2, next year", () => {
+    const result = deriveExpectedPaymentYearMonth({ fiscal_year: 2026, fiscal_month: 11, event_type: "year_end" });
+    expect(result).toEqual({ year: 2027, month: 2 });
+  });
+
+  it("interim: fiscal_month=3 → payment_month=12, previous year", () => {
+    const result = deriveExpectedPaymentYearMonth({ fiscal_year: 2026, fiscal_month: 3, event_type: "interim" });
+    expect(result).toEqual({ year: 2025, month: 12 });
+  });
+
+  it("interim: fiscal_month=9 → payment_month=6, same year", () => {
+    const result = deriveExpectedPaymentYearMonth({ fiscal_year: 2026, fiscal_month: 9, event_type: "interim" });
+    expect(result).toEqual({ year: 2026, month: 6 });
+  });
+
+  it("interim: fiscal_month=12 → payment_month=9, same year", () => {
+    const result = deriveExpectedPaymentYearMonth({ fiscal_year: 2026, fiscal_month: 12, event_type: "interim" });
+    expect(result).toEqual({ year: 2026, month: 9 });
+  });
+
+  it("interim: fiscal_month=6 → payment_month=3, same year", () => {
+    const result = deriveExpectedPaymentYearMonth({ fiscal_year: 2026, fiscal_month: 6, event_type: "interim" });
+    expect(result).toEqual({ year: 2026, month: 3 });
+  });
+
+  it("interim: fiscal_month=1 → payment_month=10, previous year", () => {
+    const result = deriveExpectedPaymentYearMonth({ fiscal_year: 2026, fiscal_month: 1, event_type: "interim" });
+    expect(result).toEqual({ year: 2025, month: 10 });
+  });
+
+  it("infers from fiscal_period when event_type is missing", () => {
+    const result = deriveExpectedPaymentYearMonth({
+      fiscal_year: 2026,
+      fiscal_month: 3,
+      fiscal_period: "year_end"
+    });
+    expect(result).toEqual({ year: 2026, month: 6 });
   });
 });

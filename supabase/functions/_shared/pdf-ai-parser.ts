@@ -83,8 +83,9 @@ export type DividendReviewInsert = {
   event_type: string | null;
   extracted_dividend_per_share: number | null;
   previous_dividend_per_share: number | null;
-  extracted_payment_date: string | null;
+  extracted_payment_year: number | null;
   extracted_payment_month: number | null;
+  extracted_fiscal_month: number | null;
   extracted_record_date: string | null;
   extracted_ex_dividend_date: string | null;
   change_type: string | null;
@@ -151,6 +152,7 @@ export type AiEventStatus =
 export type AiDividendEvent = {
   event_type?: AiEventType;
   fiscal_year: number | null;
+  fiscal_month: number | null;
   fiscal_period: AiFiscalPeriod;
   dividend_type: AiDividendType;
   status: AiEventStatus;
@@ -160,7 +162,7 @@ export type AiDividendEvent = {
   currency: "JPY";
   record_date: string | null;
   ex_dividend_date: string | null;
-  expected_payment_date: string | null;
+  expected_payment_year: number | null;
   expected_payment_month: number | null;
   payment_date_text: string | null;
   reason: string | null;
@@ -261,6 +263,97 @@ const SUSPICIOUS_DIVIDEND_THRESHOLD = 1000;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // ---------------------------------------------------------------------------
+// Expected payment year/month inference
+// ---------------------------------------------------------------------------
+
+/**
+ * Derives expected payment year and month from fiscal_year, fiscal_month, and event_type
+ * when the AI could not extract them directly from the disclosure text.
+ *
+ * Rules are based on typical Japanese corporate dividend patterns:
+ * - year_end: usually paid ~3 months after fiscal month end
+ * - interim: usually paid ~3 months before fiscal month end (or during the fiscal year)
+ */
+export function deriveExpectedPaymentYearMonth(event: {
+  fiscal_year: number | null;
+  fiscal_month: number | null;
+  event_type?: AiEventType;
+  fiscal_period?: AiFiscalPeriod;
+}): { year: number | null; month: number | null } {
+  const fiscalYear = event.fiscal_year;
+  const fiscalMonth = event.fiscal_month;
+  const eventType = event.event_type ?? mapFiscalPeriodToEventType(event.fiscal_period ?? "unknown");
+
+  if (fiscalYear == null || fiscalMonth == null) {
+    return { year: null, month: null };
+  }
+
+  // Only infer for interim and year_end
+  if (eventType !== "interim" && eventType !== "year_end") {
+    return { year: null, month: null };
+  }
+
+  if (eventType === "year_end") {
+    switch (fiscalMonth) {
+      case 3:
+        return { year: fiscalYear, month: 6 };
+      case 9:
+        return { year: fiscalYear, month: 12 };
+      case 12:
+        return { year: fiscalYear + 1, month: 3 };
+      default: {
+        let month = fiscalMonth + 3;
+        let year = fiscalYear;
+        if (month > 12) {
+          month -= 12;
+          year += 1;
+        }
+        return { year, month };
+      }
+    }
+  }
+
+  // interim
+  switch (fiscalMonth) {
+    case 3:
+      return { year: fiscalYear - 1, month: 12 };
+    case 9:
+      return { year: fiscalYear, month: 6 };
+    case 12:
+      return { year: fiscalYear, month: 9 };
+    default: {
+      let month = fiscalMonth - 3;
+      let year = fiscalYear;
+      if (month <= 0) {
+        month += 12;
+        year -= 1;
+      }
+      return { year, month };
+    }
+  }
+}
+
+function mapFiscalPeriodToEventType(period: AiFiscalPeriod): AiEventType {
+  switch (period) {
+    case "interim":
+    case "q2":
+      return "interim";
+    case "year_end":
+      return "year_end";
+    case "annual":
+      return "annual_total";
+    case "special":
+    case "commemorative":
+    case "other":
+    case "q1":
+    case "q3":
+    case "q4":
+    case "unknown":
+      return "other";
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Prompt templates
 // ---------------------------------------------------------------------------
 
@@ -321,6 +414,7 @@ ${text}
   "events": [
     {
       "fiscal_year": number | null,
+      "fiscal_month": number | null,
       "fiscal_period": "interim" | "year_end" | "q1" | "q2" | "q3" | "q4" | "annual" | "unknown",
       "dividend_type": "ordinary" | "special" | "commemorative" | "mixed" | "no_dividend" | "unknown",
       "status": "estimated" | "forecast" | "revised_forecast" | "resolved" | "confirmed" | "paid" | "undecided" | "unknown",
@@ -330,7 +424,7 @@ ${text}
       "currency": "JPY",
       "record_date": string | null,
       "ex_dividend_date": string | null,
-      "expected_payment_date": string | null,
+      "expected_payment_year": number | null,
       "expected_payment_month": number | null,
       "payment_date_text": string | null,
       "reason": string | null,
@@ -396,10 +490,10 @@ ${text}
 6. 날짜 추출 규칙
 - "基準日" → record_date
 - "権利落ち日" 또는 명확한 ex-dividend date → ex_dividend_date
-- "支払開始予定日", "効力発生日", "支払開始日" → expected_payment_date
+- "支払開始予定日", "効力発生日", "支払開始日" → exact date가 있으면 expected_payment_year(YYYY)와 expected_payment_month(1~12)를 추출하세요.
 - 정확한 날짜가 없고 "6月下旬", "12月予定"처럼 월만 있으면 expected_payment_month에 월 숫자를 넣고 payment_date_text에 원문을 넣으세요.
-- 날짜는 YYYY-MM-DD 형식으로 출력하세요.
-- 연도가 애매하면 fiscal_year, published_at, 원문 문맥을 보고 판단하되, 확실하지 않으면 null로 두고 warnings에 이유를 쓰세요.
+- 연도가 애매하면 fiscal_year, published_at, 원문 문맥을 보고 판단하되, 확실하지 않으면 expected_payment_year = null로 두고 warnings에 이유를 쓰세요.
+- fiscal_month(決算月)는 공시 원문에서 명시되면 1~12 범위의 숫자로 추출하고, 없으면 null로 두세요.
 
 7. evidence_text 규칙
 - 각 이벤트마다 판단 근거가 되는 원문 일부를 반드시 넣으세요.
@@ -999,7 +1093,15 @@ function normalizeEvent(rawEvent: unknown): AiDividendEvent | null {
     currency,
     record_date: normalizeNullableString(rawEvent.record_date),
     ex_dividend_date: normalizeNullableString(rawEvent.ex_dividend_date),
-    expected_payment_date: normalizeNullableString(rawEvent.expected_payment_date),
+    expected_payment_year:
+      rawEvent.expected_payment_year === null || rawEvent.expected_payment_year === undefined
+        ? null
+        : typeof rawEvent.expected_payment_year === "number" &&
+            Number.isInteger(rawEvent.expected_payment_year) &&
+            rawEvent.expected_payment_year >= 2000 &&
+            rawEvent.expected_payment_year <= 2100
+          ? rawEvent.expected_payment_year
+          : null,
     expected_payment_month:
       rawEvent.expected_payment_month === null || rawEvent.expected_payment_month === undefined
         ? null
@@ -1008,6 +1110,15 @@ function normalizeEvent(rawEvent: unknown): AiDividendEvent | null {
             rawEvent.expected_payment_month >= 1 &&
             rawEvent.expected_payment_month <= 12
           ? rawEvent.expected_payment_month
+          : null,
+    fiscal_month:
+      rawEvent.fiscal_month === null || rawEvent.fiscal_month === undefined
+        ? null
+        : typeof rawEvent.fiscal_month === "number" &&
+            Number.isInteger(rawEvent.fiscal_month) &&
+            rawEvent.fiscal_month >= 1 &&
+            rawEvent.fiscal_month <= 12
+          ? rawEvent.fiscal_month
           : null,
     payment_date_text: normalizeNullableString(rawEvent.payment_date_text),
     reason: normalizeNullableString(rawEvent.reason),
@@ -1211,7 +1322,7 @@ export function validateAiOutput(
         error: `ai_output_event_${i}_confidence_out_of_range:${event.confidence_score}`
       };
     }
-    for (const dateField of ["record_date", "ex_dividend_date", "expected_payment_date"] as const) {
+    for (const dateField of ["record_date", "ex_dividend_date"] as const) {
       const val = event[dateField];
       if (val !== null && val !== undefined && !DATE_RE.test(val)) {
         return {
@@ -1221,7 +1332,21 @@ export function validateAiOutput(
       }
     }
     if (
+      event.expected_payment_year !== null &&
+      event.expected_payment_year !== undefined &&
+      (typeof event.expected_payment_year !== "number" ||
+        !Number.isInteger(event.expected_payment_year) ||
+        event.expected_payment_year < 2000 ||
+        event.expected_payment_year > 2100)
+    ) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_expected_payment_year:${event.expected_payment_year}`
+      };
+    }
+    if (
       event.expected_payment_month !== null &&
+      event.expected_payment_month !== undefined &&
       (typeof event.expected_payment_month !== "number" ||
         !Number.isInteger(event.expected_payment_month) ||
         event.expected_payment_month < 1 ||
@@ -1230,6 +1355,19 @@ export function validateAiOutput(
       return {
         valid: false,
         error: `ai_output_event_${i}_invalid_expected_payment_month:${event.expected_payment_month}`
+      };
+    }
+    if (
+      event.fiscal_month !== null &&
+      event.fiscal_month !== undefined &&
+      (typeof event.fiscal_month !== "number" ||
+        !Number.isInteger(event.fiscal_month) ||
+        event.fiscal_month < 1 ||
+        event.fiscal_month > 12)
+    ) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_fiscal_month:${event.fiscal_month}`
       };
     }
     if (typeof event.evidence_text !== "string" || event.evidence_text.trim().length === 0) {
@@ -1316,7 +1454,7 @@ export function validateAiOutput(
         error: `ai_output_event_${i}_invalid_confidence_score:${event.confidence_score}`
       };
     }
-    for (const dateField of ["record_date", "ex_dividend_date", "expected_payment_date"] as const) {
+    for (const dateField of ["record_date", "ex_dividend_date"] as const) {
       const val = event[dateField];
       if (val !== null && val !== undefined && !DATE_RE.test(val)) {
         return {
@@ -1326,7 +1464,21 @@ export function validateAiOutput(
       }
     }
     if (
+      event.expected_payment_year !== null &&
+      event.expected_payment_year !== undefined &&
+      (typeof event.expected_payment_year !== "number" ||
+        !Number.isInteger(event.expected_payment_year) ||
+        event.expected_payment_year < 2000 ||
+        event.expected_payment_year > 2100)
+    ) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_expected_payment_year:${event.expected_payment_year}`
+      };
+    }
+    if (
       event.expected_payment_month !== null &&
+      event.expected_payment_month !== undefined &&
       (typeof event.expected_payment_month !== "number" ||
         !Number.isInteger(event.expected_payment_month) ||
         event.expected_payment_month < 1 ||
@@ -1335,6 +1487,19 @@ export function validateAiOutput(
       return {
         valid: false,
         error: `ai_output_event_${i}_invalid_expected_payment_month:${event.expected_payment_month}`
+      };
+    }
+    if (
+      event.fiscal_month !== null &&
+      event.fiscal_month !== undefined &&
+      (typeof event.fiscal_month !== "number" ||
+        !Number.isInteger(event.fiscal_month) ||
+        event.fiscal_month < 1 ||
+        event.fiscal_month > 12)
+    ) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_invalid_fiscal_month:${event.fiscal_month}`
       };
     }
     if (typeof event.evidence_text !== "string" || event.evidence_text.trim().length === 0) {
@@ -1423,8 +1588,8 @@ export function adjustEventConfidenceAndPriority(
     confidence = Math.max(0, confidence - 0.15);
   }
 
-  // Missing payment date reduces confidence
-  if (event.expected_payment_date === null && event.expected_payment_month === null) {
+  // Missing payment year/month reduces confidence
+  if (event.expected_payment_year === null && event.expected_payment_month === null) {
     confidence = Math.max(0, confidence - 0.1);
   }
 
@@ -1512,8 +1677,9 @@ function buildReviewRawPayload(params: {
     reason: event.reason,
     record_date: event.record_date ?? null,
     ex_dividend_date: event.ex_dividend_date ?? null,
-    expected_payment_date: event.expected_payment_date ?? null,
+    expected_payment_year: event.expected_payment_year ?? null,
     expected_payment_month: event.expected_payment_month ?? null,
+    fiscal_month: event.fiscal_month ?? null,
     evidence_text: event.evidence_text,
     // Correction context: preserved for admin triage
     ...(disclosureLevel.isCorrection ? {
@@ -1607,6 +1773,15 @@ export function buildReviewRows(params: {
       isPayable
     });
 
+    // Apply inference if AI did not provide expected_payment_year/month
+    let paymentYear = event.expected_payment_year;
+    let paymentMonth = event.expected_payment_month;
+    if (paymentYear == null && paymentMonth == null && event.fiscal_month != null) {
+      const inferred = deriveExpectedPaymentYearMonth(event);
+      paymentYear = inferred.year;
+      paymentMonth = inferred.month;
+    }
+
     rows.push({
       stock_id: stockId,
       disclosure_id: disclosure.id,
@@ -1614,8 +1789,9 @@ export function buildReviewRows(params: {
       event_type: reviewEventType,
       extracted_dividend_per_share: event.dividend_per_share ?? null,
       previous_dividend_per_share: event.previous_dividend_per_share ?? null,
-      extracted_payment_date: event.expected_payment_date ?? null,
-      extracted_payment_month: event.expected_payment_month ?? null,
+      extracted_payment_year: paymentYear,
+      extracted_payment_month: paymentMonth,
+      extracted_fiscal_month: event.fiscal_month ?? null,
       extracted_record_date: event.record_date ?? null,
       extracted_ex_dividend_date: event.ex_dividend_date ?? null,
       change_type: event.change_type,
@@ -1652,8 +1828,9 @@ export function buildNoEventsManualCheckRow(params: {
     event_type: null,
     extracted_dividend_per_share: null,
     previous_dividend_per_share: null,
-    extracted_payment_date: null,
+    extracted_payment_year: null,
     extracted_payment_month: null,
+    extracted_fiscal_month: null,
     extracted_record_date: null,
     extracted_ex_dividend_date: null,
     change_type: null,
