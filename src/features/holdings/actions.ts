@@ -18,8 +18,13 @@ const holdingFormSchema = z.object({
   })
 });
 
+export interface CsvPreviewRow extends ParsedCsvRow {
+  stockName: string;
+  isDuplicate: boolean;
+}
+
 export interface CsvPreviewResult extends CsvParseResult {
-  previewRows: Array<ParsedCsvRow & { stockName: string }>;
+  previewRows: CsvPreviewRow[];
 }
 
 async function resolveSupportedStocks(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -36,6 +41,23 @@ async function resolveSupportedStocks(supabase: Awaited<ReturnType<typeof create
   return map;
 }
 
+async function buildExistingHoldingKeys(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string
+): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from("holdings")
+    .select("stock_id, account_type")
+    .eq("user_id", userId)
+    .is("deleted_at", null);
+  if (error) throw new Error(error.message);
+  const keys = new Set<string>();
+  for (const row of data ?? []) {
+    keys.add(`${row.stock_id}:${row.account_type}`);
+  }
+  return keys;
+}
+
 export async function previewCsvHoldings(csvText: string): Promise<CsvPreviewResult> {
   const supabase = await createClient();
   const {
@@ -45,20 +67,31 @@ export async function previewCsvHoldings(csvText: string): Promise<CsvPreviewRes
     redirect("/auth/login");
   }
 
-  const stockMap = await resolveSupportedStocks(supabase);
+  const [stockMap, existingKeys] = await Promise.all([
+    resolveSupportedStocks(supabase),
+    buildExistingHoldingKeys(supabase, user.id)
+  ]);
+
   const parseResult = await parseCsvHoldings(csvText, (ticker) =>
     stockMap.has(ticker)
   );
 
-  const previewRows = parseResult.validRows.map((row) => ({
-    ...row,
-    stockName: stockMap.get(row.ticker)?.name ?? row.ticker
-  }));
+  const previewRows: CsvPreviewRow[] = parseResult.validRows.map((row) => {
+    const stockId = stockMap.get(row.ticker)?.id ?? "";
+    const isDuplicate = existingKeys.has(`${stockId}:${row.accountType}`);
+    return {
+      ...row,
+      stockName: stockMap.get(row.ticker)?.name ?? row.ticker,
+      isDuplicate
+    };
+  });
 
   return { ...parseResult, previewRows };
 }
 
-export async function commitCsvHoldings(csvText: string): Promise<{ insertedCount: number }> {
+export async function commitCsvHoldings(
+  csvText: string
+): Promise<{ insertedCount: number; skippedCount: number }> {
   const supabase = await createClient();
   const {
     data: { user }
@@ -67,7 +100,11 @@ export async function commitCsvHoldings(csvText: string): Promise<{ insertedCoun
     redirect("/auth/login");
   }
 
-  const stockMap = await resolveSupportedStocks(supabase);
+  const [stockMap, existingKeys] = await Promise.all([
+    resolveSupportedStocks(supabase),
+    buildExistingHoldingKeys(supabase, user.id)
+  ]);
+
   const parseResult = await parseCsvHoldings(csvText, (ticker) =>
     stockMap.has(ticker)
   );
@@ -78,20 +115,29 @@ export async function commitCsvHoldings(csvText: string): Promise<{ insertedCoun
     );
   }
 
-  const rows = parseResult.validRows.map((row) => ({
-    user_id: user.id,
-    stock_id: stockMap.get(row.ticker)!.id,
-    quantity: row.quantity,
-    average_purchase_price: row.averagePurchasePrice,
-    account_type: row.accountType,
-    memo: row.memo ?? null
-  }));
+  const allRows = parseResult.validRows;
+  const nonDuplicateRows = allRows.filter((row) => {
+    const stockId = stockMap.get(row.ticker)?.id ?? "";
+    return !existingKeys.has(`${stockId}:${row.accountType}`);
+  });
+  const skippedCount = allRows.length - nonDuplicateRows.length;
 
-  const { error } = await supabase.from("holdings").insert(rows);
-  if (error) throw new Error(error.message);
+  if (nonDuplicateRows.length > 0) {
+    const rows = nonDuplicateRows.map((row) => ({
+      user_id: user.id,
+      stock_id: stockMap.get(row.ticker)!.id,
+      quantity: row.quantity,
+      average_purchase_price: row.averagePurchasePrice,
+      account_type: row.accountType,
+      memo: row.memo ?? null
+    }));
+
+    const { error } = await supabase.from("holdings").insert(rows);
+    if (error) throw new Error(error.message);
+  }
 
   revalidatePath("/app/portfolio");
-  return { insertedCount: rows.length };
+  return { insertedCount: nonDuplicateRows.length, skippedCount };
 }
 
 export async function createHolding(formData: FormData): Promise<void> {
