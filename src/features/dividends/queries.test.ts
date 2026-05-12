@@ -50,14 +50,14 @@ describe("getHomeSummary", () => {
     await expect(getHomeSummary(2024)).rejects.toThrow("RPC failed");
   });
 
-  it("returns nextDividend already sorted by payment date, estimated month, and after-tax amount", async () => {
+  it("returns nextDividend already sorted by payment year/month and after-tax amount", async () => {
     const mockData = {
       year: 2026,
       holdingCount: 1,
       nextDividend: {
         ticker: "9433",
         stockName: "KDDI",
-        displayDateText: "2026年06月15日",
+        displayDateText: "2026年6月",
         beforeTaxAmount: 29000,
         afterTaxAmount: 29000,
         status: "confirmed"

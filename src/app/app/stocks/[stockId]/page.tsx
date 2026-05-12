@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatCurrencyJpy, formatPercent } from "@/lib/formatting/number";
+import { formatPaymentYearMonth } from "@/lib/formatting/date";
 import {
   formatAccountType,
   formatDividendStatus,
@@ -106,11 +107,10 @@ export default async function StockDetailPage({ params }: PageProps) {
               <div key={idx} className="flex items-center justify-between p-4">
                 <div>
                   <p className="text-sm font-medium">
-                    {evt.expectedPaymentYear !== null && evt.expectedPaymentMonth !== null
-                      ? `${evt.expectedPaymentYear}年${evt.expectedPaymentMonth}月`
-                      : evt.expectedPaymentMonth !== null
-                        ? `${evt.expectedPaymentMonth}月予定`
-                        : "未定"}
+                    {formatPaymentYearMonth(
+                      evt.expectedPaymentYear,
+                      evt.expectedPaymentMonth
+                    )}
                   </p>
                   <p className="text-xs text-muted">{evt.eventType}</p>
                 </div>
