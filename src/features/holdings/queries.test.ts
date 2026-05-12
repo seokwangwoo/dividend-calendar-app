@@ -47,7 +47,7 @@ describe("getHoldings", () => {
     await expect(getHoldings()).rejects.toThrow("Query failed");
     expect(mockSupabase.from).toHaveBeenCalledWith("holdings");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "*, stock:stocks(*, dividend_events(payment_year, dividend_per_share, review_status))"
+      "*, stock:stocks(*, dividend_events(expected_payment_year, dividend_per_share, review_status))"
     );
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
     expect(queryBuilder.order).toHaveBeenCalledWith("created_at", {
@@ -92,7 +92,7 @@ describe("getHoldingById", () => {
     expect(result).toBeNull();
     expect(mockSupabase.from).toHaveBeenCalledWith("holdings");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "*, stock:stocks(*, dividend_events(payment_year, dividend_per_share, review_status))"
+      "*, stock:stocks(*, dividend_events(expected_payment_year, dividend_per_share, review_status))"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "h1");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
@@ -169,7 +169,7 @@ describe("getPortfolioSummary", () => {
     });
   });
 
-  it("maps payment_year-keyed totals from RPC without using stock estimates", async () => {
+  it("maps expected_payment_year-keyed totals from RPC without using stock estimates", async () => {
     nextResult = {
       data: [
         {

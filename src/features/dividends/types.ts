@@ -95,7 +95,7 @@ export interface StockDetailHolding {
 
 export interface StockDetailScheduleEvent {
   eventType: string;
-  expectedPaymentDate: string | null;
+  expectedPaymentYear: number | null;
   expectedPaymentMonth: number | null;
   dividendPerShare: number | null;
   status: string;
