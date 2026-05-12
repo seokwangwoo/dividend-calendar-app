@@ -1,5 +1,11 @@
 # Phase 06: CSV Import and Calendar Expansion
 
+> **⚠️ Scope update (2026-05-12):** This phase has been **superseded** by `docs/plans/20260512_mvp_gap_close`:
+> - **CSV import** is fully implemented in `20260512_mvp_gap_close/phase_03_csv_holdings_import`.
+> - **Calendar basis UI expansion** (`record_date` / `ex_dividend_date` views) has been **removed from MVP scope** and deferred to a future Phase 2+ plan. The original MVP policy (`payment_month` only in the user UI) is restored in `20260512_mvp_gap_close/phase_01_mvp_policy_alignment`.
+>
+> The remaining content below is kept for historical reference.
+
 ## Goal
 
 Add the most useful deferred MVP 2 features: CSV-based holding import and alternate calendar views for payment month, record date, and ex-dividend date while keeping payment month as the default cash-flow view.
