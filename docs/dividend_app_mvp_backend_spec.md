@@ -307,11 +307,11 @@ create table dividend_events (
   id uuid primary key default gen_random_uuid(),
   stock_id uuid not null references stocks(id),
   fiscal_year int not null,
-  payment_year int,
+  fiscal_month int,
   event_type text not null,
   dividend_per_share numeric(18,2),
   previous_dividend_per_share numeric(18,2),
-  expected_payment_date date,
+  expected_payment_year int,
   expected_payment_month int,
   record_date date,
   ex_dividend_date date,
@@ -333,7 +333,9 @@ create table dividend_events (
 | status | estimated, confirmed, paid, undecided. `undecided`/未定은 0円으로 저장하지 않는다. |
 | change_type | increase, decrease, no_dividend, resumed, special, commemorative, unchanged, unknown |
 | review_status | pending, approved, rejected. 사용자 화면과 알림은 approved만 사용한다. |
-| payment_year | 기존 앱의 사용자-facing 달력연도 집계 키. `expected_payment_date`가 있으면 그 연도에서 도출하고, 지급월만 있을 때는 관리자 확인 전까지 승인할 수 없다. |
+| fiscal_month | 회사 결산 월(1~12). AI가 공시에서 추출하며, 지급일 예측의 기준으로 사용된다. |
+| expected_payment_year | AI 추출 또는 결산 정보 기반 예상 지급 연도. 사용자 화면 집계 키. |
+| expected_payment_month | AI 추출 또는 결산 정보 기반 예상 지급 월(1~12). |
 | raw_payload | ordinary/special/commemorative breakdown, AI evidence, source metadata 등 감사용 보조 데이터 |
 
 ---
@@ -349,10 +351,10 @@ create table dividend_reviews (
   disclosure_id uuid,
   extracted_dividend_per_share numeric(18,2),
   previous_dividend_per_share numeric(18,2),
-  extracted_payment_date date,
+  extracted_payment_year int,
   extracted_payment_month int,
   extracted_fiscal_year int,
-  extracted_payment_year int,
+  extracted_fiscal_month int,
   extracted_event_type text,
   extracted_change_type text,
   extracted_record_date date,
@@ -1173,8 +1175,8 @@ create index idx_holdings_user_id on holdings(user_id);
 create index idx_holdings_user_stock on holdings(user_id, stock_id);
 
 create index idx_dividend_events_stock_year on dividend_events(stock_id, fiscal_year);
-create index idx_dividend_events_payment_year_month on dividend_events(payment_year, expected_payment_month);
-create index idx_dividend_events_payable on dividend_events(review_status, event_type, payment_year, expected_payment_month);
+create index idx_dividend_events_payment_year_month on dividend_events(expected_payment_year, expected_payment_month);
+create index idx_dividend_events_payable on dividend_events(review_status, event_type, expected_payment_year, expected_payment_month);
 create index idx_dividend_events_review_status on dividend_events(review_status);
 
 create index idx_notification_rules_user_id on notification_rules(user_id);
