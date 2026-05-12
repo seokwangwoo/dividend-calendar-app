@@ -44,7 +44,8 @@ test("approve creates an approved dividend_event", async ({ page }) => {
   const rev = await createReview({
     stockId: kddi.id,
     disclosureId: disc,
-    extractedPaymentDate: `${new Date().getFullYear() + 1}-09-25`,
+    extractedPaymentYear: new Date().getFullYear() + 1,
+    extractedPaymentMonth: 9,
     status: "pending"
   });
   disclosureIds.push(disc);
@@ -67,19 +68,19 @@ test("approve creates an approved dividend_event", async ({ page }) => {
 
   const { data: eventRow } = await admin
     .from("dividend_events")
-    .select("review_status, payment_year")
+    .select("review_status, expected_payment_year")
     .eq("id", reviewRow!.created_dividend_event_id)
     .single();
   expect(eventRow?.review_status).toBe("approved");
-  expect(eventRow?.payment_year).toBe(new Date().getFullYear() + 1);
+  expect(eventRow?.expected_payment_year).toBe(new Date().getFullYear() + 1);
 });
 
-test("month-only review requires payment_year override before approval", async ({ page }) => {
+test("month-only review requires expectedPaymentYear override before approval", async ({ page }) => {
   const disc = await createDisclosure({ stockId: kddi.id });
   const rev = await createReview({
     stockId: kddi.id,
     disclosureId: disc,
-    extractedPaymentDate: null,
+    extractedPaymentYear: null,
     extractedPaymentMonth: 6,
     status: "pending"
   });
@@ -89,11 +90,11 @@ test("month-only review requires payment_year override before approval", async (
   await login(page, adminUser.email, adminUser.password);
   await page.goto(`/admin/dividend-reviews/${rev}`);
   await page.getByRole("button", { name: "承認する" }).click();
-  // HTML5 validation should block submission because paymentYear is required
+  // HTML5 validation should block submission because expectedPaymentYear is required
   await expect(page).toHaveURL(new RegExp(`/admin/dividend-reviews/${rev}$`));
 
   await page.goto(`/admin/dividend-reviews/${rev}`);
-  await page.locator("input[name='paymentYear']").fill(String(new Date().getFullYear() + 1));
+  await page.locator("input[name='expectedPaymentYear']").fill(String(new Date().getFullYear() + 1));
   await page.getByRole("button", { name: "承認する" }).click();
   await expect(page).toHaveURL(/\/admin\/dividend-reviews$/);
 
@@ -107,10 +108,10 @@ test("month-only review requires payment_year override before approval", async (
 
   const { data: eventRow } = await admin
     .from("dividend_events")
-    .select("payment_year")
+    .select("expected_payment_year")
     .eq("id", reviewRow!.created_dividend_event_id)
     .single();
-  expect(eventRow?.payment_year).toBe(new Date().getFullYear() + 1);
+  expect(eventRow?.expected_payment_year).toBe(new Date().getFullYear() + 1);
 });
 
 test("approval with override values persists correctly", async ({ page }) => {
@@ -119,7 +120,8 @@ test("approval with override values persists correctly", async ({ page }) => {
     stockId: kddi.id,
     disclosureId: disc,
     extractedDividendPerShare: 100,
-    extractedPaymentDate: `${new Date().getFullYear() + 1}-03-10`,
+    extractedPaymentYear: new Date().getFullYear() + 1,
+    extractedPaymentMonth: 3,
     status: "pending"
   });
   disclosureIds.push(disc);
@@ -157,7 +159,8 @@ test("duplicate approval is idempotent", async ({ page }) => {
   const rev = await createReview({
     stockId: kddi.id,
     disclosureId: disc,
-    extractedPaymentDate: `${new Date().getFullYear() + 1}-07-20`,
+    extractedPaymentYear: new Date().getFullYear() + 1,
+    extractedPaymentMonth: 7,
     status: "pending"
   });
   disclosureIds.push(disc);
@@ -230,14 +233,16 @@ test("approving one review from a multi-event disclosure leaves siblings untouch
     stockId: kddi.id,
     disclosureId: disc,
     eventType: "interim",
-    extractedPaymentDate: `${new Date().getFullYear() + 1}-09-25`,
+    extractedPaymentYear: new Date().getFullYear() + 1,
+    extractedPaymentMonth: 9,
     status: "pending"
   });
   const rev2 = await createReview({
     stockId: kddi.id,
     disclosureId: disc,
     eventType: "year_end",
-    extractedPaymentDate: `${new Date().getFullYear() + 1}-03-25`,
+    extractedPaymentYear: new Date().getFullYear() + 1,
+    extractedPaymentMonth: 3,
     status: "pending"
   });
   disclosureIds.push(disc);

@@ -2,9 +2,9 @@
  * Phase 05: Review Approval Pipeline integration tests.
  *
  * Tests cover:
- * - Approve pending/needs_manual_check reviews with full expected_payment_date
- * - payment_year derivation from full date
- * - payment_year required-confirmation when only month is known
+ * - Approve pending/needs_manual_check reviews with extracted_payment_year
+ * - expected_payment_year required for non-annual_total events
+ * - expectedPaymentYear override when AI did not extract a year
  * - Override values applied to approved event
  * - annual_total approval stored for reference; excluded from user-facing aggregation
  * - special/commemorative breakdown counted once through payable event
@@ -161,7 +161,7 @@ describe("Phase 05: review approval pipeline", () => {
 
     const { error } = await userClient.rpc("approve_dividend_review", {
       p_review_id: reviewId,
-      p_override: { paymentYear: YEAR }
+      p_override: { expectedPaymentYear: YEAR }
     });
     expect(error).not.toBeNull();
   });
@@ -181,82 +181,81 @@ describe("Phase 05: review approval pipeline", () => {
   });
 
   // --------------------------------------------------------------------------
-  // payment_year derivation and required-confirmation behavior
+  // expected_payment_year required-confirmation behavior
   // --------------------------------------------------------------------------
 
-  it("derives payment_year from full expected_payment_date", async () => {
+  it("approves review using extracted_payment_year", async () => {
     const admin = createAdminClient();
-    const disclosureId = await createDisclosure(admin, stockId, "payment-date");
+    const disclosureId = await createDisclosure(admin, stockId, "payment-year");
     disclosureIds.push(disclosureId);
     const reviewId = await createReview(admin, stockId, disclosureId, {
-      extracted_payment_date: `${YEAR}-09-25`,
+      extracted_payment_year: YEAR,
       extracted_payment_month: 9
     });
     reviewIds.push(reviewId);
 
     const { data, error } = await adminClient.rpc("approve_dividend_review", {
       p_review_id: reviewId
-      // No paymentYear override — should derive from extracted_payment_date
+      // No override — should use extracted_payment_year
     });
     expect(error).toBeNull();
-    const result = data as { dividendEventId: string; paymentYear: number };
-    expect(result.paymentYear).toBe(YEAR);
+    const result = data as { dividendEventId: string; expectedPaymentYear: number };
+    expect(result.expectedPaymentYear).toBe(YEAR);
     eventIds.push(result.dividendEventId);
 
     const { data: event } = await admin
       .from("dividend_events")
-      .select("payment_year, ex_dividend_date, record_date")
+      .select("expected_payment_year, ex_dividend_date, record_date")
       .eq("id", result.dividendEventId)
       .single();
-    expect(Number(event?.payment_year)).toBe(YEAR);
+    expect(Number(event?.expected_payment_year)).toBe(YEAR);
     // ex_dividend_date must not be auto-filled from record_date
     expect(event?.ex_dividend_date).toBeNull();
   });
 
-  it("fails approval when only month is known and no payment_year override", async () => {
+  it("fails approval when only month is known and no expectedPaymentYear override", async () => {
     const admin = createAdminClient();
     const disclosureId = await createDisclosure(admin, stockId, "month-only");
     disclosureIds.push(disclosureId);
     const reviewId = await createReview(admin, stockId, disclosureId, {
-      // No extracted_payment_date, only month
-      extracted_payment_date: null,
+      extracted_payment_year: null,
       extracted_payment_month: 9
     });
     reviewIds.push(reviewId);
 
     const { error } = await adminClient.rpc("approve_dividend_review", {
       p_review_id: reviewId
-      // No paymentYear override → should fail
+      // No expectedPaymentYear override → should fail
     });
     expect(error).not.toBeNull();
-    expect(error!.message).toMatch(/payment_year/i);
+    expect(error!.message).toMatch(/expected_payment_year/i);
   });
 
-  it("approves month-only review when payment_year override is provided", async () => {
+  it("approves month-only review when expectedPaymentYear override is provided", async () => {
     const admin = createAdminClient();
     const disclosureId = await createDisclosure(admin, stockId, "month-only-override");
     disclosureIds.push(disclosureId);
     const reviewId = await createReview(admin, stockId, disclosureId, {
-      extracted_payment_date: null,
+      extracted_payment_year: null,
       extracted_payment_month: 9
     });
     reviewIds.push(reviewId);
 
     const { data, error } = await adminClient.rpc("approve_dividend_review", {
       p_review_id: reviewId,
-      p_override: { paymentYear: YEAR }
+      p_override: { expectedPaymentYear: YEAR }
     });
     expect(error).toBeNull();
-    const result = data as { dividendEventId: string; paymentYear: number };
-    expect(result.paymentYear).toBe(YEAR);
+    const result = data as { dividendEventId: string; expectedPaymentYear: number };
+    expect(result.expectedPaymentYear).toBe(YEAR);
     eventIds.push(result.dividendEventId);
 
     const { data: event } = await admin
       .from("dividend_events")
-      .select("payment_year, expected_payment_month")
+      .select("expected_payment_year, expected_payment_month")
       .eq("id", result.dividendEventId)
       .single();
-    expect(Number(event?.payment_year)).toBe(YEAR);
+    expect(Number(event?.expected_payment_year)).toBe(YEAR);
     expect(Number(event?.expected_payment_month)).toBe(9);
   });
 
@@ -264,12 +263,12 @@ describe("Phase 05: review approval pipeline", () => {
   // Override values applied
   // --------------------------------------------------------------------------
 
-  it("applies override dividend amount and date to the approved event", async () => {
+  it("applies override dividend amount and year/month to the approved event", async () => {
     const admin = createAdminClient();
     const disclosureId = await createDisclosure(admin, stockId, "override-values");
     disclosureIds.push(disclosureId);
     const reviewId = await createReview(admin, stockId, disclosureId, {
-      extracted_payment_date: null,
+      extracted_payment_year: null,
       extracted_payment_month: 6
     });
     reviewIds.push(reviewId);
@@ -278,8 +277,8 @@ describe("Phase 05: review approval pipeline", () => {
       p_review_id: reviewId,
       p_override: {
         dividendPerShare: 150,
-        expectedPaymentDate: `${YEAR}-06-20`,
-        paymentYear: YEAR,
+        expectedPaymentYear: YEAR,
+        expectedPaymentMonth: 6,
         changeType: "increase"
       }
     });
@@ -289,12 +288,12 @@ describe("Phase 05: review approval pipeline", () => {
 
     const { data: event } = await admin
       .from("dividend_events")
-      .select("dividend_per_share, expected_payment_date, payment_year, change_type")
+      .select("dividend_per_share, expected_payment_year, expected_payment_month, change_type")
       .eq("id", result.dividendEventId)
       .single();
     expect(Number(event?.dividend_per_share)).toBe(150);
-    expect(event?.expected_payment_date).toBe(`${YEAR}-06-20`);
-    expect(Number(event?.payment_year)).toBe(YEAR);
+    expect(Number(event?.expected_payment_year)).toBe(YEAR);
+    expect(Number(event?.expected_payment_month)).toBe(6);
     expect(event?.change_type).toBe("increase");
   });
 
@@ -303,7 +302,7 @@ describe("Phase 05: review approval pipeline", () => {
     const disclosureId = await createDisclosure(admin, stockId, "override-neg-amount");
     disclosureIds.push(disclosureId);
     const reviewId = await createReview(admin, stockId, disclosureId, {
-      extracted_payment_date: `${YEAR}-09-25`
+      extracted_payment_year: YEAR
     });
     reviewIds.push(reviewId);
 
@@ -314,18 +313,18 @@ describe("Phase 05: review approval pipeline", () => {
     expect(error).not.toBeNull();
   });
 
-  it("override validation rejects invalid paymentYear", async () => {
+  it("override validation rejects invalid expectedPaymentYear", async () => {
     const admin = createAdminClient();
     const disclosureId = await createDisclosure(admin, stockId, "override-bad-year");
     disclosureIds.push(disclosureId);
     const reviewId = await createReview(admin, stockId, disclosureId, {
-      extracted_payment_date: `${YEAR}-09-25`
+      extracted_payment_year: YEAR
     });
     reviewIds.push(reviewId);
 
     const { error } = await adminClient.rpc("approve_dividend_review", {
       p_review_id: reviewId,
-      p_override: { paymentYear: 1990 }
+      p_override: { expectedPaymentYear: 1990 }
     });
     expect(error).not.toBeNull();
   });
@@ -340,7 +339,7 @@ describe("Phase 05: review approval pipeline", () => {
     disclosureIds.push(disclosureId);
     const reviewId = await createReview(admin, stockId, disclosureId, {
       status: "needs_manual_check",
-      extracted_payment_date: `${YEAR}-09-25`
+      extracted_payment_year: YEAR
     });
     reviewIds.push(reviewId);
 
@@ -398,7 +397,7 @@ describe("Phase 05: review approval pipeline", () => {
     const disclosureId = await createDisclosure(admin, stockId, "annual-total");
     disclosureIds.push(disclosureId);
 
-    // annual_total review — payment_year not required for reference-only events
+    // annual_total review — expected_payment_year not required for reference-only events
     const reviewId = await createReview(admin, stockId, disclosureId, {
       event_type: "annual_total",
       extracted_dividend_per_share: 9999,
@@ -413,7 +412,7 @@ describe("Phase 05: review approval pipeline", () => {
 
     const { data, error } = await adminClient.rpc("approve_dividend_review", {
       p_review_id: reviewId
-      // No paymentYear required for annual_total reference events
+      // No expectedPaymentYear required for annual_total reference events
     });
     expect(error).toBeNull();
     const result = data as { dividendEventId: string };
@@ -422,7 +421,7 @@ describe("Phase 05: review approval pipeline", () => {
     // Event exists in DB
     const { data: event } = await admin
       .from("dividend_events")
-      .select("event_type, review_status, payment_year")
+      .select("event_type, review_status, expected_payment_year")
       .eq("id", result.dividendEventId)
       .single();
     expect(event?.event_type).toBe("annual_total");
@@ -458,7 +457,7 @@ describe("Phase 05: review approval pipeline", () => {
       .insert({
         stock_id: stockId,
         fiscal_year: YEAR + 1,
-        payment_year: YEAR + 1,
+        expected_payment_year: YEAR + 1,
         event_type: "interim",
         dividend_per_share: 50,
         expected_payment_month: 3,
@@ -488,7 +487,7 @@ describe("Phase 05: review approval pipeline", () => {
 
     const { data, error } = await adminClient.rpc("approve_dividend_review", {
       p_review_id: reviewId,
-      p_override: { paymentYear: YEAR + 1 }
+      p_override: { expectedPaymentYear: YEAR + 1 }
     });
     expect(error).toBeNull();
     const result = data as { dividendEventId: string; isUpsert: boolean };
@@ -545,7 +544,7 @@ describe("Phase 05: review approval pipeline", () => {
     const disclosureId = await createDisclosure(admin, stockId, "dup-approve");
     disclosureIds.push(disclosureId);
     const reviewId = await createReview(admin, stockId, disclosureId, {
-      extracted_payment_date: `${YEAR}-09-25`,
+      extracted_payment_year: YEAR,
       fiscal_year: YEAR + 2,
       raw_payload: { eventType: "year_end", fiscalYear: YEAR + 2, eventStatus: "estimated" }
     });
@@ -593,7 +592,7 @@ describe("Phase 05: review approval pipeline", () => {
     disclosureIds.push(disclosureId);
 
     const reviewA = await createReview(admin, stockId, disclosureId, {
-      extracted_payment_date: `${YEAR}-09-25`,
+      extracted_payment_year: YEAR,
       fiscal_year: YEAR + 3,
       raw_payload: { eventType: "year_end", fiscalYear: YEAR + 3, eventStatus: "estimated" }
     });
@@ -661,7 +660,7 @@ describe("Phase 05: review approval pipeline", () => {
       .insert({
         stock_id: stockId,
         fiscal_year: YEAR + 5,
-        payment_year: YEAR + 5,
+        expected_payment_year: YEAR + 5,
         event_type: "year_end",
         dividend_per_share: 70,
         expected_payment_month: 9,
@@ -676,7 +675,7 @@ describe("Phase 05: review approval pipeline", () => {
     disclosureIds.push(disclosureId);
     const reviewId = await createReview(admin, stockId, disclosureId, {
       extracted_dividend_per_share: 85,
-      extracted_payment_date: `${YEAR + 5}-09-25`,
+      extracted_payment_year: YEAR + 5,
       fiscal_year: YEAR + 5,
       raw_payload: { eventType: "year_end", fiscalYear: YEAR + 5, eventStatus: "estimated" }
     });
@@ -729,7 +728,7 @@ describe("Phase 05: review approval pipeline", () => {
     const disclosureId = await createDisclosure(admin, stockId, "ex-div-check");
     disclosureIds.push(disclosureId);
     const reviewId = await createReview(admin, stockId, disclosureId, {
-      extracted_payment_date: `${YEAR}-09-25`,
+      extracted_payment_year: YEAR,
       extracted_record_date: `${YEAR}-03-31`,
       // No extracted_ex_dividend_date — must remain null after approval
       fiscal_year: YEAR + 6,

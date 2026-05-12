@@ -10,11 +10,11 @@ type ReviewStatus = Database["public"]["Enums"]["review_status"];
 export interface CreateDividendEventParams {
   stockId: string;
   fiscalYear: number;
-  paymentYear?: number;
+  fiscalMonth?: number | null;
+  expectedPaymentYear?: number | null;
   eventType?: DividendEventType;
   dividendPerShare?: number | null;
   expectedPaymentMonth?: number | null;
-  expectedPaymentDate?: string | null;
   recordDate?: string | null;
   exDividendDate?: string | null;
   status?: DividendEventStatus;
@@ -34,11 +34,11 @@ export async function createTestDividendEvent(
     .insert({
       stock_id: params.stockId,
       fiscal_year: params.fiscalYear,
-      payment_year: params.paymentYear ?? params.fiscalYear,
+      fiscal_month: params.fiscalMonth ?? null,
+      expected_payment_year: params.expectedPaymentYear ?? params.fiscalYear,
       event_type: params.eventType ?? "year_end",
       dividend_per_share: params.dividendPerShare ?? 100,
       expected_payment_month: params.expectedPaymentMonth ?? null,
-      expected_payment_date: params.expectedPaymentDate ?? null,
       record_date: params.recordDate ?? null,
       ex_dividend_date: params.exDividendDate ?? null,
       status: params.status ?? "estimated",

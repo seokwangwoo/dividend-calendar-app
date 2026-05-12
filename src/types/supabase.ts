@@ -88,8 +88,9 @@ export type Database = {
           disclosure_id: string | null;
           extracted_dividend_per_share: number | null;
           previous_dividend_per_share: number | null;
-          extracted_payment_date: string | null;
+          extracted_payment_year: number | null;
           extracted_payment_month: number | null;
+          extracted_fiscal_month: number | null;
           confidence_score: number | null;
           fiscal_year: number | null;
           event_type: Database["public"]["Enums"]["dividend_event_type"] | null;
@@ -113,8 +114,9 @@ export type Database = {
           disclosure_id?: string | null;
           extracted_dividend_per_share?: number | null;
           previous_dividend_per_share?: number | null;
-          extracted_payment_date?: string | null;
+          extracted_payment_year?: number | null;
           extracted_payment_month?: number | null;
+          extracted_fiscal_month?: number | null;
           confidence_score?: number | null;
           fiscal_year?: number | null;
           event_type?: Database["public"]["Enums"]["dividend_event_type"] | null;
@@ -137,8 +139,9 @@ export type Database = {
           disclosure_id?: string | null;
           extracted_dividend_per_share?: number | null;
           previous_dividend_per_share?: number | null;
-          extracted_payment_date?: string | null;
+          extracted_payment_year?: number | null;
           extracted_payment_month?: number | null;
+          extracted_fiscal_month?: number | null;
           confidence_score?: number | null;
           fiscal_year?: number | null;
           event_type?: Database["public"]["Enums"]["dividend_event_type"] | null;
@@ -195,11 +198,11 @@ export type Database = {
           id: string;
           stock_id: string;
           fiscal_year: number;
-          payment_year: number | null;
+          expected_payment_year: number | null;
+          fiscal_month: number | null;
           event_type: Database["public"]["Enums"]["dividend_event_type"];
           dividend_per_share: number | null;
           previous_dividend_per_share: number | null;
-          expected_payment_date: string | null;
           expected_payment_month: number | null;
           record_date: string | null;
           ex_dividend_date: string | null;
@@ -220,11 +223,11 @@ export type Database = {
           id?: string;
           stock_id: string;
           fiscal_year: number;
-          payment_year?: number | null;
+          expected_payment_year?: number | null;
+          fiscal_month?: number | null;
           event_type: Database["public"]["Enums"]["dividend_event_type"];
           dividend_per_share?: number | null;
           previous_dividend_per_share?: number | null;
-          expected_payment_date?: string | null;
           expected_payment_month?: number | null;
           record_date?: string | null;
           ex_dividend_date?: string | null;
@@ -242,11 +245,11 @@ export type Database = {
         };
         Update: {
           fiscal_year?: number;
-          payment_year?: number | null;
+          expected_payment_year?: number | null;
+          fiscal_month?: number | null;
           event_type?: Database["public"]["Enums"]["dividend_event_type"];
           dividend_per_share?: number | null;
           previous_dividend_per_share?: number | null;
-          expected_payment_date?: string | null;
           expected_payment_month?: number | null;
           record_date?: string | null;
           ex_dividend_date?: string | null;

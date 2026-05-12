@@ -86,18 +86,17 @@ export async function getStockByTicker(ticker: string): Promise<{
 }
 
 export async function createApprovedDividendEvent(stockId: string): Promise<string> {
+  const now = new Date();
   const { data, error } = await createAdminClient()
     .from("dividend_events")
     .insert({
       stock_id: stockId,
-      fiscal_year: new Date().getFullYear(),
-      payment_year: new Date().getFullYear(),
+      fiscal_year: now.getFullYear(),
+      expected_payment_year: now.getFullYear(),
+      fiscal_month: null,
       event_type: "year_end",
       dividend_per_share: 150,
-      expected_payment_month: new Date().getMonth() + 1,
-      expected_payment_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .slice(0, 10),
+      expected_payment_month: now.getMonth() + 1,
       status: "confirmed",
       review_status: "approved",
       source_type: "e2e",
@@ -183,11 +182,11 @@ export async function createDividendEventViaAdmin(
   const defaults = {
     stock_id: stockId,
     fiscal_year: year,
-    payment_year: year,
+    expected_payment_year: year,
+    fiscal_month: null,
     event_type: "year_end",
     dividend_per_share: 150,
     expected_payment_month: new Date().getMonth() + 1,
-    expected_payment_date: null,
     record_date: null,
     ex_dividend_date: null,
     status: "estimated",
@@ -291,8 +290,9 @@ export async function createDisclosureWithReview(
       disclosure_id: disc.id,
       extracted_dividend_per_share: 100,
       previous_dividend_per_share: 80,
-      extracted_payment_date: `${year + 5}-09-25`,
+      extracted_payment_year: year + 5,
       extracted_payment_month: 9,
+      extracted_fiscal_month: 6,
       fiscal_year: year + 5,
       event_type: "year_end",
       change_type: "increase",
@@ -360,8 +360,9 @@ export async function createReview(opts: {
   disclosureId: string;
   extractedDividendPerShare?: number;
   previousDividendPerShare?: number;
-  extractedPaymentDate?: string | null;
+  extractedPaymentYear?: number | null;
   extractedPaymentMonth?: number | null;
+  extractedFiscalMonth?: number | null;
   extractedRecordDate?: string | null;
   extractedExDividendDate?: string | null;
   fiscalYear?: number | null;
@@ -382,8 +383,9 @@ export async function createReview(opts: {
       disclosure_id: opts.disclosureId,
       extracted_dividend_per_share: opts.extractedDividendPerShare === undefined ? 100 : opts.extractedDividendPerShare,
       previous_dividend_per_share: opts.previousDividendPerShare === undefined ? 80 : opts.previousDividendPerShare,
-      extracted_payment_date: opts.extractedPaymentDate === undefined ? `${year + 1}-09-25` : opts.extractedPaymentDate,
+      extracted_payment_year: opts.extractedPaymentYear === undefined ? year + 1 : opts.extractedPaymentYear,
       extracted_payment_month: opts.extractedPaymentMonth === undefined ? 9 : opts.extractedPaymentMonth,
+      extracted_fiscal_month: opts.extractedFiscalMonth === undefined ? 6 : opts.extractedFiscalMonth,
       extracted_record_date: opts.extractedRecordDate === undefined ? null : opts.extractedRecordDate,
       extracted_ex_dividend_date: opts.extractedExDividendDate === undefined ? null : opts.extractedExDividendDate,
       fiscal_year: opts.fiscalYear === undefined ? year + 1 : opts.fiscalYear,

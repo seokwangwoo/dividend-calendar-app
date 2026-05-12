@@ -49,7 +49,7 @@ test.beforeAll(async () => {
     .delete()
     .in("stock_id", [kddi.id, jt.id])
     .eq("source_type", "e2e")
-    .eq("payment_year", CURRENT_YEAR);
+    .eq("expected_payment_year", CURRENT_YEAR);
 
   user = await createConfirmedUser("e2e-verify-portfolio");
 
@@ -62,11 +62,11 @@ test.beforeAll(async () => {
     .insert({
       stock_id: kddi.id,
       fiscal_year: CURRENT_YEAR,
-      payment_year: CURRENT_YEAR,
+      expected_payment_year: CURRENT_YEAR,
+      fiscal_month: null,
       event_type: "year_end",
       dividend_per_share: 150,
       expected_payment_month: CURRENT_MONTH,
-      expected_payment_date: `${CURRENT_YEAR}-${String(CURRENT_MONTH).padStart(2, "0")}-15`,
       status: "confirmed",
       review_status: "approved",
       source_type: "e2e",
@@ -81,11 +81,11 @@ test.beforeAll(async () => {
     .insert({
       stock_id: jt.id,
       fiscal_year: CURRENT_YEAR,
-      payment_year: CURRENT_YEAR,
+      expected_payment_year: CURRENT_YEAR,
+      fiscal_month: null,
       event_type: "year_end",
       dividend_per_share: 194,
       expected_payment_month: CURRENT_MONTH,
-      expected_payment_date: `${CURRENT_YEAR}-${String(CURRENT_MONTH).padStart(2, "0")}-15`,
       status: "confirmed",
       review_status: "approved",
       source_type: "e2e",

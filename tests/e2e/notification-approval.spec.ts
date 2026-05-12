@@ -59,7 +59,8 @@ async function seedAndApprove(
     stockId: kddi.id,
     disclosureId: disc,
     changeType,
-    extractedPaymentDate: `${new Date().getFullYear() + 1}-09-25`,
+    extractedPaymentYear: new Date().getFullYear() + 1,
+    extractedPaymentMonth: 9,
     ...overrides
   });
   disclosureIds.push(disc);
@@ -127,7 +128,8 @@ test("duplicate approval does not duplicate notifications", async ({ page }) => 
     stockId: kddi.id,
     disclosureId: disc,
     changeType: "increase",
-    extractedPaymentDate: `${new Date().getFullYear() + 1}-10-10`
+    extractedPaymentYear: new Date().getFullYear() + 1,
+    extractedPaymentMonth: 10
   });
   disclosureIds.push(disc);
   reviewIds.push(rev);
@@ -166,7 +168,8 @@ test("rejected review does not create notification", async ({ page }) => {
     stockId: kddi.id,
     disclosureId: disc,
     changeType: "increase",
-    extractedPaymentDate: `${new Date().getFullYear() + 1}-11-11`
+    extractedPaymentYear: new Date().getFullYear() + 1,
+    extractedPaymentMonth: 11
   });
   disclosureIds.push(disc);
   reviewIds.push(rev);

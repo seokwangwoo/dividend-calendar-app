@@ -176,7 +176,7 @@ describe("portfolio annual dividend consistency", () => {
       await createTestDividendEvent({
         stockId: kddiId,
         fiscalYear: PAYMENT_YEAR - 1,
-        paymentYear: PAYMENT_YEAR,
+        expectedPaymentYear: PAYMENT_YEAR,
         dividendPerShare: 150,
         expectedPaymentMonth: 6,
         reviewStatus: "approved",
@@ -184,7 +184,7 @@ describe("portfolio annual dividend consistency", () => {
       await createTestDividendEvent({
         stockId: jtId,
         fiscalYear: PAYMENT_YEAR - 1,
-        paymentYear: PAYMENT_YEAR,
+        expectedPaymentYear: PAYMENT_YEAR,
         dividendPerShare: 194,
         expectedPaymentMonth: 6,
         reviewStatus: "approved",
@@ -192,7 +192,7 @@ describe("portfolio annual dividend consistency", () => {
       await createTestDividendEvent({
         stockId: kddiId,
         fiscalYear: PAYMENT_YEAR,
-        paymentYear: PAYMENT_YEAR + 1,
+        expectedPaymentYear: PAYMENT_YEAR + 1,
         dividendPerShare: 9999,
         expectedPaymentMonth: 6,
         reviewStatus: "approved",
