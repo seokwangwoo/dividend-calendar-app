@@ -10,6 +10,7 @@ describe("searchStocks", () => {
   const mockSupabase = {
     from: vi.fn(() => mockSupabase),
     select: vi.fn(() => mockSupabase),
+    in: vi.fn(() => mockSupabase),
     or: vi.fn(() => mockSupabase),
     order: vi.fn(() => mockSupabase),
     limit: vi.fn(() => mockSupabase)
@@ -44,10 +45,10 @@ describe("searchStocks", () => {
     expect(createClient).toHaveBeenCalled();
     expect(mockSupabase.from).toHaveBeenCalledWith("stocks");
     expect(mockSupabase.select).toHaveBeenCalledWith("*");
+    expect(mockSupabase.in).toHaveBeenCalledWith("support_status", ["supported", "unsupported"]);
     expect(mockSupabase.or).toHaveBeenCalledWith(
-      "ticker.ilike.%AAPL%,name.ilike.%AAPL%,name_en.ilike.%AAPL%"
+      "ticker.ilike.AAPL%,name.ilike.AAPL%,name_en.ilike.AAPL%"
     );
-    expect(mockSupabase.order).toHaveBeenCalledWith("support_status", { ascending: true });
     expect(mockSupabase.order).toHaveBeenCalledWith("ticker", { ascending: true });
     expect(mockSupabase.limit).toHaveBeenCalledWith(20);
     expect(result).toEqual(mockData);

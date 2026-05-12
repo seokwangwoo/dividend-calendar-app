@@ -18,6 +18,7 @@ export type Database = {
           title: string;
           document_url: string | null;
           storage_path: string | null;
+          extracted_text: string | null;
           published_at: string | null;
           collected_at: string;
           status: string;
@@ -41,6 +42,7 @@ export type Database = {
           title: string;
           document_url?: string | null;
           storage_path?: string | null;
+          extracted_text?: string | null;
           published_at?: string | null;
           collected_at?: string;
           status?: string;
@@ -63,6 +65,7 @@ export type Database = {
           title?: string;
           document_url?: string | null;
           storage_path?: string | null;
+          extracted_text?: string | null;
           published_at?: string | null;
           collected_at?: string;
           status?: string;

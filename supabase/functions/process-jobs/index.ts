@@ -46,6 +46,13 @@ Deno.serve(async (req: Request) => {
     isRecord(body) ? body.batch_size ?? body.batchSize : null,
     parseBatchSize(Deno.env.get("PROCESS_JOBS_BATCH_SIZE"), 5)
   );
+  const rawSupportedTypes = isRecord(body) ? body.supported_types ?? body.supportedTypes : null;
+  const requestedTypes: string[] | null =
+    Array.isArray(rawSupportedTypes) &&
+      rawSupportedTypes.length > 0 &&
+      rawSupportedTypes.every((type) => typeof type === "string")
+      ? rawSupportedTypes
+      : null;
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false }
@@ -55,7 +62,10 @@ Deno.serve(async (req: Request) => {
     download_disclosure_pdf: createDownloadDisclosurePdfHandler(supabase),
     parse_disclosure_pdf_ai: createParseDisclosurePdfAiHandler(supabase)
   };
-  const client = createSupabaseJobsClient(supabase, Object.keys(handlers));
+  const effectiveSupportedTypes = requestedTypes
+    ? Object.keys(handlers).filter((type) => requestedTypes.includes(type))
+    : Object.keys(handlers);
+  const client = createSupabaseJobsClient(supabase, effectiveSupportedTypes);
 
   try {
     const result = await processRunnableJobs({ client, handlers, batchSize });
@@ -468,7 +478,7 @@ async function fetchDisclosureForParse(
   const { data, error } = await client
     .from("disclosures")
     .select(
-      "id, stock_id, external_id, title, source_type, document_url, disclosure_type, storage_path, published_at, ai_parse_attempts, raw_payload, stocks(id, ticker, name)"
+      "id, stock_id, external_id, title, source_type, document_url, disclosure_type, storage_path, published_at, ai_parse_attempts, raw_payload, extracted_text, stocks(id, ticker, name)"
     )
     .eq("id", disclosureId)
     .maybeSingle();
@@ -491,6 +501,7 @@ async function fetchDisclosureForParse(
     published_at: data.published_at,
     ai_parse_attempts: Number(data.ai_parse_attempts ?? 0),
     raw_payload: isRecord(data.raw_payload) ? data.raw_payload : {},
+    extracted_text: data.extracted_text ?? null,
     stocks: data.stocks as DisclosureForParse["stocks"]
   };
 }

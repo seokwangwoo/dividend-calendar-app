@@ -741,12 +741,14 @@ describe("executeParseDisclosurePdfAi", () => {
     parsedIds: string[];
     failedIds: string[];
     openaiRequests: OpenAIParseRequest[];
+    downloadedPaths: string[];
   }> = {}) {
     const reviews: DividendReviewInsert[] = [];
     const parseAttempts: number[] = [];
     const parsedIds: string[] = [];
     const failedIds: string[] = [];
     const openaiRequests: OpenAIParseRequest[] = overrides.openaiRequests ?? [];
+    const downloadedPaths: string[] = overrides.downloadedPaths ?? [];
     const disclosure = overrides.disclosure ?? makeDisclosure();
     const aiOutput = overrides.aiOutput ?? makeAiOutput();
 
@@ -757,7 +759,10 @@ describe("executeParseDisclosurePdfAi", () => {
 
     const deps = {
       fetchDisclosureForParse: async () => disclosure,
-      downloadPdf: async () => pdfBytes,
+      downloadPdf: async (storagePath: string) => {
+        downloadedPaths.push(storagePath);
+        return pdfBytes;
+      },
       callOpenAI: async (request: OpenAIParseRequest) => {
         openaiRequests.push(request);
         return {
@@ -782,7 +787,7 @@ describe("executeParseDisclosurePdfAi", () => {
       }
     };
 
-    return { deps, reviews, parseAttempts, parsedIds, failedIds, openaiRequests };
+    return { deps, reviews, parseAttempts, parsedIds, failedIds, openaiRequests, downloadedPaths };
   }
 
   it("completes successfully: increments parse attempts, creates reviews, marks parsed", async () => {
@@ -993,6 +998,38 @@ describe("executeParseDisclosurePdfAi", () => {
     const summary = (reviews[0].raw_payload as Record<string, unknown>).disclosure_ai_summary as Record<string, unknown>;
     expect(summary.text_extraction_method).toBe("direct_pdf_fallback");
     expect(openaiRequests[0]?.model).toBe("gpt-4o-mini");
+  });
+
+  it("uses pre-extracted disclosure text without downloading the PDF", async () => {
+    const extractedText = [
+      "配当予想の修正に関するお知らせ",
+      "1株当たり配当金",
+      "期末配当 120円",
+      "基準日 2026年3月31日",
+      "支払開始予定日 2026年6月30日"
+    ].join("\n");
+    const { deps, reviews, openaiRequests, downloadedPaths } = makeMockDeps({
+      disclosure: makeDisclosure({ extracted_text: extractedText })
+    });
+
+    await executeParseDisclosurePdfAi(makeJob(), deps);
+
+    expect(downloadedPaths).toHaveLength(0);
+    expect(openaiRequests[0]?.textExtractionMethod).toBe("extracted_text");
+    expect(openaiRequests[0]?.pdfBytes).toBeNull();
+    expect(openaiRequests[0]?.extractedText).toContain("期末配当 120円");
+    const summary = (reviews[0].raw_payload as Record<string, unknown>).disclosure_ai_summary as Record<string, unknown>;
+    expect(summary.text_extraction_method).toBe("extracted_text");
+  });
+
+  it("falls back to PDF extraction when pre-extracted text is blank", async () => {
+    const { deps, downloadedPaths } = makeMockDeps({
+      disclosure: makeDisclosure({ extracted_text: "   \n\t" })
+    });
+
+    await executeParseDisclosurePdfAi(makeJob(), deps);
+
+    expect(downloadedPaths).toEqual(["disclosures/9433/2026-05-10/ext-1.pdf"]);
   });
 
   it("marks disclosure as parsed on success", async () => {
