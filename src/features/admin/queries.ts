@@ -142,13 +142,24 @@ export async function getDividendEventById(
 
 export async function listAllStocks(): Promise<StockOption[]> {
   const supabase = await createClient();
+  const PAGE_SIZE = 1000;
+  const results: StockOption[] = [];
+  let from = 0;
 
-  const { data, error } = await supabase
-    .from("stocks")
-    .select("id, ticker, name")
-    .order("ticker", { ascending: true });
+  while (true) {
+    const { data, error } = await supabase
+      .from("stocks")
+      .select("id, ticker, name")
+      .order("ticker", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
 
-  if (error) throw new Error(error.message);
+    if (error) throw new Error(error.message);
 
-  return data ?? [];
+    results.push(...((data ?? []) as StockOption[]));
+
+    if (!data || data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  return results;
 }

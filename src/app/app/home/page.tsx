@@ -81,7 +81,7 @@ export default async function HomePage() {
                 </Badge>
               </div>
               <p className="font-semibold">
-                {summary.nextDividend.stockName}{" "}
+                <span>{summary.nextDividend.stockName}</span>{" "}
                 <span className="text-sm font-normal text-muted">
                   {summary.nextDividend.ticker}
                 </span>

@@ -71,8 +71,8 @@ test("admin can create and approve an event via new form", async ({ page }) => {
   await login(page, normalUser.email, normalUser.password);
   await page.goto("/app/home");
 
-  // The approved event amount should be reflected
-  await expect(page.locator("body")).toContainText("KDDI");
+  // The approved event amount should be reflected (stock name is stored in fullwidth: ＫＤＤＩ)
+  await expect(page.locator("body")).toContainText("9433");
 });
 
 test("admin can reject an event with a reason", async ({ page }) => {

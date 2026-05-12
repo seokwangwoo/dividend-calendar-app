@@ -52,10 +52,17 @@ async function invokeRecentCollectDisclosures(
   });
 }
 
-async function invokeProcessJobs(request: typeof test.prototype.request) {
+async function invokeProcessJobs(
+  request: typeof test.prototype.request,
+  supportedTypes?: string[],
+  batchSize?: number
+) {
+  const payload: Record<string, unknown> = {};
+  if (supportedTypes) payload.supported_types = supportedTypes;
+  if (batchSize !== undefined) payload.batch_size = batchSize;
   return request.post(`${FUNCTION_BASE_URL}/process-jobs`, {
     headers: await getServiceRoleHeader(),
-    data: {}
+    data: payload
   });
 }
 
@@ -304,6 +311,8 @@ test.describe("system pipeline", () => {
     disclosureIds.push(disclosureId);
 
     // Seed a job at max-1 attempts so the next run is the final attempt
+    // priority: 1 ensures this test job is processed first even if other jobs
+    // are in the queue at the default priority (3).
     const { data: job } = await admin
       .from("jobs")
       .insert({
@@ -312,6 +321,7 @@ test.describe("system pipeline", () => {
         payload: { disclosureId },
         attempts: 2,
         max_attempts: 3,
+        priority: 1,
         run_after: new Date().toISOString()
       })
       .select("id")
@@ -319,7 +329,7 @@ test.describe("system pipeline", () => {
     expect(job).not.toBeNull();
     jobIds.push(job!.id);
 
-    const response = await invokeProcessJobs(request);
+    const response = await invokeProcessJobs(request, ["download_disclosure_pdf"], 1);
     expect(response.status()).toBe(200);
 
     // Poll briefly for final state (process-jobs may complete asynchronously)
@@ -379,6 +389,8 @@ test.describe("system pipeline", () => {
     const disclosureId = disc!.id;
     disclosureIds.push(disclosureId);
 
+    // priority: 1 ensures this test job is processed first even if other jobs
+    // are in the queue at the default priority (3).
     const { data: job } = await admin
       .from("jobs")
       .insert({
@@ -387,6 +399,7 @@ test.describe("system pipeline", () => {
         payload: { disclosureId },
         attempts: 0,
         max_attempts: 3,
+        priority: 1,
         run_after: new Date().toISOString()
       })
       .select("id")
@@ -394,7 +407,7 @@ test.describe("system pipeline", () => {
     expect(job).not.toBeNull();
     jobIds.push(job!.id);
 
-    const response = await invokeProcessJobs(request);
+    const response = await invokeProcessJobs(request, ["download_disclosure_pdf"], 1);
     expect(response.status()).toBe(200);
 
     let attempts = 0;
@@ -461,6 +474,8 @@ test.describe("system pipeline", () => {
     const disclosureId = disc!.id;
     disclosureIds.push(disclosureId);
 
+    // priority: 1 ensures this test job is processed first even if other jobs
+    // are in the queue at the default priority (3).
     const { data: job } = await admin
       .from("jobs")
       .insert({
@@ -469,6 +484,7 @@ test.describe("system pipeline", () => {
         payload: { disclosureId },
         attempts: 1,
         max_attempts: 3,
+        priority: 1,
         run_after: new Date().toISOString()
       })
       .select("id")
@@ -476,7 +492,7 @@ test.describe("system pipeline", () => {
     expect(job).not.toBeNull();
     jobIds.push(job!.id);
 
-    const response = await invokeProcessJobs(request);
+    const response = await invokeProcessJobs(request, ["download_disclosure_pdf"], 1);
     expect(response.status()).toBe(200);
 
     let attempts = 0;

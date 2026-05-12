@@ -68,9 +68,10 @@ test("normal user can complete core portfolio, calendar, notification, and setti
 
   await page.goto("/app/portfolio/new");
   await page.getByLabel("銘柄名またはコード").fill("9433");
-  // Search is auto-triggered after debounce — wait for results to appear
-  const kddiResult = page.locator("div").filter({ hasText: /KDDI.*9433/ }).first();
-  await kddiResult.getByRole("button", { name: "選択" }).click();
+  // Search is auto-triggered after debounce — wait for a 選択 button to appear in the results list
+  const selectBtn = page.getByRole("button", { name: "選択" }).first();
+  await expect(selectBtn).toBeVisible();
+  await selectBtn.click();
   await page.getByLabel("保有数量").fill("100");
   await page.getByLabel("平均取得単価").fill("4300");
   await page.getByLabel("口座区分").selectOption("nisa");

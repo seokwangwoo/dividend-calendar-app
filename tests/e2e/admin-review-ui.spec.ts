@@ -83,7 +83,7 @@ test("priority sorting and filters", async ({ page }) => {
 
   await page.locator("select[name='priority']").selectOption("high");
   await page.getByRole("button", { name: "絞り込む" }).click();
-  await expect(page.locator("tbody").getByText("高")).toBeVisible();
+  await expect(page.locator("tbody").getByText("高").first()).toBeVisible();
   await expect(page.locator("tbody").getByText("緊急")).not.toBeVisible();
 });
 

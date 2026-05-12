@@ -114,7 +114,7 @@ test("stock detail shows stock info with exact values", async ({ page }) => {
 
   // Stock info card: scope to the card containing "現在株価"
   const infoCard = page.locator("div").filter({ hasText: "現在株価" }).first();
-  await expect(infoCard.getByText(formatJpy(4300)).first()).toBeVisible();
+  await expect(infoCard.getByText(formatJpy(kddi.currentPrice)).first()).toBeVisible();
   // expected_annual_dividend_per_share is ¥150 (exact match to avoid matching ¥150/株)
   await expect(infoCard.getByText(formatJpy(150), { exact: true }).first()).toBeVisible();
   await expect(infoCard.getByText(formatPercent(3.4884)).first()).toBeVisible();

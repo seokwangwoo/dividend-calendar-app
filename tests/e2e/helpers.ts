@@ -74,15 +74,21 @@ export async function getStockByTicker(ticker: string): Promise<{
   id: string;
   name: string;
   ticker: string;
+  currentPrice: number | null;
 }> {
   const { data, error } = await createAdminClient()
     .from("stocks")
-    .select("id, name, ticker")
+    .select("id, name, ticker, current_price")
     .eq("ticker", ticker)
     .single();
 
   if (error || !data) throw new Error(`getStockByTicker(${ticker}): ${error?.message}`);
-  return data as { id: string; name: string; ticker: string };
+  return {
+    id: data.id as string,
+    name: data.name as string,
+    ticker: data.ticker as string,
+    currentPrice: data.current_price as number | null
+  };
 }
 
 export async function createApprovedDividendEvent(stockId: string): Promise<string> {
