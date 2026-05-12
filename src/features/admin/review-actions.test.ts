@@ -73,7 +73,7 @@ describe("approveDividendReview", () => {
     adminUser();
     vi.mocked(createClient).mockResolvedValue(buildMockSupabaseWithSession() as any);
 
-    const result = await approveDividendReview("review-id", { paymentYear: 1990 });
+    const result = await approveDividendReview("review-id", { expectedPaymentYear: 1990 });
     expect(result).toEqual(expect.objectContaining({ ok: false }));
   });
 
@@ -83,13 +83,13 @@ describe("approveDividendReview", () => {
     mockSupabase.rpc.mockResolvedValue({ error: null });
     vi.mocked(createClient).mockResolvedValue(mockSupabase);
 
-    const result = await approveDividendReview("review-id", { paymentYear: 2026 });
+    const result = await approveDividendReview("review-id", { expectedPaymentYear: 2026 });
     expect(result).toEqual({ ok: true });
     expect(mockSupabase.rpc).toHaveBeenCalledWith(
       "approve_dividend_review",
       expect.objectContaining({
         p_review_id: "review-id",
-        p_override: { paymentYear: 2026 }
+        p_override: { expectedPaymentYear: 2026 }
       })
     );
     expect(revalidatePath).toHaveBeenCalledWith("/admin/dividend-reviews");
@@ -99,11 +99,11 @@ describe("approveDividendReview", () => {
   it("returns error when RPC returns error", async () => {
     adminUser();
     const mockSupabase = buildMockSupabaseWithSession() as any;
-    mockSupabase.rpc.mockResolvedValue({ error: { message: "payment_year required" } });
+    mockSupabase.rpc.mockResolvedValue({ error: { message: "expected_payment_year required" } });
     vi.mocked(createClient).mockResolvedValue(mockSupabase);
 
     const result = await approveDividendReview("review-id");
-    expect(result).toEqual({ ok: false, error: "payment_year required" });
+    expect(result).toEqual({ ok: false, error: "expected_payment_year required" });
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
@@ -114,13 +114,13 @@ describe("approveDividendReview", () => {
     vi.mocked(createClient).mockResolvedValue(mockSupabase);
 
     await approveDividendReview("review-id", {
-      paymentYear: 2026,
+      expectedPaymentYear: 2026,
       dividendPerShare: null,
       changeType: null
     });
 
     const rpcCall = mockSupabase.rpc.mock.calls[0];
-    expect(rpcCall[1].p_override).toEqual({ paymentYear: 2026 });
+    expect(rpcCall[1].p_override).toEqual({ expectedPaymentYear: 2026 });
     expect(rpcCall[1].p_override).not.toHaveProperty("dividendPerShare");
   });
 });

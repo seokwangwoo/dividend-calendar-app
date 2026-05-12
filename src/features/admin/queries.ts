@@ -10,12 +10,12 @@ export type DividendEventWithStock = {
   id: string;
   stock_id: string;
   fiscal_year: number;
-  payment_year: number | null;
+  expected_payment_year: number | null;
+  expected_payment_month: number | null;
+  fiscal_month: number | null;
   event_type: string;
   dividend_per_share: number | null;
   previous_dividend_per_share: number | null;
-  expected_payment_month: number | null;
-  expected_payment_date: string | null;
   status: string;
   change_type: string | null;
   source_type: string | null;
@@ -34,7 +34,7 @@ export type DividendEventWithStock = {
 export type DividendEventFilters = {
   reviewStatus?: string;
   ticker?: string;
-  paymentYear?: number;
+  expectedPaymentYear?: number;
   status?: string;
 };
 
@@ -50,12 +50,12 @@ export async function listDividendEvents(
       id,
       stock_id,
       fiscal_year,
-      payment_year,
+      expected_payment_year,
+      expected_payment_month,
+      fiscal_month,
       event_type,
       dividend_per_share,
       previous_dividend_per_share,
-      expected_payment_month,
-      expected_payment_date,
       status,
       change_type,
       source_type,
@@ -77,8 +77,8 @@ export async function listDividendEvents(
     query = query.eq("review_status", filters.reviewStatus);
   }
 
-  if (filters.paymentYear) {
-    query = query.eq("payment_year", filters.paymentYear);
+  if (filters.expectedPaymentYear) {
+    query = query.eq("expected_payment_year", filters.expectedPaymentYear);
   }
 
   if (filters.status) {
@@ -111,12 +111,12 @@ export async function getDividendEventById(
       id,
       stock_id,
       fiscal_year,
-      payment_year,
+      expected_payment_year,
+      expected_payment_month,
+      fiscal_month,
       event_type,
       dividend_per_share,
       previous_dividend_per_share,
-      expected_payment_month,
-      expected_payment_date,
       status,
       change_type,
       source_type,

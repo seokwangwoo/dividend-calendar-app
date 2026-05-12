@@ -3,12 +3,12 @@ import {
   validateMonth,
   validateDividendAmount,
   validatePaymentYear,
+  validateFiscalMonth,
   validateEventType,
   validateChangeType,
   validateEventStatus,
   validateIsoDate,
-  validateApprovalOverride,
-  derivePaymentYear
+  validateApprovalOverride
 } from "./validation";
 
 describe("validateMonth", () => {
@@ -80,6 +80,28 @@ describe("validatePaymentYear", () => {
   it("returns an error for non-integer values", () => {
     expect(validatePaymentYear(2025.5)).not.toBeNull();
     expect(validatePaymentYear("abc")).not.toBeNull();
+  });
+});
+
+describe("validateFiscalMonth", () => {
+  it("returns null for valid months 1–12", () => {
+    for (let m = 1; m <= 12; m++) {
+      expect(validateFiscalMonth(m)).toBeNull();
+    }
+  });
+
+  it("returns an error for 0", () => {
+    expect(validateFiscalMonth(0)).not.toBeNull();
+  });
+
+  it("returns an error for 13", () => {
+    expect(validateFiscalMonth(13)).not.toBeNull();
+  });
+
+  it("returns an error for non-integer values", () => {
+    expect(validateFiscalMonth(1.5)).not.toBeNull();
+    expect(validateFiscalMonth("abc")).not.toBeNull();
+    expect(validateFiscalMonth(NaN)).not.toBeNull();
   });
 });
 
@@ -183,11 +205,11 @@ describe("validateApprovalOverride", () => {
       dividendPerShare: 120,
       previousDividendPerShare: 100,
       expectedPaymentMonth: 6,
-      paymentYear: 2026,
+      expectedPaymentYear: 2026,
+      fiscalMonth: 3,
       eventType: "year_end",
       status: "confirmed",
       changeType: "increase",
-      expectedPaymentDate: "2026-06-15",
       recordDate: "2026-03-31"
     });
     expect(errors).toEqual({});
@@ -208,9 +230,14 @@ describe("validateApprovalOverride", () => {
     expect(errors).toHaveProperty("expectedPaymentMonth");
   });
 
-  it("catches invalid paymentYear", () => {
-    const errors = validateApprovalOverride({ paymentYear: 1999 });
-    expect(errors).toHaveProperty("paymentYear");
+  it("catches invalid expectedPaymentYear", () => {
+    const errors = validateApprovalOverride({ expectedPaymentYear: 1999 });
+    expect(errors).toHaveProperty("expectedPaymentYear");
+  });
+
+  it("catches invalid fiscalMonth", () => {
+    const errors = validateApprovalOverride({ fiscalMonth: 13 });
+    expect(errors).toHaveProperty("fiscalMonth");
   });
 
   it("catches unknown eventType", () => {
@@ -228,46 +255,8 @@ describe("validateApprovalOverride", () => {
     expect(errors).toHaveProperty("status");
   });
 
-  it("catches invalid date formats", () => {
-    const errors = validateApprovalOverride({ expectedPaymentDate: "01/06/2026" });
-    expect(errors).toHaveProperty("expectedPaymentDate");
-  });
-
   it("does not complain about exDividendDate: null (explicitly excluded)", () => {
     const errors = validateApprovalOverride({ exDividendDate: null });
     expect(errors).not.toHaveProperty("exDividendDate");
-  });
-});
-
-describe("derivePaymentYear", () => {
-  it("returns overridePaymentYear when provided", () => {
-    expect(derivePaymentYear("2026-06-30", 2027)).toBe(2027);
-    expect(derivePaymentYear(null, 2026)).toBe(2026);
-  });
-
-  it("derives year from full expected_payment_date when no override", () => {
-    expect(derivePaymentYear("2026-06-30", null)).toBe(2026);
-    expect(derivePaymentYear("2025-12-01", undefined)).toBe(2025);
-  });
-
-  it("returns null when only expected_payment_month is known (no full date, no override)", () => {
-    expect(derivePaymentYear(null, null)).toBeNull();
-    expect(derivePaymentYear(undefined, undefined)).toBeNull();
-    expect(derivePaymentYear("", null)).toBeNull();
-  });
-
-  it("returns null when date format is not a full ISO date", () => {
-    expect(derivePaymentYear("2026-06", null)).toBeNull();
-    expect(derivePaymentYear("not-a-date", null)).toBeNull();
-  });
-
-  it("returns null for out-of-range years in expected_payment_date", () => {
-    expect(derivePaymentYear("1999-01-01", null)).toBeNull();
-    expect(derivePaymentYear("2200-01-01", null)).toBeNull();
-  });
-
-  it("admin override wins even when full date provides a different year", () => {
-    // Override should always win over auto-derived value
-    expect(derivePaymentYear("2026-12-31", 2027)).toBe(2027);
   });
 });

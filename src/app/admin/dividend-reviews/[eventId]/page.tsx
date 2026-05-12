@@ -87,9 +87,8 @@ export default async function DividendReviewDetailPage({
   const isActionable =
     review.status === "pending" || review.status === "needs_manual_check";
 
-  // Determine whether payment_year is needed (month-only, no full date)
-  const hasFullPaymentDate = !!review.extracted_payment_date;
-  const needsPaymentYear = !hasFullPaymentDate && review.event_type !== "annual_total";
+  // Determine whether expected_payment_year is needed (AI did not extract one)
+  const needsPaymentYear = !review.extracted_payment_year && review.event_type !== "annual_total";
 
   // Signed PDF URL (generated on demand via ?pdf=1)
   let pdfSignedUrl: string | null = null;
@@ -114,9 +113,9 @@ export default async function DividendReviewDetailPage({
 
     const dividendPerShareRaw = getValue("dividendPerShare");
     const previousDividendPerShareRaw = getValue("previousDividendPerShare");
-    const paymentYearRaw = getValue("paymentYear");
+    const expectedPaymentYearRaw = getValue("expectedPaymentYear");
     const expectedPaymentMonthRaw = getValue("expectedPaymentMonth");
-    const expectedPaymentDateRaw = getValue("expectedPaymentDate");
+    const fiscalMonthRaw = getValue("fiscalMonth");
     const recordDateRaw = getValue("recordDate");
     const eventTypeRaw = getValue("eventType");
     const changeTypeRaw = getValue("changeType");
@@ -127,11 +126,11 @@ export default async function DividendReviewDetailPage({
       ...(previousDividendPerShareRaw != null
         ? { previousDividendPerShare: Number(previousDividendPerShareRaw) }
         : {}),
-      ...(paymentYearRaw != null ? { paymentYear: Number(paymentYearRaw) } : {}),
+      ...(expectedPaymentYearRaw != null ? { expectedPaymentYear: Number(expectedPaymentYearRaw) } : {}),
       ...(expectedPaymentMonthRaw != null
         ? { expectedPaymentMonth: Number(expectedPaymentMonthRaw) }
         : {}),
-      ...(expectedPaymentDateRaw != null ? { expectedPaymentDate: expectedPaymentDateRaw } : {}),
+      ...(fiscalMonthRaw != null ? { fiscalMonth: Number(fiscalMonthRaw) } : {}),
       ...(recordDateRaw != null ? { recordDate: recordDateRaw } : {}),
       ...(eventTypeRaw != null ? { eventType: eventTypeRaw } : {}),
       ...(changeTypeRaw != null ? { changeType: changeTypeRaw } : {}),
@@ -289,10 +288,21 @@ export default async function DividendReviewDetailPage({
           )}
           {field("権利確定日", review.extracted_record_date)}
           {field("権利落ち日", review.extracted_ex_dividend_date)}
-          {field("支払予定日", review.extracted_payment_date)}
+          {field(
+            "支払予定年",
+            review.extracted_payment_year != null
+              ? `${review.extracted_payment_year}年`
+              : null
+          )}
           {field(
             "支払予定月",
             review.extracted_payment_month ? `${review.extracted_payment_month}月` : null
+          )}
+          {field(
+            "決算月",
+            review.extracted_fiscal_month != null
+              ? `${review.extracted_fiscal_month}月`
+              : null
           )}
         </dl>
 
@@ -397,16 +407,22 @@ export default async function DividendReviewDetailPage({
 
                 <FormField
                   label={needsPaymentYear ? "支払年 *必須" : "支払年（上書き）"}
-                  htmlFor="paymentYear"
+                  htmlFor="expectedPaymentYear"
                 >
                   <Input
-                    id="paymentYear"
-                    name="paymentYear"
+                    id="expectedPaymentYear"
+                    name="expectedPaymentYear"
                     type="number"
                     min={2000}
                     max={2100}
                     required={needsPaymentYear}
-                    placeholder={needsPaymentYear ? "例: 2026" : "空欄=自動"}
+                    placeholder={
+                      review.extracted_payment_year != null
+                        ? `AI: ${review.extracted_payment_year}`
+                        : needsPaymentYear
+                          ? "例: 2026"
+                          : "空欄=AI値"
+                    }
                   />
                 </FormField>
 
@@ -425,12 +441,18 @@ export default async function DividendReviewDetailPage({
                   />
                 </FormField>
 
-                <FormField label="支払予定日（上書き）" htmlFor="expectedPaymentDate">
+                <FormField label="決算月（上書き）" htmlFor="fiscalMonth">
                   <Input
-                    id="expectedPaymentDate"
-                    name="expectedPaymentDate"
-                    type="date"
-                    placeholder="YYYY-MM-DD"
+                    id="fiscalMonth"
+                    name="fiscalMonth"
+                    type="number"
+                    min={1}
+                    max={12}
+                    placeholder={
+                      review.extracted_fiscal_month != null
+                        ? `AI: ${review.extracted_fiscal_month}`
+                        : "1〜12"
+                    }
                   />
                 </FormField>
 

@@ -7,8 +7,9 @@ export type DividendReviewWithRelations = {
   disclosure_id: string | null;
   extracted_dividend_per_share: number | null;
   previous_dividend_per_share: number | null;
-  extracted_payment_date: string | null;
+  extracted_payment_year: number | null;
   extracted_payment_month: number | null;
+  extracted_fiscal_month: number | null;
   confidence_score: number | null;
   fiscal_year: number | null;
   event_type: Database["public"]["Enums"]["dividend_event_type"] | null;
@@ -62,8 +63,9 @@ const REVIEW_SELECT = `
   disclosure_id,
   extracted_dividend_per_share,
   previous_dividend_per_share,
-  extracted_payment_date,
+  extracted_payment_year,
   extracted_payment_month,
+  extracted_fiscal_month,
   confidence_score,
   fiscal_year,
   event_type,

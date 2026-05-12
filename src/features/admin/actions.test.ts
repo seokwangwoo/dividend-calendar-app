@@ -50,7 +50,7 @@ beforeEach(() => {
 const BASE_INPUT = {
   stockId: "stock-uuid",
   fiscalYear: 2026,
-  paymentYear: 2026,
+  expectedPaymentYear: 2026,
   eventType: "year_end" as const,
   dividendPerShare: 50
 };
@@ -78,12 +78,12 @@ describe("createDividendEvent", () => {
     ).rejects.toThrow();
   });
 
-  it("rejects missing payment_year", async () => {
+  it("rejects missing expected_payment_year", async () => {
     adminUser();
     vi.mocked(createClient).mockResolvedValue(buildMockSupabase({ error: null }) as any);
 
     await expect(
-      createDividendEvent({ ...BASE_INPUT, paymentYear: undefined as unknown as number })
+      createDividendEvent({ ...BASE_INPUT, expectedPaymentYear: undefined as unknown as number })
     ).rejects.toThrow();
   });
 

@@ -3,12 +3,12 @@
  *
  * Covers:
  * - Override field validation: invalid amounts, years, months, dates, event types
- * - payment_year required when only month is known (needsPaymentYear logic)
+ * - expected_payment_year required for non-annual_total events
  * - Valid full-override passes all validators
  */
 
 import { describe, it, expect } from "vitest";
-import { validateApprovalOverride, derivePaymentYear } from "./validation";
+import { validateApprovalOverride } from "./validation";
 
 describe("review form validation: override field guards", () => {
   it("accepts an empty override (all defaults)", () => {
@@ -19,9 +19,9 @@ describe("review form validation: override field guards", () => {
     const errors = validateApprovalOverride({
       dividendPerShare: 80,
       previousDividendPerShare: 70,
-      paymentYear: 2026,
+      expectedPaymentYear: 2026,
       expectedPaymentMonth: 9,
-      expectedPaymentDate: "2026-09-25",
+      fiscalMonth: 3,
       recordDate: "2026-03-31",
       eventType: "year_end",
       changeType: "increase",
@@ -40,14 +40,14 @@ describe("review form validation: override field guards", () => {
     expect(errors).toHaveProperty("previousDividendPerShare");
   });
 
-  it("rejects paymentYear out of range (below 2000)", () => {
-    const errors = validateApprovalOverride({ paymentYear: 1999 });
-    expect(errors).toHaveProperty("paymentYear");
+  it("rejects expectedPaymentYear out of range (below 2000)", () => {
+    const errors = validateApprovalOverride({ expectedPaymentYear: 1999 });
+    expect(errors).toHaveProperty("expectedPaymentYear");
   });
 
-  it("rejects paymentYear out of range (above 2100)", () => {
-    const errors = validateApprovalOverride({ paymentYear: 2101 });
-    expect(errors).toHaveProperty("paymentYear");
+  it("rejects expectedPaymentYear out of range (above 2100)", () => {
+    const errors = validateApprovalOverride({ expectedPaymentYear: 2101 });
+    expect(errors).toHaveProperty("expectedPaymentYear");
   });
 
   it("rejects invalid expectedPaymentMonth (0)", () => {
@@ -58,16 +58,6 @@ describe("review form validation: override field guards", () => {
   it("rejects invalid expectedPaymentMonth (13)", () => {
     const errors = validateApprovalOverride({ expectedPaymentMonth: 13 });
     expect(errors).toHaveProperty("expectedPaymentMonth");
-  });
-
-  it("rejects non-ISO date for expectedPaymentDate", () => {
-    const errors = validateApprovalOverride({ expectedPaymentDate: "09/25/2026" });
-    expect(errors).toHaveProperty("expectedPaymentDate");
-  });
-
-  it("rejects invalid calendar date (Feb 30)", () => {
-    const errors = validateApprovalOverride({ expectedPaymentDate: "2026-02-30" });
-    expect(errors).toHaveProperty("expectedPaymentDate");
   });
 
   it("rejects unknown eventType", () => {
@@ -88,47 +78,6 @@ describe("review form validation: override field guards", () => {
   it("accepts zero dividend (no-dividend scenario)", () => {
     const errors = validateApprovalOverride({ dividendPerShare: 0 });
     expect(errors).not.toHaveProperty("dividendPerShare");
-  });
-});
-
-describe("payment_year required logic (needsPaymentYear)", () => {
-  /**
-   * The detail page derives needsPaymentYear as:
-   *   !hasFullPaymentDate && event_type !== 'annual_total'
-   *
-   * We test derivePaymentYear to confirm the underlying logic.
-   */
-
-  it("payment_year is NOT required when full payment date is present", () => {
-    // When extracted_payment_date is a full ISO date, year can be derived
-    const year = derivePaymentYear("2026-09-25", null);
-    expect(year).toBe(2026);
-  });
-
-  it("payment_year IS required when only month is known (derives null)", () => {
-    const year = derivePaymentYear(null, null);
-    expect(year).toBeNull();
-  });
-
-  it("payment_year override wins over derived value", () => {
-    const year = derivePaymentYear("2026-09-25", 2027);
-    expect(year).toBe(2027);
-  });
-
-  it("explicit paymentYear override satisfies requirement even without full date", () => {
-    const year = derivePaymentYear(null, 2026);
-    expect(year).toBe(2026);
-    expect(year).not.toBeNull();
-  });
-
-  it("returns null for partial date strings", () => {
-    // Only month, no full date
-    expect(derivePaymentYear("2026-09", null)).toBeNull();
-  });
-
-  it("returns null for date strings that fail range check", () => {
-    expect(derivePaymentYear("1999-01-01", null)).toBeNull();
-    expect(derivePaymentYear("2200-12-31", null)).toBeNull();
   });
 });
 

@@ -32,6 +32,14 @@ export function validatePaymentYear(value: unknown): string | null {
   return null;
 }
 
+export function validateFiscalMonth(value: unknown): string | null {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 12) {
+    return "決算月は1〜12の整数で入力してください";
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Override validation helpers for Phase 05 review approval
 // ---------------------------------------------------------------------------
@@ -129,10 +137,15 @@ export function validateApprovalOverride(override: Record<string, unknown>): Rec
     : null;
   if (monthError) errors.expectedPaymentMonth = monthError;
 
-  const yearError = override.paymentYear != null
-    ? validatePaymentYear(override.paymentYear)
+  const yearError = override.expectedPaymentYear != null
+    ? validatePaymentYear(override.expectedPaymentYear)
     : null;
-  if (yearError) errors.paymentYear = yearError;
+  if (yearError) errors.expectedPaymentYear = yearError;
+
+  const fiscalMonthError = override.fiscalMonth != null
+    ? validateFiscalMonth(override.fiscalMonth)
+    : null;
+  if (fiscalMonthError) errors.fiscalMonth = fiscalMonthError;
 
   const eventTypeError = validateEventType(override.eventType);
   if (eventTypeError) errors.eventType = eventTypeError;
@@ -143,9 +156,6 @@ export function validateApprovalOverride(override: Record<string, unknown>): Rec
   const changeTypeError = validateChangeType(override.changeType);
   if (changeTypeError) errors.changeType = changeTypeError;
 
-  const paymentDateError = validateIsoDate(override.expectedPaymentDate, "expectedPaymentDate");
-  if (paymentDateError) errors.expectedPaymentDate = paymentDateError;
-
   const recordDateError = validateIsoDate(override.recordDate, "recordDate");
   if (recordDateError) errors.recordDate = recordDateError;
 
@@ -153,28 +163,4 @@ export function validateApprovalOverride(override: Record<string, unknown>): Rec
   if (exDivDateError) errors.exDividendDate = exDivDateError;
 
   return errors;
-}
-
-/**
- * Derives payment_year from the given expected_payment_date when it contains a
- * full YYYY-MM-DD date. Returns null when only a month is known, so callers can
- * require an explicit admin paymentYear override before approving.
- *
- * Rules:
- * 1. If overridePaymentYear is provided, it wins.
- * 2. If expectedPaymentDate is a full date, extract year from it.
- * 3. Otherwise return null → caller must require admin confirmation.
- */
-export function derivePaymentYear(
-  expectedPaymentDate: string | null | undefined,
-  overridePaymentYear: number | null | undefined
-): number | null {
-  if (overridePaymentYear != null && Number.isInteger(overridePaymentYear)) {
-    return overridePaymentYear;
-  }
-  if (expectedPaymentDate && /^\d{4}-\d{2}-\d{2}$/.test(expectedPaymentDate)) {
-    const year = parseInt(expectedPaymentDate.slice(0, 4), 10);
-    if (year >= 2000 && year <= 2100) return year;
-  }
-  return null;
 }

@@ -10,12 +10,12 @@ const USER_FACING_PATHS = ["/app/home", "/app/portfolio", "/app/calendar"];
 export type ApprovalOverride = {
   dividendPerShare?: number | null;
   previousDividendPerShare?: number | null;
+  expectedPaymentYear?: number | null;
   expectedPaymentMonth?: number | null;
-  paymentYear?: number | null;
+  fiscalMonth?: number | null;
   eventType?: string | null;
   status?: string | null;
   changeType?: string | null;
-  expectedPaymentDate?: string | null;
   recordDate?: string | null;
   exDividendDate?: string | null;
 };

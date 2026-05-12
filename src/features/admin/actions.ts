@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdminUser } from "./auth";
 import { createClient } from "@/lib/supabase/server";
-import { validateMonth, validateDividendAmount, validatePaymentYear } from "./validation";
+import { validateMonth, validateDividendAmount, validatePaymentYear, validateFiscalMonth } from "./validation";
 import type { Database } from "@/types/supabase";
 
 const USER_FACING_PATHS = ["/app/home", "/app/portfolio", "/app/calendar"];
@@ -11,9 +11,9 @@ const USER_FACING_PATHS = ["/app/home", "/app/portfolio", "/app/calendar"];
 export type CreateDividendEventInput = {
   stockId: string;
   fiscalYear: number;
-  paymentYear: number;
+  expectedPaymentYear: number;
   estimatedPaymentMonth?: number | null;
-  paymentStartDate?: string | null;
+  fiscalMonth?: number | null;
   eventType: Database["public"]["Enums"]["dividend_event_type"];
   status?: "estimated" | "confirmed" | "paid" | "undecided";
   changeType?: Database["public"]["Enums"]["dividend_change_type"] | null;
@@ -26,12 +26,17 @@ export type CreateDividendEventInput = {
 export async function createDividendEvent(input: CreateDividendEventInput): Promise<void> {
   await requireAdminUser();
 
-  const yearError = validatePaymentYear(input.paymentYear);
+  const yearError = validatePaymentYear(input.expectedPaymentYear);
   if (yearError) throw new Error(yearError);
 
   if (input.estimatedPaymentMonth != null) {
     const monthError = validateMonth(input.estimatedPaymentMonth);
     if (monthError) throw new Error(monthError);
+  }
+
+  if (input.fiscalMonth != null) {
+    const fiscalMonthError = validateFiscalMonth(input.fiscalMonth);
+    if (fiscalMonthError) throw new Error(fiscalMonthError);
   }
 
   if (input.dividendPerShare != null) {
@@ -44,9 +49,9 @@ export async function createDividendEvent(input: CreateDividendEventInput): Prom
   const { error } = await supabase.from("dividend_events").insert({
     stock_id: input.stockId,
     fiscal_year: input.fiscalYear,
-    payment_year: input.paymentYear,
+    expected_payment_year: input.expectedPaymentYear,
     expected_payment_month: input.estimatedPaymentMonth ?? null,
-    expected_payment_date: input.paymentStartDate ?? null,
+    fiscal_month: input.fiscalMonth ?? null,
     event_type: input.eventType,
     status: input.status ?? "estimated",
     change_type: input.changeType ?? null,
