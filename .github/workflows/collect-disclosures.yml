@@ -78,12 +78,12 @@ jobs:
           console.log(text);
           if (!response.ok) process.exit(1);
           NODE
-  process-jobs:
+  download:
     runs-on: ubuntu-latest
     needs: collect
     if: always()
     steps:
-      - name: Invoke process-jobs
+      - name: Invoke process-jobs (download only)
         env:
           SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -97,7 +97,132 @@ jobs:
               "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
               "Content-Type": "application/json"
             },
-            body: JSON.stringify({ batch_size: Number(process.env.PROCESS_BATCH_SIZE || "5") })
+            body: JSON.stringify({
+              batch_size: Number(process.env.PROCESS_BATCH_SIZE || "5"),
+              supported_types: ["download_disclosure_pdf"]
+            })
+          });
+          const text = await response.text();
+          console.log(text);
+          if (!response.ok) process.exit(1);
+          NODE
+  extract:
+    runs-on: ubuntu-latest
+    needs: download
+    if: always()
+    steps:
+      - name: Extract PDF text with pdftotext
+        env:
+          SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
+          SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+          const restUrl = (process.env.SUPABASE_REST_URL || process.env.SUPABASE_FUNCTION_URL?.replace(/\/functions\/v1\/?$/, "") || "").replace(/\/$/, "");
+
+          if (!restUrl) {
+            console.error("SUPABASE_REST_URL is not set and could not be derived from SUPABASE_FUNCTION_URL");
+            process.exit(1);
+          }
+          if (!key) {
+            console.error("SUPABASE_SERVICE_ROLE_KEY is not set");
+            process.exit(1);
+          }
+
+          const headers = {
+            "Authorization": `Bearer ${key}`,
+            "apikey": key,
+            "Content-Type": "application/json"
+          };
+          const LIMIT = 50;
+
+          const listRes = await fetch(
+            `${restUrl}/rest/v1/disclosures?select=id,storage_path&storage_path=not.is.null&extracted_text=is.null&limit=${LIMIT}`,
+            { headers }
+          );
+          if (!listRes.ok) {
+            console.error("Failed to list disclosures", await listRes.text());
+            process.exit(1);
+          }
+
+          const disclosures = await listRes.json();
+          console.log(`Disclosures pending extraction: ${disclosures.length}`);
+          if (disclosures.length === 0) process.exit(0);
+
+          const { spawnSync } = await import("child_process");
+          const fs = await import("fs");
+          const os = await import("os");
+          const path = await import("path");
+
+          let extracted = 0;
+          let failed = 0;
+          for (const d of disclosures) {
+            const tmpPdf = path.join(os.tmpdir(), `disclosure_${d.id}.pdf`);
+            const tmpTxt = path.join(os.tmpdir(), `disclosure_${d.id}.txt`);
+            try {
+              const signRes = await fetch(
+                `${restUrl}/storage/v1/object/sign/disclosures/${d.storage_path}`,
+                { method: "POST", headers, body: JSON.stringify({ expiresIn: 120 }) }
+              );
+              if (!signRes.ok) throw new Error(`sign_failed:${await signRes.text()}`);
+
+              const signed = await signRes.json();
+              const signedUrl = signed.signedURL?.startsWith("http")
+                ? signed.signedURL
+                : `${restUrl}${signed.signedURL}`;
+              if (!signedUrl) throw new Error("sign_failed:missing_signed_url");
+
+              const dlResult = spawnSync("curl", ["-sLf", signedUrl, "-o", tmpPdf], { encoding: "utf8" });
+              if (dlResult.status !== 0) throw new Error(`download_failed:${dlResult.stderr}`);
+
+              const ptResult = spawnSync("pdftotext", ["-layout", tmpPdf, tmpTxt], { encoding: "utf8" });
+              if (ptResult.status !== 0) throw new Error(`pdftotext_failed:${ptResult.stderr}`);
+
+              const text = fs.readFileSync(tmpTxt, "utf8");
+              const patchRes = await fetch(
+                `${restUrl}/rest/v1/disclosures?id=eq.${d.id}`,
+                { method: "PATCH", headers, body: JSON.stringify({ extracted_text: text }) }
+              );
+              if (!patchRes.ok) throw new Error(`patch_failed:${await patchRes.text()}`);
+
+              console.log(`extracted id=${d.id} chars=${text.length}`);
+              extracted++;
+            } catch (err) {
+              console.error(`failed id=${d.id} reason=${err instanceof Error ? err.message : String(err)}`);
+              failed++;
+            } finally {
+              fs.rmSync(tmpPdf, { force: true });
+              fs.rmSync(tmpTxt, { force: true });
+            }
+          }
+
+          console.log(`Summary: extracted=${extracted} failed=${failed}`);
+          NODE
+  parse:
+    runs-on: ubuntu-latest
+    needs: extract
+    if: always()
+    steps:
+      - name: Invoke process-jobs (parse only)
+        env:
+          SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PROCESS_BATCH_SIZE: ${{ inputs.process_batch_size || vars.PROCESS_JOBS_BATCH_SIZE || '5' }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const response = await fetch(`${process.env.SUPABASE_FUNCTION_URL}/process-jobs`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              batch_size: Number(process.env.PROCESS_BATCH_SIZE || "5"),
+              supported_types: ["parse_disclosure_pdf_ai"]
+            })
           });
           const text = await response.text();
           console.log(text);
