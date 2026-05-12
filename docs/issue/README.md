@@ -14,14 +14,13 @@ docs/issue/
 
 ## 미해결 이슈 (Open)
 
-| 이슈 | 우선순위 | 유형 | 생성일 | 처리 플랜 |
-|------|---------|------|--------|----------|
-| [종목 검색 라우트 누락](active/20260510-missing-stock-search-route-for-alert-entry.md) | high | feature | 2026-05-10 | Phase 02 |
+미해결 이슈 없음.
 
 ## 해결된 이슈 (Recently Resolved)
 
 | 이슈 | 유형 | 해결일 |
 |------|------|--------|
+| [종목 검색 라우트 누락](archive/20260510-missing-stock-search-route-for-alert-entry.md) | feature | 2026-05-12 |
 | [캘린더 기준 전환 UI가 MVP 정책과 충돌](archive/20260510-calendar-basis-switch-mvp-scope-mismatch.md) | bug | 2026-05-12 |
 | [알림 기준 UI가 MVP 단일 기준 정책과 충돌](archive/20260510-notification-rule-basis-mvp-scope-mismatch.md) | bug | 2026-05-12 |
 | [알림 평가 yield 불일치](archive/20260510-notification-evaluation-yield-mismatch.md) | bug | 2026-05-12 |
