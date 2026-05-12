@@ -106,11 +106,8 @@ export default async function StockDetailPage({ params }: PageProps) {
               <div key={idx} className="flex items-center justify-between p-4">
                 <div>
                   <p className="text-sm font-medium">
-                    {evt.expectedPaymentDate
-                      ? evt.expectedPaymentDate.replace(
-                          /^(\d{4})-(\d{2})-(\d{2})$/,
-                          "$1年$2月$3日"
-                        )
+                    {evt.expectedPaymentYear !== null && evt.expectedPaymentMonth !== null
+                      ? `${evt.expectedPaymentYear}年${evt.expectedPaymentMonth}月`
                       : evt.expectedPaymentMonth !== null
                         ? `${evt.expectedPaymentMonth}月予定`
                         : "未定"}

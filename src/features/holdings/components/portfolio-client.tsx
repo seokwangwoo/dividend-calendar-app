@@ -66,7 +66,7 @@ function getApprovedAnnualDividendPerShare(
       ?.filter(
         (event) =>
           event.review_status === "approved" &&
-          event.payment_year === year &&
+          event.expected_payment_year === year &&
           event.dividend_per_share != null
       )
       .reduce((sum, event) => sum + Number(event.dividend_per_share), 0) ?? 0;

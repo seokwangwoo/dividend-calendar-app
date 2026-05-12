@@ -7,7 +7,7 @@ export type HoldingRow = Database["public"]["Tables"]["holdings"]["Row"];
 export interface HoldingWithStock extends HoldingRow {
   stock: StockRow & {
     dividend_events?: Array<{
-      payment_year: number | null;
+      expected_payment_year: number | null;
       dividend_per_share: number | null;
       review_status: Database["public"]["Enums"]["review_status"];
     }>;
@@ -31,7 +31,7 @@ export async function getHoldings(
   let query = supabase
     .from("holdings")
     .select(
-      "*, stock:stocks(*, dividend_events(payment_year, dividend_per_share, review_status))"
+      "*, stock:stocks(*, dividend_events(expected_payment_year, dividend_per_share, review_status))"
     )
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
@@ -57,7 +57,7 @@ export async function getHoldingById(
   const { data, error } = await supabase
     .from("holdings")
     .select(
-      "*, stock:stocks(*, dividend_events(payment_year, dividend_per_share, review_status))"
+      "*, stock:stocks(*, dividend_events(expected_payment_year, dividend_per_share, review_status))"
     )
     .eq("id", holdingId)
     .is("deleted_at", null)

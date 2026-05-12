@@ -359,14 +359,14 @@ describe("ex-dividend calendar excludes null ex_dividend_date rows", () => {
           dividendSchedule: [
             {
               eventType: "year_end",
-              expectedPaymentDate: "2026-06-20",
-              expectedPaymentMonth: null,
+              expectedPaymentYear: 2026,
+              expectedPaymentMonth: 6,
               dividendPerShare: 100,
               status: "confirmed"
             },
             {
               eventType: "interim",
-              expectedPaymentDate: null,
+              expectedPaymentYear: null,
               expectedPaymentMonth: 12,
               dividendPerShare: 100,
               status: "estimated",
@@ -385,14 +385,14 @@ describe("ex-dividend calendar excludes null ex_dividend_date rows", () => {
 
     const interimEvent = result?.dividendSchedule?.find(
       (e: { eventType: string }) => e.eventType === "interim"
-    ) as { exDividendDate?: string | null; expectedPaymentDate: string | null } | undefined;
+    ) as { exDividendDate?: string | null; expectedPaymentYear: number | null } | undefined;
 
     // The query layer must not synthesize an ex_dividend_date
     if (interimEvent && "exDividendDate" in interimEvent) {
       expect(interimEvent.exDividendDate).toBeNull();
     }
-    // expectedPaymentDate remains null for month-only events
-    expect(interimEvent?.expectedPaymentDate).toBeNull();
+    // expectedPaymentYear remains null for month-only events
+    expect(interimEvent?.expectedPaymentYear).toBeNull();
   });
 
   it("calendar RPC with ex_dividend_date basis excludes events where ex_dividend_date is null (RPC contract)", async () => {
