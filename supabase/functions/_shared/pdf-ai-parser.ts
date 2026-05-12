@@ -7,6 +7,7 @@
  */
 
 import { JobHandlerError, resolvePayloadString, type JobRow, type JsonRecord } from "./process-jobs.ts";
+import { isPositionedTextItem, type PositionedTextItem, extractStructuredPageText } from "./pdf-table-extractor.ts";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -558,20 +559,17 @@ async function extractTextWithPdfjs(pdfBytes: Uint8Array): Promise<string> {
         disableCombineTextItems: false
       });
 
-      const pageLines: string[] = [];
-      for (const item of content.items) {
-        if (!isTextContentItem(item)) continue;
-        const text = item.str?.trim();
-        if (!text) continue;
-        pageLines.push(text);
-        if (item.hasEOL) {
-          pageLines.push("\n");
-        } else {
-          pageLines.push(" ");
-        }
-      }
+      const positionedItems: PositionedTextItem[] = content.items
+        .filter(isPositionedTextItem)
+        .map((item) => ({
+          str: item.str,
+          x: item.transform?.[4] ?? 0,
+          y: item.transform?.[5] ?? 0,
+          width: item.width ?? 0,
+          hasEOL: item.hasEOL ?? false,
+        }));
 
-      const pageText = pageLines.join("").replace(/[ \t]+\n/g, "\n").replace(/\s+\n/g, "\n").trim();
+      const pageText = extractStructuredPageText(positionedItems).trim();
       if (pageText.length > 0) {
         pageTexts.push(pageText);
       }
@@ -606,12 +604,6 @@ async function loadPdfJsModule(): Promise<PdfJsModule> {
   }
 
   return pdfJsModulePromise;
-}
-
-function isTextContentItem(
-  item: unknown
-): item is { str: string; hasEOL?: boolean | undefined } {
-  return typeof item === "object" && item !== null && "str" in item && typeof (item as { str?: unknown }).str === "string";
 }
 
 function extractTextFromPdfLegacy(pdfBytes: Uint8Array): string {
