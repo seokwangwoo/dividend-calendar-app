@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -158,9 +158,11 @@ function CompletionScreen({
 }
 
 export function NewHoldingForm({
-  onSearch
+  onSearch,
+  initialStock = null
 }: {
   onSearch: (query: string) => Promise<StockRow[]>;
+  initialStock?: StockRow | null;
 }) {
   const {
     query: searchQuery,
@@ -170,7 +172,17 @@ export function NewHoldingForm({
     clearResults
   } = useStockSearch(onSearch);
 
-  const [selectedStock, setSelectedStock] = useState<StockRow | null>(null);
+  const [selectedStock, setSelectedStock] = useState<StockRow | null>(initialStock);
+
+  // Pre-populate search query display when initial stock is provided
+  useEffect(() => {
+    if (initialStock) {
+      setSearchQuery(initialStock.name);
+    }
+    // Only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [quantity, setQuantity] = useState("");
   const [averagePurchasePrice, setAveragePurchasePrice] = useState("");
   const [accountType, setAccountType] = useState<AccountType>("tokutei");

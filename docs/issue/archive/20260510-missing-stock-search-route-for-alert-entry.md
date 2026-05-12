@@ -1,7 +1,8 @@
 ---
-status: open
+status: resolved
 type: feature
 created: 2026-05-10
+resolved: 2026-05-12
 priority: high
 labels: [ui, routing, mvp-scope, notifications, stock-search]
 ---

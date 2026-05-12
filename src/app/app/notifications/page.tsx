@@ -141,6 +141,8 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
         <EmptyState
           title="通知はありません"
           description="目標利回りや配当情報の更新があるとここに表示されます。"
+          actionHref="/app/stocks/search"
+          actionLabel="알림을 설정할 종목 찾기"
         />
       ) : (
         <div className="space-y-5">

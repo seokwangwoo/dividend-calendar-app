@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { getHoldings, getPortfolioSummary } from "@/features/holdings/queries";
 import { PortfolioClient } from "@/features/holdings/components/portfolio-client";
@@ -17,6 +18,12 @@ export default async function PortfolioPage() {
         actionHref="/app/portfolio/new"
         actionLabel="+ 銘柄追加"
       >
+        <Link
+          href="/app/stocks/search"
+          className="inline-flex h-10 shrink-0 items-center rounded-md border border-line bg-white px-4 text-sm font-semibold text-ink hover:bg-paper"
+        >
+          종목 검색
+        </Link>
         <CsvImportSection />
       </PageHeader>
       <PortfolioClient
