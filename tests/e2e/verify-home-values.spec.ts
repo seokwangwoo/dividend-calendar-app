@@ -34,16 +34,7 @@ function formatJpy(amount: number | null): string {
   }).format(amount);
 }
 
-// Calculate helper event payment date (now + 7 days) — KDDI event date
-// Use UTC date string to match what createApprovedDividendEvent stores via toISOString().slice(0, 10)
-const helperPaymentDateStr = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-  .toISOString()
-  .slice(0, 10); // "YYYY-MM-DD" in UTC
-const [hYear, hMonth, hDay] = helperPaymentDateStr.split("-");
-const helperDateText = `${hYear}年${hMonth}月${hDay}日`;
-
-// JT event payment date (now + 14 days) — must be later than KDDI so KDDI is shown as next dividend
-const jtPaymentDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+const helperDateText = `${CURRENT_YEAR}年${CURRENT_MONTH}月`;
 
 test.beforeAll(async () => {
   kddi = await getStockByTicker("9433");
@@ -66,24 +57,23 @@ test.beforeAll(async () => {
   await createHolding(userA.id, kddi.id, 100, 4300, "nisa");
   await createHolding(userA.id, jt.id, 100, 3800, "tokutei");
 
-  // KDDI event via helper (expected_payment_date = now + 7 days)
+  // KDDI event via helper (current expected payment year/month)
   const kddiEventId = await createApprovedDividendEvent(kddi.id);
   createdEventIds.push(kddiEventId);
 
-  // JT event — payment date is now + 14 days (later than KDDI's now + 7 days)
-  const jtPaymentDateStr = jtPaymentDate.toISOString().slice(0, 10);
-  const jtPaymentMonth = jtPaymentDate.getMonth() + 1;
-  const jtPaymentYear = jtPaymentDate.getFullYear();
+  // JT event — same expected payment month as KDDI; larger after-tax amount wins the month-level next-dividend tie.
+  const jtPaymentMonth = CURRENT_MONTH;
+  const jtPaymentYear = CURRENT_YEAR;
   const { data: jtEventData } = await admin
     .from("dividend_events")
     .insert({
       stock_id: jt.id,
       fiscal_year: CURRENT_YEAR,
-      payment_year: jtPaymentYear,
+      expected_payment_year: jtPaymentYear,
+      fiscal_month: null,
       event_type: "year_end",
       dividend_per_share: 194,
       expected_payment_month: jtPaymentMonth,
-      expected_payment_date: jtPaymentDateStr,
       status: "confirmed",
       review_status: "approved",
       source_type: "e2e",
@@ -146,16 +136,16 @@ test("home screen shows next dividend card with exact values", async ({ page }) 
 
   const nextCard = page.locator("div").filter({ hasText: "次の配当" }).first();
   await expect(nextCard).toBeVisible();
-  await expect(nextCard.getByText(kddi.name, { exact: true }).first()).toBeVisible();
-  await expect(nextCard.getByText(kddi.ticker).first()).toBeVisible();
+  await expect(nextCard.getByText(jt.name, { exact: true }).first()).toBeVisible();
+  await expect(nextCard.getByText(jt.ticker).first()).toBeVisible();
 
   // Status label mapping: confirmed -> 確定
   await expect(nextCard.getByText("確定").first()).toBeVisible();
 
-  // KDDI: before_tax = 150 * 100 = 15,000, after_tax = 15,000 (NISA)
-  await expect(nextCard.getByText(`税引後 ${formatJpy(15000)}`).first()).toBeVisible();
-  await expect(nextCard.getByText(`税引前 ${formatJpy(15000)}`).first()).toBeVisible();
-  // Payment date
+  // JT: before_tax = 194 * 100 = 19,400, after_tax = 15,458.89 (tokutei)
+  await expect(nextCard.getByText(`税引後 ${formatJpy(15458.89)}`).first()).toBeVisible();
+  await expect(nextCard.getByText(`税引前 ${formatJpy(19400)}`).first()).toBeVisible();
+  // Payment year/month
   await expect(nextCard.getByText(helperDateText).first()).toBeVisible();
 });
 

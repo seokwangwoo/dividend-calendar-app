@@ -163,14 +163,14 @@ describe("review Edge Functions", () => {
 
     const response = await invokeReviewFunction("approve-dividend-review", adminClient, {
       reviewId,
-      override: { paymentYear: YEAR }
+      override: { expectedPaymentYear: YEAR }
     });
     const body = await response.json();
 
     expect(response.status, JSON.stringify(body)).toBe(200);
     expect(body).toMatchObject({
       dividendEventId: expect.any(String),
-      paymentYear: YEAR
+      expectedPaymentYear: YEAR
     });
     eventIds.push(body.dividendEventId);
 
@@ -188,12 +188,12 @@ describe("review Edge Functions", () => {
 
     const { data: event } = await admin
       .from("dividend_events")
-      .select("review_status, payment_year, dividend_per_share")
+      .select("review_status, expected_payment_year, dividend_per_share")
       .eq("id", body.dividendEventId)
       .single();
     expect(event).toMatchObject({
       review_status: "approved",
-      payment_year: YEAR,
+      expected_payment_year: YEAR,
       dividend_per_share: 123
     });
   });
@@ -237,7 +237,7 @@ describe("review Edge Functions", () => {
 
     const response = await invokeReviewFunction("approve-dividend-review", userClient, {
       reviewId,
-      override: { paymentYear: YEAR }
+      override: { expectedPaymentYear: YEAR }
     });
     const body = await response.json();
 

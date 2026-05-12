@@ -58,7 +58,8 @@ test("full pipeline from disclosure to user reflection", async ({ page }) => {
     eventType: "year_end",
     changeType: "increase",
     extractedDividendPerShare: 180,
-    extractedPaymentDate: `${new Date().getFullYear() + 1}-06-15`,
+    extractedPaymentYear: new Date().getFullYear() + 1,
+    extractedPaymentMonth: 6,
     status: "pending"
   });
   const revAnnualTotal = await createReview({

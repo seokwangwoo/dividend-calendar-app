@@ -202,7 +202,7 @@ describe("get_home_summary RPC", () => {
       const e1 = await createTestDividendEvent({
         stockId,
         fiscalYear: ISOLATED_YEAR,
-        paymentYear: ISOLATED_YEAR,
+        expectedPaymentYear: ISOLATED_YEAR,
         dividendPerShare: 5000,
         expectedPaymentMonth: CURRENT_MONTH,
         reviewStatus: "pending",
@@ -210,7 +210,7 @@ describe("get_home_summary RPC", () => {
       const e2 = await createTestDividendEvent({
         stockId,
         fiscalYear: ISOLATED_YEAR,
-        paymentYear: ISOLATED_YEAR,
+        expectedPaymentYear: ISOLATED_YEAR,
         dividendPerShare: 5000,
         expectedPaymentMonth: CURRENT_MONTH,
         reviewStatus: "rejected",

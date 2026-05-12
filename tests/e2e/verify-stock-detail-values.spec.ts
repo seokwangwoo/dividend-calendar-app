@@ -56,7 +56,7 @@ test.beforeAll(async () => {
     .from("dividend_events")
     .select("id")
     .eq("stock_id", kddi.id)
-    .eq("payment_year", CURRENT_YEAR)
+    .eq("expected_payment_year", CURRENT_YEAR)
     .eq("review_status", "approved")
     .not("source_url", "like", "https://www.release.tdnet.info%");
   if (staleEvents && staleEvents.length > 0) {
@@ -69,11 +69,11 @@ test.beforeAll(async () => {
     .insert({
       stock_id: kddi.id,
       fiscal_year: CURRENT_YEAR,
-      payment_year: CURRENT_YEAR,
+      expected_payment_year: CURRENT_YEAR,
+      fiscal_month: null,
       event_type: "year_end",
       dividend_per_share: 150,
       expected_payment_month: 6,
-      expected_payment_date: `${CURRENT_YEAR}-06-15`,
       status: "confirmed",
       review_status: "approved",
       source_type: "tdnet",
@@ -90,7 +90,7 @@ test.beforeAll(async () => {
     .from("dividend_events")
     .select("dividend_per_share")
     .eq("stock_id", kddi.id)
-    .eq("payment_year", CURRENT_YEAR)
+    .eq("expected_payment_year", CURRENT_YEAR)
     .eq("review_status", "approved")
     .not("dividend_per_share", "is", null);
   expectedAnnualDividendPerShare =
@@ -143,8 +143,8 @@ test("stock detail shows dividend schedule with status labels", async ({ page })
   const scheduleSection = page.locator("section").filter({ hasText: "配当スケジュール" }).first();
   await expect(scheduleSection).toBeVisible();
 
-  // Our manual event: June 15, confirmed
-  await expect(scheduleSection.getByText(`${CURRENT_YEAR}年06月15日`).first()).toBeVisible();
+  // Our manual event: June, confirmed
+  await expect(scheduleSection.getByText(`${CURRENT_YEAR}年6月`).first()).toBeVisible();
 
   // Dividend per share for our event (use exact match to avoid matching other ¥150)
   await expect(scheduleSection.getByText(`${formatJpy(150)}/株`, { exact: true }).first()).toBeVisible();
