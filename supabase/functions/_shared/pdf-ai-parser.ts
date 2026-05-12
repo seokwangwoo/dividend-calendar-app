@@ -50,6 +50,7 @@ export type DisclosureForParse = {
   published_at: string | null;
   ai_parse_attempts: number;
   raw_payload: JsonRecord;
+  extracted_text?: string | null;
   stocks?: {
     ticker: string | null;
     name?: string | null;
@@ -1930,17 +1931,6 @@ export async function executeParseDisclosurePdfAi(
     ""
   );
 
-  // Download PDF bytes from storage
-  let pdfBytes: Uint8Array;
-  try {
-    pdfBytes = await deps.downloadPdf(disclosure.storage_path);
-  } catch (error) {
-    throw new JobHandlerError(
-      `pdf_download_failed:${error instanceof Error ? error.message : String(error)}`,
-      { cause: error }
-    );
-  }
-
   // Build prompt
   const disclosureType = disclosure.disclosure_type ?? "other";
   const stockTicker = resolveDisclosureTicker(disclosure);
@@ -1949,7 +1939,32 @@ export async function executeParseDisclosurePdfAi(
     normalizeSourceType(disclosure.source_type) ?? normalizeSourceType(disclosure.raw_payload?.source_type) ?? "unknown";
 
   // Extract text / determine input method, passing disclosure type for smarter section trimming
-  const textExtraction = await prepareTextForAI(pdfBytes, disclosureType);
+  let pdfBytes: Uint8Array | null = null;
+  let textExtraction: TextExtractionResult;
+  if (disclosure.extracted_text && disclosure.extracted_text.trim().length > 0) {
+    const earningsRelease =
+      disclosureType === "earnings_release" || disclosureType === "earnings_revision";
+    const { trimmedText, sectionTrimmed } = trimToDividendSections(
+      disclosure.extracted_text,
+      { earningsRelease }
+    );
+    textExtraction = {
+      text: isTextUsable(trimmedText) ? trimmedText : disclosure.extracted_text,
+      method: "extracted_text",
+      sectionTrimmed,
+      fallbackReason: null
+    };
+  } else {
+    try {
+      pdfBytes = await deps.downloadPdf(disclosure.storage_path);
+    } catch (error) {
+      throw new JobHandlerError(
+        `pdf_download_failed:${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
+      );
+    }
+    textExtraction = await prepareTextForAI(pdfBytes, disclosureType);
+  }
   const prompt = buildPromptForDisclosure({
     context: {
       stockTicker,

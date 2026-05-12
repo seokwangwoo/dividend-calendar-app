@@ -17,7 +17,13 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 
-function createMockQuery(result: any) {
+function createMockQuery(
+  result: any,
+  singleResult: any = {
+    data: { expected_annual_dividend_per_share: 120 },
+    error: null
+  }
+) {
   const self: any = {
     select: vi.fn(() => self),
     insert: vi.fn(() => self),
@@ -25,6 +31,7 @@ function createMockQuery(result: any) {
     eq: vi.fn(() => self),
     order: vi.fn(() => self),
     limit: vi.fn(() => self),
+    single: vi.fn(() => Promise.resolve(singleResult)),
     then: (resolve: any, reject: any) =>
       Promise.resolve(result).then(resolve, reject)
   };
@@ -148,7 +155,13 @@ describe("saveNotificationRule", () => {
     mockSupabase.auth.getUser.mockResolvedValue({
       data: { user: { id: "user-1" } }
     });
-    const query = createMockQuery({ error: { message: "DB error" } });
+    const query = createMockQuery(
+      { error: { message: "DB error" } },
+      {
+        data: { expected_annual_dividend_per_share: 120 },
+        error: null
+      }
+    );
     mockSupabase.from.mockReturnValue(query);
     await expect(saveNotificationRule(createValidFormData())).rejects.toThrow(
       "DB error"

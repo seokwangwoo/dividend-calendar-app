@@ -114,14 +114,14 @@ describe("createHolding", () => {
       error: { message: "Stock not found" }
     });
     await expect(createHolding(makeFormData(validData))).rejects.toThrow(
-      "Stock not found"
+      "銘柄が見つかりません"
     );
     expect(mockSupabase.from).toHaveBeenCalledWith("stocks");
     expect(mockSupabase.select).toHaveBeenCalledWith("id, support_status");
     expect(mockSupabase.eq).toHaveBeenCalledWith("id", validData.stockId);
   });
 
-  it("throws when stock support_status is not supported", async () => {
+  it("allows stocks with unsupported support_status", async () => {
     mockSupabase.auth.getUser.mockResolvedValue({
       data: { user: { id: "user-1" } }
     });
@@ -129,9 +129,9 @@ describe("createHolding", () => {
       data: { id: validData.stockId, support_status: "unsupported" },
       error: null
     });
-    await expect(createHolding(makeFormData(validData))).rejects.toThrow(
-      "This stock is not supported in the current MVP."
-    );
+    mockSupabase.insert.mockResolvedValue({ data: null, error: null });
+    await createHolding(makeFormData(validData));
+    expect(revalidatePath).toHaveBeenCalledWith("/app/portfolio");
   });
 
   it("throws on insert error", async () => {
