@@ -117,20 +117,37 @@ Deno.serve(async (req: Request) => {
 
     // 2. If no jobs exist, create chunk jobs for all non-delisted stocks
     if (!existingJobs || existingJobs.length === 0) {
-      const { data: stocks, error: stocksError } = await client
-        .from("stocks")
-        .select("id, ticker")
-        .in("support_status", ["supported", "unsupported"])
-        .order("ticker");
+      // Paginate to bypass PostgREST 1,000 row default limit
+      const allStocks: { id: string; ticker: string }[] = [];
+      const pageSize = 1000;
+      let page = 0;
+      let hasMore = true;
 
-      if (stocksError) {
-        throw new Error(`Failed to fetch stocks: ${stocksError.message}`);
+      while (hasMore) {
+        const { data: stocks, error: stocksError } = await client
+          .from("stocks")
+          .select("id, ticker")
+          .in("support_status", ["supported", "unsupported"])
+          .order("ticker")
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (stocksError) {
+          throw new Error(`Failed to fetch stocks (page ${page}): ${stocksError.message}`);
+        }
+
+        if (stocks && stocks.length > 0) {
+          allStocks.push(...stocks);
+          hasMore = stocks.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
       }
 
       const chunkSize = Number(Deno.env.get("PRICE_REFRESH_CHUNK_SIZE") ?? "50");
       const chunks: Array<{ stock_id: string; ticker: string }[]> = [];
-      for (let i = 0; i < (stocks ?? []).length; i += chunkSize) {
-        chunks.push((stocks ?? []).slice(i, i + chunkSize));
+      for (let i = 0; i < allStocks.length; i += chunkSize) {
+        chunks.push(allStocks.slice(i, i + chunkSize));
       }
 
       const jobInserts = chunks.map((chunk, index) => ({
@@ -219,7 +236,6 @@ Deno.serve(async (req: Request) => {
     }
 
     const payloadTickers: string[] = jobToRun.payload?.tickers ?? [];
-    const delayMs = Number(Deno.env.get("STOOQ_REQUEST_DELAY_MS") ?? "200");
 
     // Fetch stock IDs for the tickers in this chunk
     const { data: stockRows, error: stockQueryError } = await client
@@ -233,88 +249,137 @@ Deno.serve(async (req: Request) => {
 
     const stockMap = new Map(stockRows?.map((s) => [s.ticker, s.id]) ?? []);
 
-    // 5. Process each ticker in the chunk
-    for (const ticker of payloadTickers) {
-      const stockId = stockMap.get(ticker);
-      if (!stockId) {
-        result.errors.push(`${ticker}: stock not found in DB`);
-        result.failedTickers.push(ticker);
-        continue;
-      }
+    // Collect batch data to minimize DB round trips
+    const stockUpdates: { id: string; current_price: number; price_updated_at: string; updated_at: string }[] = [];
+    const successLogs: { stock_id: string; status: "success"; new_price: number }[] = [];
+    const failureLogs: { stock_id: string; status: "failure"; error_message: string }[] = [];
 
+    const now = new Date().toISOString();
+    const foundTickers = new Set<string>();
+
+    // Build Stooq symbols and fetch all at once via CSV batch API
+    const stooqSymbols = payloadTickers
+      .map((t) => stockMap.has(t) ? `${t}.JP` : null)
+      .filter((s): s is string => s !== null);
+
+    if (stooqSymbols.length === 0) {
+      result.errors.push("No valid symbols to query");
+    } else {
+      // 1) Try Stooq
       try {
-        const url = `https://stooq.com/q/l/?s=${ticker}.JP&f=sd2t2ohlcv&h&e=json`;
-        const res = await fetch(url, { method: "GET" });
+        const url = `https://stooq.com/q/l/?s=${stooqSymbols.join("+")}&f=sd2t2ohlcv&h&e=csv`;
+        const res = await fetch(url, {
+          method: "GET",
+          signal: AbortSignal.timeout(5000),
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; DividendCalendarBot/1.0)" }
+        });
 
-        if (res.status === 429) {
-          throw new RetryableError(`Stooq rate limit (429) for ${ticker}`);
-        }
         if (!res.ok) {
-          throw new Error(`Stooq HTTP ${res.status} for ${ticker}`);
+          result.errors.push(`Stooq HTTP ${res.status} - will try Yahoo Finance`);
+        } else {
+          const csvBody = await res.text();
+          const lines = csvBody.split(/\r?\n/);
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.toLowerCase().startsWith("symbol")) continue;
+
+            const parts = trimmed.split(",");
+            if (parts.length < 6) continue;
+
+            const symbol = parts[0].trim();
+            const closeStr = parts[5].trim();
+            const tickerMatch = symbol.match(/^(\d{4})\.JP$/i);
+            if (!tickerMatch) continue;
+
+            const ticker = tickerMatch[1];
+            const stockId = stockMap.get(ticker);
+            if (!stockId) continue;
+
+            const closePrice = Number(closeStr);
+            if (!Number.isFinite(closePrice) || closePrice <= 0) {
+              result.errors.push(`${ticker}: Stooq invalid price ${closeStr}`);
+              continue;
+            }
+
+            stockUpdates.push({ id: stockId, current_price: closePrice, price_updated_at: now, updated_at: now });
+            successLogs.push({ stock_id: stockId, status: "success", new_price: closePrice });
+            result.processed++;
+            foundTickers.add(ticker);
+          }
         }
+      } catch (stooqErr) {
+        result.errors.push(`Stooq error: ${stooqErr instanceof Error ? stooqErr.message : String(stooqErr)} - will try Yahoo Finance`);
+      }
 
-        const data: StooqResponse = await res.json();
-        const symbolData = data.symbols?.[0];
-
-        if (!symbolData || !symbolData.close) {
-          throw new Error(`Invalid Stooq response for ${ticker}`);
-        }
-
-        const closePrice = Number(symbolData.close);
-        if (!Number.isFinite(closePrice) || closePrice <= 0) {
-          throw new Error(`Invalid close price for ${ticker}: ${symbolData.close}`);
-        }
-
-        // Update stock price
-        const { error: updateError } = await client
-          .from("stocks")
-          .update({
-            current_price: closePrice,
-            price_updated_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+      // 2) Yahoo Finance chart API fallback (parallel, per-ticker) for tickers not yet found
+      const missingTickers = payloadTickers.filter((t) => stockMap.has(t) && !foundTickers.has(t));
+      if (missingTickers.length > 0) {
+        const yfResults = await Promise.allSettled(
+          missingTickers.map(async (ticker) => {
+            const url = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}.T?interval=1d&range=1d`;
+            const res = await fetch(url, {
+              signal: AbortSignal.timeout(12000),
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept": "application/json"
+              }
+            });
+            if (!res.ok) throw new Error(`Yahoo Finance HTTP ${res.status} for ${ticker}`);
+            const data = await res.json();
+            const price: unknown = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
+            if (typeof price !== "number" || price <= 0) throw new Error(`Yahoo Finance invalid price for ${ticker}`);
+            return { ticker, price };
           })
-          .eq("id", stockId);
+        );
 
-        if (updateError) {
-          throw new Error(`DB update failed for ${ticker}: ${updateError.message}`);
-        }
-
-        // Log success
-        const { error: logError } = await client.from("stock_price_refresh_logs").insert({
-          stock_id: stockId,
-          status: "success",
-          new_price: closePrice
-        });
-
-        if (logError) {
-          result.errors.push(`${ticker} log insert: ${logError.message}`);
-        }
-
-        result.processed++;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        result.errors.push(`${ticker}: ${message}`);
-        result.failedTickers.push(ticker);
-
-        // Log failure
-        const { error: logError } = await client.from("stock_price_refresh_logs").insert({
-          stock_id: stockId,
-          status: "failure",
-          error_message: message
-        });
-
-        if (logError) {
-          result.errors.push(`${ticker} log insert: ${logError.message}`);
-        }
-
-        // If retryable, abort the chunk so it can be retried
-        if (err instanceof RetryableError) {
-          throw err;
+        for (const settled of yfResults) {
+          if (settled.status === "rejected") {
+            result.errors.push(`Yahoo Finance error: ${settled.reason instanceof Error ? settled.reason.message : String(settled.reason)}`);
+            continue;
+          }
+          const { ticker, price } = settled.value;
+          const stockId = stockMap.get(ticker);
+          if (!stockId) continue;
+          stockUpdates.push({ id: stockId, current_price: price, price_updated_at: now, updated_at: now });
+          successLogs.push({ stock_id: stockId, status: "success", new_price: price });
+          result.processed++;
+          foundTickers.add(ticker);
         }
       }
 
-      // Delay between requests
-      await sleep(delayMs);
+      // 3) Mark tickers not found in either source as failed
+      for (const ticker of payloadTickers) {
+        const stockId = stockMap.get(ticker);
+        if (!stockId || foundTickers.has(ticker)) continue;
+        result.errors.push(`${ticker}: Not found in Stooq or Yahoo Finance`);
+        result.failedTickers.push(ticker);
+        failureLogs.push({ stock_id: stockId, status: "failure", error_message: "Not found in Stooq or Yahoo Finance" });
+      }
+    }
+
+    // Update stock prices in parallel (upsert avoided: NOT NULL columns not included)
+    if (stockUpdates.length > 0) {
+      await Promise.all(
+        stockUpdates.map(async ({ id, current_price, price_updated_at, updated_at }) => {
+          const { error } = await client
+            .from("stocks")
+            .update({ current_price, price_updated_at, updated_at })
+            .eq("id", id);
+          if (error) {
+            result.errors.push(`Stock update failed for ${id}: ${error.message}`);
+          }
+        })
+      );
+    }
+
+    // Batch insert logs
+    const allLogs = [...successLogs, ...failureLogs];
+    if (allLogs.length > 0) {
+      const { error: logError } = await client.from("stock_price_refresh_logs").insert(allLogs);
+      if (logError) {
+        result.errors.push(`Batch log insert failed: ${logError.message}`);
+      }
     }
 
     // 6. Mark job as completed

@@ -24,14 +24,28 @@ async function getAdminClient(req: Request) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const apiSecret = Deno.env.get("API_SECRET");
 
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
     throw new Error("Missing Supabase environment");
   }
 
-  const authorization = req.headers.get("Authorization") ?? "";
+  const authHeader = req.headers.get("Authorization");
+
+  // Server-to-server auth: accept service role key or API secret
+  if (
+    authHeader === `Bearer ${serviceRoleKey}` ||
+    (apiSecret && authHeader === `Bearer ${apiSecret}`)
+  ) {
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    return { client: admin, userId: "service_role", error: null };
+  }
+
+  // Fall back to user JWT authentication
   const client = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authorization } },
+    global: { headers: { Authorization: authHeader ?? "" } },
     auth: { persistSession: false, autoRefreshToken: false }
   });
   const { data, error } = await client.auth.getUser();
@@ -229,19 +243,29 @@ Deno.serve(async (req: Request) => {
 
   try {
     // Fetch existing stocks for both dry-run and actual run to compute preview
+    // Batch .in() queries to avoid PostgREST URL length limits
     const tickers = rows.map((r) => r.ticker);
-    const { data: existingStocks, error: existingError } = await client
-      .from("stocks")
-      .select("id, ticker, support_status, name, market_segment")
-      .in("ticker", tickers);
+    const BATCH_SIZE = 1000;
+    const existingStocks: { id: string; ticker: string; support_status: string; name: string | null; market_segment: string | null }[] = [];
 
-    if (existingError) {
-      result.errors.push(`Failed to fetch existing stocks: ${existingError.message}`);
-      result.failedCount = rows.length;
-      throw new Error("Abort: cannot safely upsert without reading existing stocks");
+    for (let i = 0; i < tickers.length; i += BATCH_SIZE) {
+      const batch = tickers.slice(i, i + BATCH_SIZE);
+      const { data: batchData, error: batchError } = await client
+        .from("stocks")
+        .select("id, ticker, support_status, name, market_segment")
+        .in("ticker", batch);
+
+      if (batchError) {
+        result.errors.push(`Failed to fetch existing stocks (batch ${i / BATCH_SIZE + 1}): ${batchError.message}`);
+        result.failedCount = rows.length;
+        throw new Error("Abort: cannot safely upsert without reading existing stocks");
+      }
+      if (batchData) {
+        existingStocks.push(...batchData);
+      }
     }
 
-    existingMap = new Map(existingStocks?.map((s) => [s.ticker, s]) ?? []);
+    existingMap = new Map(existingStocks.map((s) => [s.ticker, s]));
 
     // Compute inserts vs updates
     for (const row of rows) {
@@ -272,40 +296,50 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!dryRun) {
-      // Perform actual upserts
-      for (const row of rows) {
-        const existing = existingMap.get(row.ticker);
-        const upsertData = {
-          ticker: row.ticker,
-          name: row.name,
-          market_segment: row.marketSegment || null,
-          exchange: "TSE",
-          support_status: existing?.support_status ?? "unsupported"
-        };
+      // Batch upserts to avoid hitting worker resource limits
+      const UPSERT_BATCH_SIZE = 500;
+      for (let i = 0; i < rows.length; i += UPSERT_BATCH_SIZE) {
+        const batch = rows.slice(i, i + UPSERT_BATCH_SIZE).map((row) => {
+          const existing = existingMap.get(row.ticker);
+          return {
+            ticker: row.ticker,
+            name: row.name,
+            market_segment: row.marketSegment || null,
+            exchange: "TSE",
+            support_status: existing?.support_status ?? "unsupported"
+          };
+        });
 
         const { error: upsertError } = await client
           .from("stocks")
-          .upsert(upsertData, { onConflict: "ticker" });
+          .upsert(batch, { onConflict: "ticker" });
 
         if (upsertError) {
-          result.failedCount++;
-          result.errors.push(`${row.ticker}: ${upsertError.message}`);
+          result.failedCount += batch.length;
+          result.errors.push(`Batch ${i / UPSERT_BATCH_SIZE + 1} upsert: ${upsertError.message}`);
         }
       }
 
-      // Perform actual delisting
+      // Batch delisting to avoid hitting worker resource limits
       if (allDbStocks) {
         const csvTickerSet = new Set(rows.map((r) => r.ticker));
+        const delistIds: string[] = [];
         for (const dbStock of allDbStocks) {
           if (!csvTickerSet.has(dbStock.ticker) && dbStock.support_status !== "delisted") {
-            const { error: delistError } = await client
-              .from("stocks")
-              .update({ support_status: "delisted" })
-              .eq("id", dbStock.id);
+            delistIds.push(dbStock.id);
+          }
+        }
 
-            if (delistError) {
-              result.errors.push(`${dbStock.ticker} delist: ${delistError.message}`);
-            }
+        const DELIST_BATCH_SIZE = 500;
+        for (let i = 0; i < delistIds.length; i += DELIST_BATCH_SIZE) {
+          const batch = delistIds.slice(i, i + DELIST_BATCH_SIZE);
+          const { error: delistError } = await client
+            .from("stocks")
+            .update({ support_status: "delisted" })
+            .in("id", batch);
+
+          if (delistError) {
+            result.errors.push(`Delist batch ${i / DELIST_BATCH_SIZE + 1}: ${delistError.message}`);
           }
         }
       }

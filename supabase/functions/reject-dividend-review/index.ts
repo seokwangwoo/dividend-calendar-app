@@ -17,6 +17,8 @@ Deno.serve(async (req: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const apiSecret = Deno.env.get("API_SECRET");
+
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
     return new Response(JSON.stringify({ error: "Missing Supabase environment" }), {
       status: 500,
@@ -24,29 +26,49 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const authorization = req.headers.get("Authorization") ?? "";
-  const client = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authorization } },
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
+  const authHeader = req.headers.get("Authorization");
+  let reviewerId: string;
+  let admin: ReturnType<typeof createClient>;
 
-  const { data: userData, error: userError } = await client.auth.getUser();
-  if (userError || !userData.user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+  // Server-to-server auth: accept service role key or API secret
+  if (
+    authHeader === `Bearer ${serviceRoleKey}` ||
+    (apiSecret && authHeader === `Bearer ${apiSecret}`)
+  ) {
+    admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
     });
-  }
+    reviewerId = "service_role";
+  } else {
+    // Fall back to user JWT authentication
+    const client = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader ?? "" } },
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
 
-  const { data: profile } = await client
-    .from("profiles")
-    .select("role, status")
-    .eq("id", userData.user.id)
-    .single();
-  if (profile?.role !== "admin" || profile.status !== "active") {
-    return new Response(JSON.stringify({ error: "Forbidden" }), {
-      status: 403,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    const { data: userData, error: userError } = await client.auth.getUser();
+    if (userError || !userData.user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const { data: profile } = await client
+      .from("profiles")
+      .select("role, status")
+      .eq("id", userData.user.id)
+      .single();
+    if (profile?.role !== "admin" || profile.status !== "active") {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    reviewerId = userData.user.id;
+    admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
     });
   }
 
@@ -55,14 +77,10 @@ Deno.serve(async (req: Request) => {
   // Accept both camelCase (reviewId) and snake_case (review_id) for compatibility
   const reviewId = body.reviewId ?? body.review_id;
 
-  // Service-role client for privileged operations — NEVER exposed to browser
-  const admin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
   const { data, error } = await admin.rpc("reject_dividend_review_for_reviewer", {
     p_review_id:   reviewId,
     p_reason:      body.reason ?? body.rejectionReason ?? "",
-    p_reviewer_id: userData.user.id
+    p_reviewer_id: reviewerId
   });
 
   if (error) {

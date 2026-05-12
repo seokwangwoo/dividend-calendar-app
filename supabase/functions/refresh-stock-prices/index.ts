@@ -182,7 +182,7 @@ Deno.serve(async (req: Request) => {
   const batchSize = 40;
   for (let i = 0; i < symbols.length; i += batchSize) {
     const batch = symbols.slice(i, i + batchSize);
-    const url = `https://stooq.com/q/l/?s=${batch.join(",")}&f=sd2t2ohlcv&h&e=csv`;
+      const url = `https://stooq.com/q/l/?s=${batch.join("+")}&f=sd2t2ohlcv&h&e=csv`;
 
     try {
       const res = await fetch(url, { method: "GET" });

@@ -9,14 +9,28 @@ async function getAdminClient(req: Request) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const apiSecret = Deno.env.get("API_SECRET");
 
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
     throw new Error("Missing Supabase environment");
   }
 
-  const authorization = req.headers.get("Authorization") ?? "";
+  const authHeader = req.headers.get("Authorization");
+
+  // Server-to-server auth: accept service role key or API secret
+  if (
+    authHeader === `Bearer ${serviceRoleKey}` ||
+    (apiSecret && authHeader === `Bearer ${apiSecret}`)
+  ) {
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+    return { client: admin, userId: "service_role", error: null };
+  }
+
+  // Fall back to user JWT authentication
   const client = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authorization } },
+    global: { headers: { Authorization: authHeader ?? "" } },
     auth: { persistSession: false, autoRefreshToken: false }
   });
   const { data, error } = await client.auth.getUser();

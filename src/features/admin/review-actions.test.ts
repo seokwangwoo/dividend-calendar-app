@@ -26,7 +26,8 @@ function buildMockSupabaseWithSession(accessToken = "test-token") {
       getSession: vi.fn().mockResolvedValue({
         data: { session: { access_token: accessToken } }
       })
-    }
+    },
+    rpc: vi.fn()
   };
 }
 
@@ -34,7 +35,8 @@ function buildMockSupabaseNoSession() {
   return {
     auth: {
       getSession: vi.fn().mockResolvedValue({ data: { session: null } })
-    }
+    },
+    rpc: vi.fn()
   };
 }
 
@@ -54,12 +56,14 @@ describe("approveDividendReview", () => {
     await expect(approveDividendReview("review-id")).rejects.toThrow("Redirect: /app/home");
   });
 
-  it("returns error when session is missing", async () => {
+  it("returns error when RPC fails", async () => {
     adminUser();
-    vi.mocked(createClient).mockResolvedValue(buildMockSupabaseNoSession() as any);
+    const mockSupabase = buildMockSupabaseWithSession() as any;
+    mockSupabase.rpc.mockResolvedValue({ error: { message: "review not found" } });
+    vi.mocked(createClient).mockResolvedValue(mockSupabase);
 
     const result = await approveDividendReview("review-id");
-    expect(result).toEqual({ ok: false, error: "未認証" });
+    expect(result).toEqual({ ok: false, error: "review not found" });
   });
 
   it("returns error when override validation fails (negative dividend)", async () => {
@@ -81,45 +85,41 @@ describe("approveDividendReview", () => {
     expect(result).toEqual(expect.objectContaining({ ok: false }));
   });
 
-  it("calls Edge Function and returns ok on success", async () => {
+  it("calls RPC and returns ok on success", async () => {
     adminUser();
-    vi.mocked(createClient).mockResolvedValue(buildMockSupabaseWithSession() as any);
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({ dividendEventId: "event-id" })
-    });
+    const mockSupabase = buildMockSupabaseWithSession() as any;
+    mockSupabase.rpc.mockResolvedValue({ error: null });
+    vi.mocked(createClient).mockResolvedValue(mockSupabase);
 
     const result = await approveDividendReview("review-id", { paymentYear: 2026 });
     expect(result).toEqual({ ok: true });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://test.supabase.co/functions/v1/approve-dividend-review",
-      expect.objectContaining({ method: "POST" })
+    expect(mockSupabase.rpc).toHaveBeenCalledWith(
+      "approve_dividend_review",
+      expect.objectContaining({
+        p_review_id: "review-id",
+        p_override: { paymentYear: 2026 }
+      })
     );
     expect(revalidatePath).toHaveBeenCalledWith("/admin/dividend-reviews");
     expect(revalidatePath).toHaveBeenCalledWith("/app/home");
   });
 
-  it("returns error on Edge Function HTTP error", async () => {
+  it("returns error when RPC returns error", async () => {
     adminUser();
-    vi.mocked(createClient).mockResolvedValue(buildMockSupabaseWithSession() as any);
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({ error: "payment_year required" })
-    });
+    const mockSupabase = buildMockSupabaseWithSession() as any;
+    mockSupabase.rpc.mockResolvedValue({ error: { message: "payment_year required" } });
+    vi.mocked(createClient).mockResolvedValue(mockSupabase);
 
     const result = await approveDividendReview("review-id");
     expect(result).toEqual({ ok: false, error: "payment_year required" });
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
-  it("strips null/empty values from override before sending", async () => {
+  it("strips null/empty values from override before sending to RPC", async () => {
     adminUser();
-    vi.mocked(createClient).mockResolvedValue(buildMockSupabaseWithSession() as any);
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({ dividendEventId: "event-id" })
-    });
+    const mockSupabase = buildMockSupabaseWithSession() as any;
+    mockSupabase.rpc.mockResolvedValue({ error: null });
+    vi.mocked(createClient).mockResolvedValue(mockSupabase);
 
     await approveDividendReview("review-id", {
       paymentYear: 2026,
@@ -127,9 +127,9 @@ describe("approveDividendReview", () => {
       changeType: null
     });
 
-    const bodyArg = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(bodyArg.override).toEqual({ paymentYear: 2026 });
-    expect(bodyArg.override).not.toHaveProperty("dividendPerShare");
+    const rpcCall = mockSupabase.rpc.mock.calls[0];
+    expect(rpcCall[1].p_override).toEqual({ paymentYear: 2026 });
+    expect(rpcCall[1].p_override).not.toHaveProperty("dividendPerShare");
   });
 });
 
@@ -154,40 +154,40 @@ describe("rejectDividendReview", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("returns error when session is missing", async () => {
+  it("returns error when RPC fails", async () => {
     adminUser();
-    vi.mocked(createClient).mockResolvedValue(buildMockSupabaseNoSession() as any);
+    const mockSupabase = buildMockSupabaseWithSession() as any;
+    mockSupabase.rpc.mockResolvedValue({ error: { message: "review not found" } });
+    vi.mocked(createClient).mockResolvedValue(mockSupabase);
 
     const result = await rejectDividendReview("review-id", "bad data");
-    expect(result).toEqual({ ok: false, error: "未認証" });
+    expect(result).toEqual({ ok: false, error: "review not found" });
   });
 
-  it("calls Edge Function and returns ok on success", async () => {
+  it("calls RPC and returns ok on success", async () => {
     adminUser();
-    vi.mocked(createClient).mockResolvedValue(buildMockSupabaseWithSession() as any);
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({ status: "rejected" })
-    });
+    const mockSupabase = buildMockSupabaseWithSession() as any;
+    mockSupabase.rpc.mockResolvedValue({ error: null });
+    vi.mocked(createClient).mockResolvedValue(mockSupabase);
 
     const result = await rejectDividendReview("review-id", "データ不備");
     expect(result).toEqual({ ok: true });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://test.supabase.co/functions/v1/reject-dividend-review",
-      expect.objectContaining({ method: "POST" })
+    expect(mockSupabase.rpc).toHaveBeenCalledWith(
+      "reject_dividend_review",
+      expect.objectContaining({
+        p_review_id: "review-id",
+        p_reason: "データ不備"
+      })
     );
     expect(revalidatePath).toHaveBeenCalledWith("/admin/dividend-reviews");
     expect(revalidatePath).toHaveBeenCalledWith("/app/home");
   });
 
-  it("returns error on Edge Function HTTP error", async () => {
+  it("returns error when RPC returns error", async () => {
     adminUser();
-    vi.mocked(createClient).mockResolvedValue(buildMockSupabaseWithSession() as any);
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({ error: "review already rejected" })
-    });
+    const mockSupabase = buildMockSupabaseWithSession() as any;
+    mockSupabase.rpc.mockResolvedValue({ error: { message: "review already rejected" } });
+    vi.mocked(createClient).mockResolvedValue(mockSupabase);
 
     const result = await rejectDividendReview("review-id", "reason");
     expect(result).toEqual({ ok: false, error: "review already rejected" });

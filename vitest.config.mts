@@ -7,7 +7,13 @@ export default defineConfig({
     environment: "node",
     setupFiles: ["tests/setup.ts"],
     // Integration tests share a remote DB, so keep files sequential.
-    fileParallelism: false
+    fileParallelism: false,
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/.claude/worktrees/**",
+      "**/.worktrees/**"
+    ]
   },
   resolve: {
     alias: {

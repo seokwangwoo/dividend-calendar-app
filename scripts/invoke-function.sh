@@ -27,20 +27,42 @@ while IFS='=' read -r key value; do
 done < "$ENV_FILE"
 
 FUNCTION_NAME="${1:-}"
-PAYLOAD="${2:-{}}"
+PAYLOAD="${2:-\{\}}"
+USE_ADMIN_JWT="false"
+
+if [[ "${3:-}" == "--admin" ]]; then
+  USE_ADMIN_JWT="true"
+fi
 
 if [[ -z "$FUNCTION_NAME" ]]; then
-  echo "Usage: $0 <function-name> [json-payload]" >&2
+  echo "Usage: $0 <function-name> [json-payload] [--admin]" >&2
   echo "Example: $0 process-jobs '{\"batch_size\":10}'" >&2
+  echo "Example: $0 parse-stock-master-csv '{\"filePath\":\"...\"}' --admin" >&2
   exit 1
 fi
 
 SUPABASE_URL="${NEXT_PUBLIC_SUPABASE_URL:-}"
 SERVICE_ROLE_KEY="${SUPABASE_SERVICE_ROLE_KEY:-}"
+ADMIN_JWT="${SUPABASE_ADMIN_JWT:-}"
 
-if [[ -z "$SUPABASE_URL" || -z "$SERVICE_ROLE_KEY" ]]; then
-  echo "ERROR: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set in .env.local" >&2
+if [[ -z "$SUPABASE_URL" ]]; then
+  echo "ERROR: NEXT_PUBLIC_SUPABASE_URL not set in .env.local" >&2
   exit 1
+fi
+
+if [[ "$USE_ADMIN_JWT" == "true" ]]; then
+  if [[ -z "$ADMIN_JWT" ]]; then
+    echo "ERROR: SUPABASE_ADMIN_JWT not set in .env.local" >&2
+    echo "       Run ./scripts/get-admin-jwt.sh to generate one." >&2
+    exit 1
+  fi
+  AUTH_TOKEN="$ADMIN_JWT"
+else
+  if [[ -z "$SERVICE_ROLE_KEY" ]]; then
+    echo "ERROR: SUPABASE_SERVICE_ROLE_KEY not set in .env.local" >&2
+    exit 1
+  fi
+  AUTH_TOKEN="$SERVICE_ROLE_KEY"
 fi
 
 ENDPOINT="${SUPABASE_URL}/functions/v1/${FUNCTION_NAME}"
@@ -52,8 +74,8 @@ echo ""
 
 RESPONSE=$(curl -s -w "\n%{http_code}" \
   -X POST "${ENDPOINT}" \
-  -H "Authorization: Bearer sb_publishable_e9qIiFlG_ThCGVkZCxBeDw_vGTcL-9s" \
-  -H 'apikey: sb_publishable_e9qIiFlG_ThCGVkZCxBeDw_vGTcL-9s' \
+  -H "Authorization: Bearer ${AUTH_TOKEN}" \
+  -H "apikey: ${AUTH_TOKEN}" \
   -H "Content-Type: application/json" \
   -d "${PAYLOAD}")
 

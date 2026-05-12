@@ -5,9 +5,7 @@
 # 사용법:
 #   ./scripts/run-stock-master-import.sh <storage-file-path> [--dry-run]
 #
-# ⚠️ 이 함수는 관리자 JWT가 필요합니다.
-#   .env.local에 SUPABASE_ADMIN_JWT를 추가하거나,
-#   ./scripts/get-admin-jwt.sh로 먼저 토큰을 발급받으세요.
+# .env.local에 SUPABASE_SERVICE_ROLE_KEY가 필요합니다.
 #
 # 예시:
 #   ./scripts/run-stock-master-import.sh imports/stock-master/202506_list_of_tse_listed_issues.csv --dry-run
@@ -49,4 +47,4 @@ fi
 
 PAYLOAD=$(jq -n --arg fp "$FILE_PATH" --argjson dr "$DRY_RUN" '{filePath: $fp, dryRun: $dr}')
 
-"${SCRIPT_DIR}/invoke-function.sh" parse-stock-master-csv "$PAYLOAD" --admin
+"${SCRIPT_DIR}/invoke-function.sh" parse-stock-master-csv "$PAYLOAD"
