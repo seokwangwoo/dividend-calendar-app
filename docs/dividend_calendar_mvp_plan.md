@@ -555,7 +555,7 @@ Must
 
 ### 처리 우선순위
 
-1. 저장된 PDF에서 텍스트 추출
+1. 저장된 PDF에서 텍스트 추출 — PDF.js의 좌표 정보(`transform[4]`=x, `transform[5]`=y)를 사용해 행 그룹화 및 컬럼 경계를 검출하고, 표는 Markdown `| col | col |` 형식으로 재구성한다
 2. 배당 관련 섹션 우선 선별 (`配当の状況`, `1株当たり配当金`, `年間配当金` 등)
 3. OpenAI Responses API Structured Outputs로 JSON 추출
 4. 서버 측 validation과 confidence 조정
@@ -564,6 +564,7 @@ Must
 ### 요구사항
 
 - 시스템은 PDF에서 배당 키워드 주변 텍스트를 추출하고, 결산短信에서는 배당 표 섹션을 우선 입력으로 사용한다.
+- 텍스트 추출 시 표 구조를 Markdown 형식으로 보존한다. 좌표 정보가 없는 항목은 x=0, y=0으로 폴백한다.
 - 시스템은 dividend disclosure와 earnings release용 prompt/schema를 분리한다.
 - AI 응답은 이벤트별 JSON 배열로 검증하고, 하나의 AI 이벤트마다 `dividend_reviews` row를 1개 생성한다.
 - 시스템은 event type, change type, 배당금, 이전 배당금, 지급일/지급월, 기준일, 명시된 권리락일, evidence text, confidence score, ordinary/special/commemorative breakdown을 검증한다.

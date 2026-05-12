@@ -926,6 +926,7 @@ notify_email = true이면 email job 생성
 - PDF URL이 없는 공시는 accepted disclosure로 저장하더라도 다운로드/파싱 job을 만들지 않고 관리자 확인 대상으로 남긴다.
 - Storage 경로는 `disclosures/{ticker}/{published_date}/{external_id}.pdf` 형식을 사용한다.
 - `parse_disclosure_pdf_ai` job은 PDF 저장 성공 후 `disclosures.storage_path`가 채워진 경우에만 생성한다.
+- PDF 텍스트 추출은 PDF.js의 좌표 정보(x/y)를 사용하여 표를 Markdown `| col | col |` 형식으로 재구성한다. 표 검출 로직은 `supabase/functions/_shared/pdf-table-extractor.ts`에 분리 구현한다.
 - OpenAI 호출은 Edge Function 내부에서만 수행하고, 구조화 JSON 출력과 서버 측 validation/confidence 조정을 거쳐 `dividend_reviews`에 저장한다.
 - 브라우저 코드에는 `OPENAI_API_KEY`, service-role key, OpenAI model 설정 secret, raw private Storage path를 노출하지 않는다.
 

@@ -310,8 +310,10 @@ When the user asks for a new plan:
     - Highlight any assumptions or blockers that need user confirmation before execution begins.
     - Confirm that the plan is ready for the `phase_executor` to consume.
 
-11. **Delete git worktree**
-    - After the final report is delivered and all plan files are committed (or staged), delete the git worktree to clean up.
+11. **Merge to main and delete git worktree**
+    - After the final report is delivered, commit all plan files in the worktree.
+    - Merge the worktree branch into `main` (e.g. `git checkout main && git merge <worktree-branch>`).
+    - Only after the merge is complete, delete the git worktree to clean up.
     - Run: `git worktree remove .worktrees/plan-design-<YYYYMMDD>_<short_kebab_name>`
     - Also prune the worktree reference: `git worktree prune`
     - Confirm the worktree no longer appears in `git worktree list`.
