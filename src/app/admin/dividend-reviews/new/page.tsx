@@ -18,17 +18,19 @@ export default async function NewDividendEventPage() {
     const dividendRaw = formData.get("dividendPerShare");
     const prevDividendRaw = formData.get("previousDividendPerShare");
 
+    const fiscalMonthRaw = formData.get("fiscalMonth");
+
     await createDividendEvent({
       stockId: String(formData.get("stockId") ?? ""),
       fiscalYear: Number(formData.get("fiscalYear")),
-      paymentYear: Number(formData.get("paymentYear")),
+      expectedPaymentYear: Number(formData.get("expectedPaymentYear")),
       estimatedPaymentMonth:
         paymentMonthRaw && String(paymentMonthRaw).trim() !== ""
           ? Number(paymentMonthRaw)
           : null,
-      paymentStartDate:
-        formData.get("paymentStartDate")
-          ? String(formData.get("paymentStartDate"))
+      fiscalMonth:
+        fiscalMonthRaw && String(fiscalMonthRaw).trim() !== ""
+          ? Number(fiscalMonthRaw)
           : null,
       eventType: String(
         formData.get("eventType") ?? "year_end"
@@ -94,10 +96,10 @@ export default async function NewDividendEventPage() {
             />
           </FormField>
 
-          <FormField label="支払年" htmlFor="paymentYear">
+          <FormField label="支払年" htmlFor="expectedPaymentYear">
             <Input
-              id="paymentYear"
-              name="paymentYear"
+              id="expectedPaymentYear"
+              name="expectedPaymentYear"
               type="number"
               required
               defaultValue={currentYear}
@@ -123,11 +125,18 @@ export default async function NewDividendEventPage() {
             />
           </FormField>
 
-          <FormField label="支払開始日（任意）" htmlFor="paymentStartDate">
+          <FormField
+            label="決算月（任意）"
+            htmlFor="fiscalMonth"
+            description="不明の場合は空欄"
+          >
             <Input
-              id="paymentStartDate"
-              name="paymentStartDate"
-              type="date"
+              id="fiscalMonth"
+              name="fiscalMonth"
+              type="number"
+              min={1}
+              max={12}
+              placeholder="1〜12"
             />
           </FormField>
         </div>
