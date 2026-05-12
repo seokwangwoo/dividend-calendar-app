@@ -2,7 +2,6 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/page-header";
 import { getHoldings, getPortfolioSummary } from "@/features/holdings/queries";
 import { PortfolioClient } from "@/features/holdings/components/portfolio-client";
-import { CsvImportSection } from "@/features/holdings/components/csv-import-section";
 
 export default async function PortfolioPage() {
   const year = new Date().getFullYear();
@@ -24,7 +23,12 @@ export default async function PortfolioPage() {
         >
           종목 검색
         </Link>
-        <CsvImportSection />
+        <Link
+          href="/app/portfolio/import"
+          className="inline-flex h-10 shrink-0 items-center rounded-md border border-line bg-white px-4 text-sm font-semibold text-ink hover:bg-paper"
+        >
+          CSVインポート
+        </Link>
       </PageHeader>
       <PortfolioClient
         initialHoldings={holdings}
