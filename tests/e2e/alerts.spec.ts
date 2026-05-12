@@ -49,6 +49,23 @@ test("stale price suppresses yield alert display", async ({ page }) => {
     .eq("id", kddi.id);
 });
 
+test("notification rule page shows single before-tax basis label and no basis selector", async ({
+  page
+}) => {
+  await login(page, user.email, user.password);
+  await page.goto(`/app/stocks/${kddi.id}/notification-rule`);
+
+  // The read-only basis label must be visible
+  await expect(page.getByText("予想配当利回り（税引前", { exact: false })).toBeVisible();
+
+  // There must be no <select> or radio group for basis choice
+  await expect(page.locator("select[name='basis']")).not.toBeAttached();
+  await expect(page.locator("input[type='radio'][name='basis']")).not.toBeAttached();
+
+  // After-tax yield label must not appear on the page
+  await expect(page.getByText("税引後配当利回り", { exact: false })).not.toBeVisible();
+});
+
 test("dividend change alert only reaches holders", async ({ page }) => {
   const nonHolder = await createConfirmedUser("e2e-alerts-nonholder");
 
