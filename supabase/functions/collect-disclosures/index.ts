@@ -245,10 +245,12 @@ async function findStockId(
   client: ReturnType<typeof createClient>,
   ticker: string
 ): Promise<string | null> {
+  // TDnet/Yanoshin sends 5-digit codes with a trailing 0 (e.g. 12340 -> 1234)
+  const normalizedTicker = ticker.replace(/0$/, "");
   const { data, error } = await client
     .from("stocks")
     .select("id")
-    .eq("ticker", ticker)
+    .eq("ticker", normalizedTicker)
     .maybeSingle();
   if (error) throw error;
   return data?.id ?? null;
