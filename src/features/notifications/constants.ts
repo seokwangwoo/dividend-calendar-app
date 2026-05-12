@@ -8,8 +8,7 @@ export const NOTIFICATION_OPERATORS = ["gte", "lte"] as const;
 export type NotificationOperator = (typeof NOTIFICATION_OPERATORS)[number];
 
 export const NOTIFICATION_RULE_BASIS_OPTIONS = [
-  { value: "before_tax_yield", label: "税引前配当利回り" },
-  { value: "after_tax_yield", label: "税引後配当利回り" }
+  { value: "before_tax_yield", label: "予想配当利回り（税引前）" }
 ] as const;
 
 export const NOTIFICATION_OPERATOR_OPTIONS = [

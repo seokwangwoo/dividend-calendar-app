@@ -31,14 +31,6 @@ function buildMockSupabaseWithSession(accessToken = "test-token") {
   };
 }
 
-function buildMockSupabaseNoSession() {
-  return {
-    auth: {
-      getSession: vi.fn().mockResolvedValue({ data: { session: null } })
-    },
-    rpc: vi.fn()
-  };
-}
 
 beforeEach(() => {
   vi.clearAllMocks();

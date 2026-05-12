@@ -14,8 +14,7 @@ import {
 } from "@/features/notifications/actions";
 import {
   INVESTMENT_NEUTRAL_DISCLAIMER,
-  NOTIFICATION_OPERATOR_OPTIONS,
-  NOTIFICATION_RULE_BASIS_OPTIONS
+  NOTIFICATION_OPERATOR_OPTIONS
 } from "@/features/notifications/constants";
 import { getNotificationRulesForStock } from "@/features/notifications/queries";
 
@@ -25,7 +24,7 @@ interface PageProps {
 
 function formatRule(rule: Awaited<ReturnType<typeof getNotificationRulesForStock>>[number]) {
   const basis =
-    rule.basis === "before_tax_yield" ? "税引前配当利回り" : "税引後配当利回り";
+    rule.basis === "before_tax_yield" ? "予想配当利回り（税引前）" : "税引後配当利回り";
   const operator = rule.operator === "gte" ? "以上" : "以下";
   return `${basis} ${Number(rule.target_yield).toFixed(1)}%${operator}`;
 }
@@ -57,15 +56,16 @@ export default async function NotificationRulePage({ params }: PageProps) {
           {activeRule ? (
             <input type="hidden" name="ruleId" value={activeRule.id} />
           ) : null}
+          {/* basis is always before_tax_yield in MVP */}
+          <input type="hidden" name="basis" value="before_tax_yield" />
 
-          <FormField label="基準" htmlFor="basis">
-            <Select
-              id="basis"
-              name="basis"
-              defaultValue={activeRule?.basis ?? "before_tax_yield"}
-              options={NOTIFICATION_RULE_BASIS_OPTIONS}
-              disabled={!hasDividendData}
-            />
+          <FormField label="基準" htmlFor="basis-label">
+            <p
+              id="basis-label"
+              className="flex h-10 items-center rounded-md border border-line bg-paper px-3 text-sm text-ink"
+            >
+              予想配当利回り（税引前・MVP固定）
+            </p>
           </FormField>
 
           <FormField label="条件" htmlFor="operator">

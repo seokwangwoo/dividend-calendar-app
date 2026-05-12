@@ -18,10 +18,10 @@ describe("notification constants", () => {
     expect(NOTIFICATION_OPERATORS).toEqual(["gte", "lte"]);
   });
 
-  it("NOTIFICATION_RULE_BASIS_OPTIONS has correct labels", () => {
+  it("NOTIFICATION_RULE_BASIS_OPTIONS has exactly one option (MVP: before_tax_yield only)", () => {
+    expect(NOTIFICATION_RULE_BASIS_OPTIONS).toHaveLength(1);
     expect(NOTIFICATION_RULE_BASIS_OPTIONS).toEqual([
-      { value: "before_tax_yield", label: "税引前配当利回り" },
-      { value: "after_tax_yield", label: "税引後配当利回り" }
+      { value: "before_tax_yield", label: "予想配当利回り（税引前）" }
     ]);
   });
 

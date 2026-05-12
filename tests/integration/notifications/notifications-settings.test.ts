@@ -26,11 +26,17 @@ describe("notification rules, notifications, and settings", () => {
     user = await createTestUser(uniqueEmail("notifications"), PASSWORD);
     client = await signInAs(user.email, PASSWORD);
 
-    // Ensure test stock price is fresh so yield evaluation isn't skipped
+    // Ensure test stock has concrete price and dividend data so yield evaluation
+    // produces a deterministic result. expected_annual_dividend_per_share=100
+    // and current_price=2000 → before-tax yield = 5.0%, satisfying gte 3.5%.
     const admin = createAdminClient();
     await admin
       .from("stocks")
-      .update({ price_updated_at: new Date().toISOString() })
+      .update({
+        current_price: 2000,
+        expected_annual_dividend_per_share: 100,
+        price_updated_at: new Date().toISOString()
+      })
       .eq("id", stockId);
   });
 
