@@ -16,6 +16,7 @@ docs/issue/
 
 | 이슈 | 유형 | 생성일 |
 |------|------|--------|
+| [승인 배당 이벤트 기반 종목 예상 배당 동기화 및 산식 근거 표시 필요](active/20260514-stock-expected-dividend-sync-and-simulation-basis.md) | bug | 2026-05-14 |
 | [종목 상세 데이터 소스 미표시 필요](active/20260514-stock-detail-hide-source.md) | bug | 2026-05-14 |
 | [AI 파서 change_type 판단 제거 및 필수 기간 필드 강화](active/20260514-ai-parser-change-type-and-required-period-fields.md) | feature | 2026-05-14 |
 
