@@ -156,7 +156,11 @@ export function classifyDisclosureTitle(title: string): {
 }
 
 export function extractYanoshinRows(payload: unknown): Record<string, unknown>[] {
-  if (Array.isArray(payload)) return payload.filter(isRecord);
+  if (Array.isArray(payload)) {
+    return payload
+      .map((item) => (isRecord(item) && isRecord(item.TDnet) ? item.TDnet : item))
+      .filter(isRecord);
+  }
   if (!isRecord(payload)) return [];
 
   if (Array.isArray(payload.items)) {
