@@ -141,6 +141,10 @@ jobs:
     needs: download
     if: always()
     steps:
+      - name: Install PDF text extraction tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
       - name: Extract PDF text with pdftotext
         env:
           SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
