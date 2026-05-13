@@ -209,7 +209,9 @@ jobs:
               const signed = await signRes.json();
               const signedUrl = signed.signedURL?.startsWith("http")
                 ? signed.signedURL
-                : `${restUrl}${signed.signedURL}`;
+                : signed.signedURL?.startsWith("/storage/v1/")
+                  ? `${restUrl}${signed.signedURL}`
+                  : `${restUrl}/storage/v1${signed.signedURL}`;
               if (!signedUrl) throw new Error("sign_failed:missing_signed_url");
 
               const dlResult = spawnSync("curl", ["-sLf", signedUrl, "-o", tmpPdf], { encoding: "utf8" });
