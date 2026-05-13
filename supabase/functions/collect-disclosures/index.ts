@@ -89,12 +89,17 @@ Deno.serve(async (req: Request) => {
 
   const source =
     normalizedInputs == null
-      ? await fetchYanoshinCandidates(body)
+      ? await fetchYanoshinCandidates(body).catch((error) => ({
+          candidates: [],
+          url: null,
+          sourceError: error instanceof Error ? error.message : String(error)
+        }))
       : {
           candidates: normalizedInputs
             .filter(isRecord)
             .map((candidate) => classifyCandidate(normalizeCandidateInput(candidate))),
-          url: null
+          url: null,
+          sourceError: null
         };
 
   const results: CollectionResult[] = [];
@@ -115,12 +120,13 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  return jsonResponse({ sourceUrl: source.url, results });
+  return jsonResponse({ sourceUrl: source.url, sourceError: source.sourceError, results });
 });
 
 async function fetchYanoshinCandidates(body: JsonRecord): Promise<{
   candidates: ClassifiedDisclosureCandidate[];
   url: string;
+  sourceError: null;
 }> {
   const condition = resolveYanoshinCondition({
     mode: typeof body.mode === "string" ? body.mode : null,
@@ -132,7 +138,9 @@ async function fetchYanoshinCandidates(body: JsonRecord): Promise<{
     ? body.limit
     : Deno.env.get("YANOSHIN_LIST_LIMIT");
   const url = buildYanoshinListUrl({ condition, format, limit });
-  const response = await fetch(url);
+  const timeoutMs = Number(Deno.env.get("YANOSHIN_FETCH_TIMEOUT_MS") ?? "20000");
+  const signal = AbortSignal.timeout(Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 20000);
+  const response = await fetch(url, { signal });
 
   if (!response.ok) {
     throw new Error(`Yanoshin request failed: ${response.status}`);
@@ -141,6 +149,7 @@ async function fetchYanoshinCandidates(body: JsonRecord): Promise<{
   const payload = await response.json();
   return {
     url,
+    sourceError: null,
     candidates: extractYanoshinRows(payload).map((row) =>
       classifyCandidate(normalizeYanoshinRow(row))
     )
