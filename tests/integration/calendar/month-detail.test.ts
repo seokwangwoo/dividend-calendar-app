@@ -140,7 +140,7 @@ describe("get_dividend_month_detail RPC", () => {
     );
   });
 
-  it("displayDateText contains the payment date", async () => {
+  it("displayDateText contains the payment year/month", async () => {
     const { data } = await client.rpc("get_dividend_month_detail", {
       p_year: YEAR,
       p_month: TEST_MONTH,
@@ -149,8 +149,7 @@ describe("get_dividend_month_detail RPC", () => {
     });
     const detail = data as unknown as MonthDetail;
     const evt = detail.events[0];
-    // Expected: "YYYY年MM月DD日" format
-    expect(evt.displayDateText).toMatch(/\d{4}年\d+月\d+日/);
+    expect(evt.displayDateText).toBe(`${YEAR}年${TEST_MONTH}月`);
   });
 
   it("sourceUrl and sourceType are present on the event", async () => {

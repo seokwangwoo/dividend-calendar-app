@@ -29,7 +29,6 @@ import {
   uniqueEmail
 } from "../../helpers/test-users";
 import { cleanupUser } from "../../helpers/cleanup";
-import { getTestStocks } from "../../fixtures/test-stock";
 
 beforeAll(() => requireRemoteTests());
 
@@ -110,13 +109,27 @@ describe("Phase 05: review approval pipeline", () => {
   const jobIds: string[] = [];
 
   beforeAll(async () => {
-    const { supported } = await getTestStocks();
-    stockId = supported.id;
-
     adminUser = await createTestUser(uniqueEmail("ph05-admin"), PASSWORD);
     appUser = await createTestUser(uniqueEmail("ph05-user"), PASSWORD);
 
     const admin = createAdminClient();
+    const { data: stock, error: stockError } = await admin
+      .from("stocks")
+      .insert({
+        ticker: `PH05${Date.now().toString().slice(-8)}`,
+        exchange: "TSE",
+        name: "Phase 05 Integration Stock",
+        name_en: "Phase 05 Integration Stock",
+        support_status: "supported",
+        current_price: 2000,
+        expected_annual_dividend_per_share: 100,
+        expected_dividend_yield: 5
+      })
+      .select("id")
+      .single();
+    if (stockError) throw new Error(`createStock: ${stockError.message}`);
+    stockId = stock!.id;
+
     await admin.from("profiles").update({ role: "admin" }).eq("id", adminUser.id);
     await admin.from("holdings").insert({
       user_id: appUser.id,
@@ -146,6 +159,7 @@ describe("Phase 05: review approval pipeline", () => {
     if (jobIds.length > 0) await admin.from("jobs").delete().in("id", jobIds);
     await cleanupUser(appUser.id);
     await cleanupUser(adminUser.id);
+    if (stockId) await admin.from("stocks").delete().eq("id", stockId);
   });
 
   // --------------------------------------------------------------------------

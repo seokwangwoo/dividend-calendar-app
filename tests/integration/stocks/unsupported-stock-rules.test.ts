@@ -21,7 +21,7 @@ describe("unsupported stock rules", () => {
     await cleanupUser(user.id);
   });
 
-  it("calculate_holding_dividend returns error for unsupported stock", async () => {
+  it("calculate_holding_dividend allows unsupported stock calculations", async () => {
     const { unsupported } = await getTestStocks();
 
     if (!unsupported) {
@@ -29,14 +29,17 @@ describe("unsupported stock rules", () => {
       return;
     }
 
-    const { error } = await client.rpc("calculate_holding_dividend", {
+    const { data, error } = await client.rpc("calculate_holding_dividend", {
       p_stock_id: unsupported.id,
       p_quantity: 10,
       p_average_purchase_price: 1000,
       p_account_type: "nisa",
     });
-    expect(error).not.toBeNull();
-    expect(error!.message).toMatch(/not supported/i);
+    expect(error).toBeNull();
+    expect(data?.[0]).toMatchObject({
+      currency: "JPY",
+    });
+    expect(data).toHaveLength(1);
   });
 
   it("unsupported stock is visible in search results", async () => {
