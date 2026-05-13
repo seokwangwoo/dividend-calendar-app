@@ -14,7 +14,9 @@ docs/issue/
 
 ## 미해결 이슈 (Open)
 
-미해결 이슈 없음.
+| 이슈 | 유형 | 생성일 |
+|------|------|--------|
+| [AI 파서 change_type 판단 제거 및 필수 기간 필드 강화](active/20260514-ai-parser-change-type-and-required-period-fields.md) | feature | 2026-05-14 |
 
 ## 해결된 이슈 (Recently Resolved)
 
