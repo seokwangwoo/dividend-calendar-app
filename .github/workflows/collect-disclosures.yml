@@ -41,6 +41,11 @@ on:
         required: false
         default: "5"
         type: string
+      parse_iterations:
+        description: "Number of process-jobs calls in the parse loop"
+        required: false
+        default: "20"
+        type: string
 
 jobs:
   collect:
@@ -181,7 +186,7 @@ jobs:
           const LIMIT = 50;
 
           const listRes = await fetch(
-            `${restUrl}/rest/v1/disclosures?select=id,storage_path&storage_path=not.is.null&extracted_text=is.null&limit=${LIMIT}`,
+            `${restUrl}/rest/v1/disclosures?select=id,storage_path&storage_path=not.is.null&extracted_text=is.null&document_url=not.like.*example.com*&limit=${LIMIT}`,
             { headers }
           );
           if (!listRes.ok) {
@@ -256,6 +261,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PROCESS_BATCH_SIZE: ${{ inputs.process_batch_size || vars.PROCESS_JOBS_BATCH_SIZE || '5' }}
+          PARSE_ITERATIONS: ${{ inputs.parse_iterations || vars.PARSE_ITERATIONS || '20' }}
         run: |
           set -euo pipefail
           node <<'NODE'
@@ -272,18 +278,34 @@ jobs:
             return `${baseUrl}/functions/v1/${functionName}`;
           }
 
-          const response = await fetch(getFunctionUrl("process-jobs"), {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              batch_size: Number(process.env.PROCESS_BATCH_SIZE || "5"),
-              supported_types: ["parse_disclosure_pdf_ai"]
-            })
-          });
-          const text = await response.text();
-          console.log(text);
-          if (!response.ok) process.exit(1);
+          const batchSize = Number(process.env.PROCESS_BATCH_SIZE || "5");
+          const iterations = Math.min(Number(process.env.PARSE_ITERATIONS || "20"), 100);
+          let totalClaimed = 0;
+
+          for (let i = 0; i < iterations; i++) {
+            const response = await fetch(getFunctionUrl("process-jobs"), {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                batch_size: batchSize,
+                supported_types: ["parse_disclosure_pdf_ai"]
+              })
+            });
+            const text = await response.text();
+            console.log(`[iteration ${i + 1}/${iterations}] ${text}`);
+            if (!response.ok) process.exit(1);
+
+            let result;
+            try { result = JSON.parse(text); } catch { break; }
+            totalClaimed += result.claimed ?? 0;
+            if (result.claimed === 0) {
+              console.log("No jobs claimed, stopping early.");
+              break;
+            }
+          }
+
+          console.log(`Total claimed: ${totalClaimed}`);
           NODE

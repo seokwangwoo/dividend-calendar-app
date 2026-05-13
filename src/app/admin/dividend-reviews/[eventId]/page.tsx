@@ -69,9 +69,13 @@ function disclosureTypeLabel(t: string | null | undefined) {
 function eventStatusLabel(t: string | null | undefined) {
   const map: Record<string, string> = {
     estimated: "予想",
+    forecast: "予想",
+    revised_forecast: "修正予想",
+    resolved: "決議済",
     confirmed: "確定",
     paid: "支払済",
-    undecided: "未定"
+    undecided: "未定",
+    unknown: "不明"
   };
   return map[t ?? ""] ?? (t ?? "—");
 }
@@ -314,7 +318,7 @@ export default async function DividendReviewDetailPage({
               ? `${review.extracted_fiscal_month}月`
               : null
           )}
-          {field("状態", eventStatusLabel(review.status))}
+          {field("状態", eventStatusLabel((review.raw_payload as Record<string, unknown>)?.status as string | null))}
         </dl>
 
         {review.evidence_text && (
