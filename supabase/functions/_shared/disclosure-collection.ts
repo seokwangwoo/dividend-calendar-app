@@ -155,22 +155,28 @@ export function classifyDisclosureTitle(title: string): {
   return { accepted, disclosureType, reviewPriority, skipReason: null };
 }
 
+function unwrapTdnetItem(item: unknown): unknown {
+  if (!isRecord(item)) return item;
+  // Yanoshin uses "TDnet" or "Tdnet" depending on response size
+  if (isRecord(item.TDnet)) return item.TDnet;
+  if (isRecord(item.Tdnet)) return item.Tdnet;
+  return item;
+}
+
 export function extractYanoshinRows(payload: unknown): Record<string, unknown>[] {
   if (Array.isArray(payload)) {
-    return payload
-      .map((item) => (isRecord(item) && isRecord(item.TDnet) ? item.TDnet : item))
-      .filter(isRecord);
+    return payload.map(unwrapTdnetItem).filter(isRecord);
   }
   if (!isRecord(payload)) return [];
 
   if (Array.isArray(payload.items)) {
-    return payload.items
-      .map((item) => (isRecord(item) && isRecord(item.TDnet) ? item.TDnet : item))
-      .filter(isRecord);
+    return payload.items.map(unwrapTdnetItem).filter(isRecord);
   }
 
-  if (Array.isArray(payload.TDnet)) return payload.TDnet.filter(isRecord);
+  if (Array.isArray(payload.TDnet)) return (payload.TDnet as unknown[]).filter(isRecord);
   if (isRecord(payload.TDnet)) return [payload.TDnet];
+  if (Array.isArray(payload.Tdnet)) return (payload.Tdnet as unknown[]).filter(isRecord);
+  if (isRecord(payload.Tdnet)) return [payload.Tdnet as Record<string, unknown>];
   return [];
 }
 
