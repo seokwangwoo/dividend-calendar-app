@@ -90,7 +90,8 @@ test("approved payable event appears on user surfaces", async ({ page }) => {
     stockId: kddi.id,
     disclosureId,
     extractedDividendPerShare: 200,
-    extractedPaymentDate: `${new Date().getFullYear() + 1}-06-15`,
+    extractedPaymentYear: new Date().getFullYear() + 1,
+    extractedPaymentMonth: 6,
     eventType: "year_end",
     status: "pending"
   });

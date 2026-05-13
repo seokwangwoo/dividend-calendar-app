@@ -131,6 +131,36 @@ After the initial audit (PASS with MINOR issues), the following additional files
 - Test descriptions updated to remove references to old `payment_year`/`expected_payment_date` concepts
 - `expectedPaymentDate` in override → `expectedPaymentYear` + `expectedPaymentMonth`
 
+## Additional Follow-Up on 2026-05-13
+
+After resuming the work, another stale-reference scan found a few remaining old helper/override names in integration and E2E tests. The following files were updated:
+
+- `tests/e2e/user-safety-isolation.spec.ts`
+  - `extractedPaymentDate` → `extractedPaymentYear` + `extractedPaymentMonth`
+- `tests/integration/stocks/stock-detail.test.ts`
+  - `expectedPaymentDate` helper arg removed; added `expectedPaymentYear`
+  - removed unused `isoDate` import
+- `tests/integration/calendar/month-detail.test.ts`
+  - `expectedPaymentDate` helper arg removed; added `expectedPaymentYear`
+  - updated comment from exact payment date to year/month timing
+  - removed unused `isoDate` import
+- `tests/integration/admin/admin-review-pipeline.test.ts`
+  - `p_override.paymentYear` → `p_override.expectedPaymentYear`
+- `tests/integration/admin/pdf-ai-contracts.test.ts`
+  - `paymentYear` fixture fields → `expectedPaymentYear`
+- `tests/integration/portfolio/holdings-crud.test.ts`
+  - test descriptions now refer to `expected_payment_year`
+
+Follow-up verification:
+
+| Command | Status |
+|---|---|
+| `rg -n --pcre2 "\\bpaymentYear\\b|\\bexpectedPaymentDate\\b|\\bextractedPaymentDate\\b|(?<!expected_)\\bpayment_year\\b|\\bexpected_payment_date\\b|\\bextracted_payment_date\\b" tests src/types --glob '!node_modules'` | PASS (no matches) |
+| `npm run lint` | PASS |
+| `npm run typecheck` | PASS |
+| `npm run build` | PASS |
+| `npm run test:unit` | PASS (46 files, 637 tests) |
+
 ## Notes
 
 - `npm run test:unit` covers all `src/**/*.test.ts` files. No unit test references old columns.

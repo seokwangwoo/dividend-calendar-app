@@ -12,7 +12,6 @@ import { getTestStocks } from "../../fixtures/test-stock";
 import {
   createTestDividendEvent,
   deleteTestDividendEvents,
-  isoDate,
 } from "../../fixtures/test-dividend-events";
 import type { MonthDetail } from "@/features/dividends/types";
 
@@ -48,13 +47,13 @@ describe("get_dividend_month_detail RPC", () => {
       account_type: "tokutei",
     });
 
-    // Approved event in TEST_MONTH with a specific payment date
+    // Approved event in TEST_MONTH with expected payment year/month
     const e1 = await createTestDividendEvent({
       stockId,
       fiscalYear: YEAR,
       dividendPerShare: DPS,
+      expectedPaymentYear: YEAR,
       expectedPaymentMonth: TEST_MONTH,
-      expectedPaymentDate: isoDate(YEAR, TEST_MONTH, 15),
       reviewStatus: "approved",
       sourceType: "tdnet",
       sourceUrl: "https://example.com/disclosure/1",

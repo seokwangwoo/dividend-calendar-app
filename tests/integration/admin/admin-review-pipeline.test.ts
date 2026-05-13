@@ -152,7 +152,7 @@ describe("admin review and disclosure pipeline", () => {
 
     const { data, error } = await adminClient.rpc("approve_dividend_review", {
       p_review_id: reviewId,
-      p_override: { paymentYear: YEAR }
+      p_override: { expectedPaymentYear: YEAR }
     });
 
     expect(error).toBeNull();
@@ -198,7 +198,7 @@ describe("admin review and disclosure pipeline", () => {
     const reviewId = await createReview({ suffix: "decrease", amount: 80 });
     const { data, error } = await adminClient.rpc("approve_dividend_review", {
       p_review_id: reviewId,
-      p_override: { paymentYear: YEAR }
+      p_override: { expectedPaymentYear: YEAR }
     });
     expect(error).toBeNull();
     const result = data as { dividendEventId: string; changeType: string };
@@ -272,7 +272,7 @@ describe("admin review and disclosure pipeline", () => {
 
     const { data, error } = await adminClient.rpc("approve_dividend_review", {
       p_review_id: reviewId,
-      p_override: { paymentYear: YEAR }
+      p_override: { expectedPaymentYear: YEAR }
     });
 
     expect(error).toBeNull();
@@ -296,7 +296,7 @@ describe("admin review and disclosure pipeline", () => {
       {
         p_review_id: reviewId,
         p_reviewer_id: adminUser.id,
-        p_override: { paymentYear: YEAR }
+        p_override: { expectedPaymentYear: YEAR }
       }
     );
 

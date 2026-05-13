@@ -133,7 +133,7 @@ describe("PDF AI data contracts", () => {
     const eventId = await createTestDividendEvent({
       stockId,
       fiscalYear: YEAR - 1,
-      paymentYear: YEAR,
+      expectedPaymentYear: YEAR,
       eventType: "year_end",
       dividendPerShare: 120,
       expectedPaymentMonth: 6,
@@ -217,7 +217,7 @@ describe("PDF AI data contracts", () => {
     const payable = await createTestDividendEvent({
       stockId,
       fiscalYear: YEAR,
-      paymentYear: YEAR,
+      expectedPaymentYear: YEAR,
       eventType: "interim",
       dividendPerShare: 100,
       expectedPaymentMonth: 4,
@@ -226,7 +226,7 @@ describe("PDF AI data contracts", () => {
     const annualTotal = await createTestDividendEvent({
       stockId,
       fiscalYear: YEAR,
-      paymentYear: YEAR,
+      expectedPaymentYear: YEAR,
       eventType: "annual_total",
       dividendPerShare: 9999,
       expectedPaymentMonth: 4,
@@ -235,7 +235,7 @@ describe("PDF AI data contracts", () => {
     const special = await createTestDividendEvent({
       stockId,
       fiscalYear: YEAR,
-      paymentYear: YEAR,
+      expectedPaymentYear: YEAR,
       eventType: "special",
       dividendPerShare: 9999,
       expectedPaymentMonth: 4,

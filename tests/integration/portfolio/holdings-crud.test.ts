@@ -205,7 +205,7 @@ describe("portfolio annual dividend consistency", () => {
     await cleanupUser(user.id);
   });
 
-  it("holding summary row uses approved payment_year events, not stock estimates", async () => {
+  it("holding summary row uses approved expected_payment_year events, not stock estimates", async () => {
     const { data, error } = await client.rpc("get_portfolio_summary", {
       p_account_type: null,
       p_year: PAYMENT_YEAR,
@@ -216,7 +216,7 @@ describe("portfolio annual dividend consistency", () => {
     expect(Number(data?.[0]?.annual_after_tax_amount)).toBeCloseTo(30458.89, 1);
   });
 
-  it("excludes approved events whose payment_year is N±1", async () => {
+  it("excludes approved events whose expected_payment_year is N±1", async () => {
     const { data, error } = await client.rpc("get_portfolio_summary", {
       p_account_type: null,
       p_year: PAYMENT_YEAR,
@@ -226,7 +226,7 @@ describe("portfolio annual dividend consistency", () => {
     expect(Number(data?.[0]?.annual_before_tax_amount)).toBeLessThan(100000);
   });
 
-  it("KDDI + JT portfolio query matches home summary for the same payment_year", async () => {
+  it("KDDI + JT portfolio query matches home summary for the same expected_payment_year", async () => {
     const [{ data: portfolio, error: portfolioError }, { data: home, error: homeError }] =
       await Promise.all([
         client.rpc("get_portfolio_summary", {

@@ -12,7 +12,6 @@ import { getTestStocks } from "../../fixtures/test-stock";
 import {
   createTestDividendEvent,
   deleteTestDividendEvents,
-  isoDate,
 } from "../../fixtures/test-dividend-events";
 import type { StockDetail } from "@/features/dividends/types";
 
@@ -48,7 +47,7 @@ describe("get_stock_detail RPC", () => {
       stockId,
       fiscalYear: YEAR,
       dividendPerShare: 100,
-      expectedPaymentDate: isoDate(YEAR, 9, 20),
+      expectedPaymentYear: YEAR,
       expectedPaymentMonth: 9,
       status: "confirmed",
       reviewStatus: "approved",
