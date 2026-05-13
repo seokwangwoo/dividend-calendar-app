@@ -49,6 +49,8 @@ jobs:
       - name: Invoke collect-disclosures
         env:
           SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           INPUT_DATE: ${{ inputs.date }}
           INPUT_MODE: ${{ inputs.mode || 'recent' }}
@@ -58,6 +60,19 @@ jobs:
         run: |
           set -euo pipefail
           node <<'NODE'
+          function getFunctionUrl(functionName) {
+            const rawUrl =
+              process.env.SUPABASE_FUNCTION_URL ||
+              process.env.SUPABASE_URL ||
+              process.env.NEXT_PUBLIC_SUPABASE_URL;
+            if (!rawUrl) {
+              throw new Error("Set SUPABASE_FUNCTION_URL, SUPABASE_URL, or NEXT_PUBLIC_SUPABASE_URL in GitHub Secrets");
+            }
+
+            const baseUrl = rawUrl.trim().replace(/\/+$/, "").replace(/\/functions\/v1$/, "");
+            return `${baseUrl}/functions/v1/${functionName}`;
+          }
+
           const payload = {
             mode: process.env.INPUT_MODE || "recent",
             format: process.env.INPUT_FORMAT || "json2",
@@ -66,7 +81,7 @@ jobs:
           if (process.env.INPUT_DATE) payload.date = process.env.INPUT_DATE;
           if (process.env.INPUT_CONDITION) payload.condition = process.env.INPUT_CONDITION;
 
-          const response = await fetch(`${process.env.SUPABASE_FUNCTION_URL}/collect-disclosures`, {
+          const response = await fetch(getFunctionUrl("collect-disclosures"), {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
@@ -86,12 +101,27 @@ jobs:
       - name: Invoke process-jobs (download only)
         env:
           SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PROCESS_BATCH_SIZE: ${{ inputs.process_batch_size || vars.PROCESS_JOBS_BATCH_SIZE || '5' }}
         run: |
           set -euo pipefail
           node <<'NODE'
-          const response = await fetch(`${process.env.SUPABASE_FUNCTION_URL}/process-jobs`, {
+          function getFunctionUrl(functionName) {
+            const rawUrl =
+              process.env.SUPABASE_FUNCTION_URL ||
+              process.env.SUPABASE_URL ||
+              process.env.NEXT_PUBLIC_SUPABASE_URL;
+            if (!rawUrl) {
+              throw new Error("Set SUPABASE_FUNCTION_URL, SUPABASE_URL, or NEXT_PUBLIC_SUPABASE_URL in GitHub Secrets");
+            }
+
+            const baseUrl = rawUrl.trim().replace(/\/+$/, "").replace(/\/functions\/v1$/, "");
+            return `${baseUrl}/functions/v1/${functionName}`;
+          }
+
+          const response = await fetch(getFunctionUrl("process-jobs"), {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
@@ -115,15 +145,23 @@ jobs:
         env:
           SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
           SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -euo pipefail
           node <<'NODE'
           const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-          const restUrl = (process.env.SUPABASE_REST_URL || process.env.SUPABASE_FUNCTION_URL?.replace(/\/functions\/v1\/?$/, "") || "").replace(/\/$/, "");
+          const rawRestUrl =
+            process.env.SUPABASE_REST_URL ||
+            process.env.SUPABASE_FUNCTION_URL ||
+            process.env.SUPABASE_URL ||
+            process.env.NEXT_PUBLIC_SUPABASE_URL ||
+            "";
+          const restUrl = rawRestUrl.trim().replace(/\/+$/, "").replace(/\/functions\/v1$/, "");
 
           if (!restUrl) {
-            console.error("SUPABASE_REST_URL is not set and could not be derived from SUPABASE_FUNCTION_URL");
+            console.error("Set SUPABASE_REST_URL, SUPABASE_FUNCTION_URL, SUPABASE_URL, or NEXT_PUBLIC_SUPABASE_URL in GitHub Secrets");
             process.exit(1);
           }
           if (!key) {
@@ -208,12 +246,27 @@ jobs:
       - name: Invoke process-jobs (parse only)
         env:
           SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PROCESS_BATCH_SIZE: ${{ inputs.process_batch_size || vars.PROCESS_JOBS_BATCH_SIZE || '5' }}
         run: |
           set -euo pipefail
           node <<'NODE'
-          const response = await fetch(`${process.env.SUPABASE_FUNCTION_URL}/process-jobs`, {
+          function getFunctionUrl(functionName) {
+            const rawUrl =
+              process.env.SUPABASE_FUNCTION_URL ||
+              process.env.SUPABASE_URL ||
+              process.env.NEXT_PUBLIC_SUPABASE_URL;
+            if (!rawUrl) {
+              throw new Error("Set SUPABASE_FUNCTION_URL, SUPABASE_URL, or NEXT_PUBLIC_SUPABASE_URL in GitHub Secrets");
+            }
+
+            const baseUrl = rawUrl.trim().replace(/\/+$/, "").replace(/\/functions\/v1$/, "");
+            return `${baseUrl}/functions/v1/${functionName}`;
+          }
+
+          const response = await fetch(getFunctionUrl("process-jobs"), {
             method: "POST",
             headers: {
               "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,

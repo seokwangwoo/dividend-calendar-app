@@ -10,9 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Invoke process-pending-emails Edge Function
+        env:
+          SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           curl -sSf -X POST \
-            "${{ secrets.SUPABASE_URL }}/functions/v1/process-pending-emails" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            "$(node -e 'const raw=process.env.SUPABASE_FUNCTION_URL||process.env.SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL;if(!raw){throw new Error("Set SUPABASE_FUNCTION_URL, SUPABASE_URL, or NEXT_PUBLIC_SUPABASE_URL in GitHub Secrets")} const base=raw.trim().replace(/\/+$/,"").replace(/\/functions\/v1$/,""); process.stdout.write(`${base}/functions/v1/process-pending-emails`);')" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Content-Type: application/json" \
             -d '{}' || exit 1

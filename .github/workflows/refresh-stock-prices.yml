@@ -17,11 +17,27 @@ jobs:
       - name: Invoke process-price-refresh in a loop
         env:
           SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           INPUT_RUN_DATE: ${{ inputs.run_date }}
         run: |
           set -euo pipefail
           node <<'NODE'
+          function getFunctionUrl(functionName) {
+            const rawUrl =
+              process.env.SUPABASE_FUNCTION_URL ||
+              process.env.SUPABASE_URL ||
+              process.env.NEXT_PUBLIC_SUPABASE_URL;
+            if (!rawUrl) {
+              throw new Error("Set SUPABASE_FUNCTION_URL, SUPABASE_URL, or NEXT_PUBLIC_SUPABASE_URL in GitHub Secrets");
+            }
+
+            const baseUrl = rawUrl.trim().replace(/\/+$/, "").replace(/\/functions\/v1$/, "");
+            return `${baseUrl}/functions/v1/${functionName}`;
+          }
+
+          const processPriceRefreshUrl = getFunctionUrl("process-price-refresh");
           const runDate = process.env.INPUT_RUN_DATE || new Date().toLocaleDateString('ja-JP', {
             timeZone: 'Asia/Tokyo',
             year: 'numeric',
@@ -41,7 +57,7 @@ jobs:
 
           while (remainingJobs > 0 && iterations < maxIterations) {
             iterations++;
-            const response = await fetch(`${process.env.SUPABASE_FUNCTION_URL}/process-price-refresh`, {
+            const response = await fetch(processPriceRefreshUrl, {
               method: "POST",
               headers: {
                 "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
