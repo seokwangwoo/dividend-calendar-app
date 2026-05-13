@@ -139,14 +139,14 @@ async function fetchYanoshinCandidates(body: JsonRecord): Promise<{
     : Deno.env.get("YANOSHIN_LIST_LIMIT");
   const url = buildYanoshinListUrl({ condition, format, limit });
 
-  const timeoutMs = Number(Deno.env.get("YANOSHIN_FETCH_TIMEOUT_MS") ?? "20000");
-  const perAttemptTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 20000;
+  const timeoutMs = Number(Deno.env.get("YANOSHIN_FETCH_TIMEOUT_MS") ?? "60000");
+  const perAttemptTimeout = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 60000;
   const maxRetries = Number(Deno.env.get("YANOSHIN_MAX_RETRIES") ?? "3");
 
   let lastError: Error = new Error("unknown");
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
-      const delayMs = Math.min(1000 * 2 ** (attempt - 1), 16000);
+      const delayMs = Math.min(10000 * 2 ** (attempt - 1), 40000);
       console.log(`Yanoshin retry ${attempt}/${maxRetries} after ${delayMs}ms (prev: ${lastError.message})`);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
