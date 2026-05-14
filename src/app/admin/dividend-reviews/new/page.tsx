@@ -204,6 +204,7 @@ export default async function NewDividendEventPage() {
             <option value="">自動判定</option>
             <option value="increase">増額</option>
             <option value="decrease">減額</option>
+            <option value="none">変化なし</option>
             <option value="unchanged">変化なし</option>
             <option value="unknown">不明</option>
             <option value="no_dividend">無配</option>

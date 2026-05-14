@@ -331,11 +331,11 @@ create table dividend_events (
 |---|---|
 | event_type | interim, year_end, annual_total, special, commemorative, other. `annual_total`은 검증/참고용이며 사용자 현금흐름 합계에는 포함하지 않는다. MVP에서는 특별/기념 배당을 별도 지급 row로 중복 집계하지 않고 payable interim/year_end 이벤트의 breakdown metadata로 보관한다. |
 | status | estimated, confirmed, paid, undecided. `undecided`/未定은 0円으로 저장하지 않는다. |
-| change_type | increase, decrease, no_dividend, resumed, special, commemorative, unchanged, unknown |
+| change_type | 서버 승인 시점에만 결정한다. `increase`, `decrease`, `no_dividend`, `none`을 기본으로 사용하며, UI에서는 `none`을 "変化なし"로 표시한다. 전년 동기 비교 대상이 없거나 금액이 같으면 `none`이다. |
 | review_status | pending, approved, rejected. 사용자 화면과 알림은 approved만 사용한다. |
-| fiscal_month | 회사 결산 월(1~12). AI가 공시에서 추출하며, 지급일 예측의 기준으로 사용된다. |
-| expected_payment_year | AI 추출 또는 결산 정보 기반 예상 지급 연도. 사용자 화면 집계 키. |
-| expected_payment_month | AI 추출 또는 결산 정보 기반 예상 지급 월(1~12). |
+| fiscal_month | 회사 결산 월(1~12). AI 후보 단계에서 필수이며, 지급일 추론의 기준으로 사용된다. |
+| expected_payment_year | AI 추출 또는 결산 정보 기반 예상 지급 연도. 후보 단계/승인 이벤트 모두 필수이며 사용자 화면 집계 키다. |
+| expected_payment_month | AI 추출 또는 결산 정보 기반 예상 지급 월(1~12). 후보 단계/승인 이벤트 모두 필수다. |
 | raw_payload | ordinary/special/commemorative breakdown, AI evidence, source metadata 등 감사용 보조 데이터 |
 
 ---
@@ -343,6 +343,10 @@ create table dividend_events (
 ## 6.6 dividend_reviews
 
 관리자 검수용 테이블입니다. AI 파싱 결과는 사용자 데이터가 아니라 후보 데이터이며, AI가 하나의 공시에서 여러 배당 이벤트를 추출하면 이벤트별로 review row를 1개씩 생성합니다.
+
+- `dividend_reviews.change_type`은 AI 판단값을 저장하지 않습니다.
+- review row 생성 시 `change_type`은 `null`로 두고, 관리자가 override를 주지 않으면 승인 RPC가 `dividend_events`의 직전연도 동일 `event_type` 승인 row와 비교해 산출합니다.
+- `fiscal_year`, `fiscal_month`, `extracted_payment_year`, `extracted_payment_month`는 review 후보 단계에서 모두 채워져야 합니다. 원문에 지급 연월이 없으면 결산 연도/월과 중간/기말 구분으로 추론합니다.
 
 ```sql
 create table dividend_reviews (
@@ -356,7 +360,7 @@ create table dividend_reviews (
   extracted_fiscal_year int,
   extracted_fiscal_month int,
   extracted_event_type text,
-  extracted_change_type text,
+  change_type text,
   extracted_record_date date,
   extracted_ex_dividend_date date,
   confidence_score numeric(5,4),

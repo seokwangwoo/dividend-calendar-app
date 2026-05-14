@@ -13,6 +13,7 @@ type NotificationType = Database["public"]["Enums"]["notification_type"];
  * - resumed        → dividend_increase  (resuming dividends is positive)
  * - special        → special_dividend
  * - commemorative  → special_dividend   (nearest existing type)
+ * - none           → null (no change notification)
  * - unchanged      → null (no notification needed)
  * - unknown        → null (cannot classify; admin must decide)
  *
@@ -35,6 +36,8 @@ export function mapChangeTypeToNotificationType(
       return "special_dividend";
     case "commemorative":
       return "special_dividend";
+    case "none":
+      return null;
     case "unchanged":
       return null;
     case "unknown":

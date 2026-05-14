@@ -38,6 +38,7 @@ function changeTypeLabel(changeType: string | null | undefined) {
     resumed: "復配",
     special: "特別",
     commemorative: "記念",
+    none: "変化なし",
     unchanged: "変化なし",
     unknown: "不明"
   };

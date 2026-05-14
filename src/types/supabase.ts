@@ -689,6 +689,7 @@ export type Database = {
         | "resumed"
         | "special"
         | "commemorative"
+        | "none"
         | "unchanged"
         | "unknown";
       review_status: "pending" | "approved" | "rejected" | "needs_manual_check";

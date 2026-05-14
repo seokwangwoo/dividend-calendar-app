@@ -820,12 +820,12 @@ stock_id
 disclosure_id
 event_index            -- 동일 공시 내 AI event index
 extracted_event_type
-extracted_change_type
+change_type            -- review 단계에서는 null, 승인 시 서버가 산출
 extracted_dividend_per_share
 previous_dividend_per_share
-extracted_payment_date
 extracted_payment_month
 extracted_payment_year
+extracted_fiscal_month
 extracted_record_date
 extracted_ex_dividend_date
 confidence_score
