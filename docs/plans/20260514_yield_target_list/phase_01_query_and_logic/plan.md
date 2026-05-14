@@ -44,17 +44,26 @@
      - 기존 패턴(`vi.mock('@/lib/supabase/server')` + `createMockQuery`)을 따른다.
      - 활성 룰 반환 케이스, 빈 배열 반환 케이스 작성.
 
+4. **통합 테스트 작성**
+   - `tests/integration/notifications/yield-targets.test.ts` 신규 파일.
+   - 실제 Supabase DB에 대해 `getActiveYieldTargets` 동작 검증.
+   - 검증 경계: status='active' 필터, stocks 조인 결과, RLS(다른 user_id 룰 비노출).
+   - `RUN_REMOTE_TESTS=1` 환경에서만 실행되도록 기존 통합 테스트 패턴 따름.
+
 ## Test Plan
 
-- `npm run typecheck` — 타입 오류 없음 확인.
-- `npm run test` — `yield-target.test.ts` 6개 케이스 전부 통과 확인.
 - `npm run lint` — lint 오류 없음 확인.
+- `npm run typecheck` — 타입 오류 없음 확인.
+- `npm run build` — 빌드 성공 확인.
+- `npm run test:unit` — `yield-target.test.ts` 6개 케이스 전부 통과 확인, `queries.test.ts` 쿼리 케이스 통과 확인.
+- `npm run test:integration` — `getActiveYieldTargets`의 DB 조회 경계(active 필터, stock 조인, RLS) 를 커버하는 통합 테스트 통과 확인.
 
 ## Completion Criteria
 
 - `getActiveYieldTargets`를 서버 컴포넌트에서 호출하면 현재 사용자의 활성 알림 룰 목록이 stock 정보와 함께 반환된다.
 - `calculateAchieved`가 `gte`/`lte` operator와 null yield를 모두 올바르게 처리한다.
-- `npm run test` 가 통과한다.
+- `npm run test:unit` 이 통과한다.
+- `npm run test:integration` 이 통과한다.
 - `npm run typecheck` 가 통과한다.
 
 ## Excluded From This Phase

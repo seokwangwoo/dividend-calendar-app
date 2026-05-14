@@ -64,6 +64,8 @@
 - `npm run lint` — lint 오류 없음.
 - `npm run typecheck` — 타입 오류 없음.
 - `npm run build` — 빌드 성공.
+- `npm run test:unit` — Phase 01에서 작성한 단위 테스트 통과 확인 (회귀 없음).
+- `npm run test:integration` — Phase 01에서 작성한 DB 조회 통합 테스트 통과 확인 (회귀 없음).
 - 수동 검증:
   - 설정 탭 → "目標利回り管理" 링크 표시 확인.
   - 링크 탭 → `/app/settings/yield-targets` 이동 확인.
