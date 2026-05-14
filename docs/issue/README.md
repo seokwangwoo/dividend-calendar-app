@@ -18,12 +18,12 @@ docs/issue/
 |------|------|--------|
 | [승인 배당 이벤트 기반 종목 예상 배당 동기화 및 산식 근거 표시 필요](active/20260514-stock-expected-dividend-sync-and-simulation-basis.md) | bug | 2026-05-14 |
 | [종목 상세 데이터 소스 미표시 필요](active/20260514-stock-detail-hide-source.md) | bug | 2026-05-14 |
-| [AI 파서 change_type 판단 제거 및 필수 기간 필드 강화](active/20260514-ai-parser-change-type-and-required-period-fields.md) | feature | 2026-05-14 |
 
 ## 해결된 이슈 (Recently Resolved)
 
 | 이슈 | 유형 | 해결일 |
 |------|------|--------|
+| [AI 파서 change_type 판단 제거 및 필수 기간 필드 강화](archive/20260514-ai-parser-change-type-and-required-period-fields.md) | feature | 2026-05-14 |
 | [종목 검색 라우트 누락](archive/20260510-missing-stock-search-route-for-alert-entry.md) | feature | 2026-05-12 |
 | [캘린더 기준 전환 UI가 MVP 정책과 충돌](archive/20260510-calendar-basis-switch-mvp-scope-mismatch.md) | bug | 2026-05-12 |
 | [알림 기준 UI가 MVP 단일 기준 정책과 충돌](archive/20260510-notification-rule-basis-mvp-scope-mismatch.md) | bug | 2026-05-12 |

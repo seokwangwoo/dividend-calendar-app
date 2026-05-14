@@ -1,8 +1,8 @@
 ---
-status: open
+status: resolved
 type: feature
 created: 2026-05-14
-resolved:
+resolved: 2026-05-14
 priority: high
 labels: [pdf-ai, parser, dividend-data, approval-pipeline]
 ---
