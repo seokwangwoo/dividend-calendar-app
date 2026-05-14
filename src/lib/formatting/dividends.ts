@@ -56,6 +56,7 @@ export function formatChangeType(changeType: string): string {
     resumed: "復配",
     special: "特別配当",
     commemorative: "記念配当",
+    none: "変化なし",
     unchanged: "変化なし",
     unknown: "不明"
   };

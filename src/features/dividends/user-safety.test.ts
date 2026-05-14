@@ -328,6 +328,7 @@ describe("special and commemorative dividend components are not double-counted",
   it("mapChangeTypeToNotificationType is deterministic for special and commemorative", () => {
     expect(mapChangeTypeToNotificationType("special")).toBe("special_dividend");
     expect(mapChangeTypeToNotificationType("commemorative")).toBe("special_dividend");
+    expect(mapChangeTypeToNotificationType("none")).toBeNull();
     // Calling twice returns the same result (idempotent)
     expect(mapChangeTypeToNotificationType("special")).toBe(
       mapChangeTypeToNotificationType("special")

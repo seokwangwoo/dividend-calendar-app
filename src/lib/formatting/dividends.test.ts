@@ -50,6 +50,7 @@ describe("formatChangeType", () => {
     expect(formatChangeType("resumed")).toBe("復配");
     expect(formatChangeType("special")).toBe("特別配当");
     expect(formatChangeType("commemorative")).toBe("記念配当");
+    expect(formatChangeType("none")).toBe("変化なし");
     expect(formatChangeType("unchanged")).toBe("変化なし");
     expect(formatChangeType("unknown")).toBe("不明");
   });

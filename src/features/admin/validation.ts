@@ -60,6 +60,7 @@ const VALID_CHANGE_TYPES: DividendChangeType[] = [
   "resumed",
   "special",
   "commemorative",
+  "none",
   "unchanged",
   "unknown"
 ];

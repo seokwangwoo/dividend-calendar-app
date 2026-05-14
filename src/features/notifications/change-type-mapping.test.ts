@@ -29,6 +29,10 @@ describe("mapChangeTypeToNotificationType", () => {
     expect(mapChangeTypeToNotificationType("commemorative")).toBe("special_dividend");
   });
 
+  it("maps none to null (no notification needed)", () => {
+    expect(mapChangeTypeToNotificationType("none")).toBeNull();
+  });
+
   it("maps unchanged to null (no notification needed)", () => {
     expect(mapChangeTypeToNotificationType("unchanged")).toBeNull();
   });
@@ -50,6 +54,12 @@ describe("buildDividendChangeNotificationPayload", () => {
 
   it("returns shouldNotify false for unchanged", () => {
     const result = buildDividendChangeNotificationPayload("unchanged", 100, 100);
+    expect(result.shouldNotify).toBe(false);
+    expect(result.notificationType).toBeNull();
+  });
+
+  it("returns shouldNotify false for none", () => {
+    const result = buildDividendChangeNotificationPayload("none", 100, 100);
     expect(result.shouldNotify).toBe(false);
     expect(result.notificationType).toBeNull();
   });

@@ -162,7 +162,7 @@ describe("Fixture: 配当予想の修正 (dividend_forecast_revision)", () => {
     expect(sectionTrimmed).toBe(true);
   });
 
-  it("produces one year_end review row with increase change_type", () => {
+  it("produces one year_end review row and leaves change_type for server derivation", () => {
     const disclosure = makeDisclosure({
       title: "配当予想の修正に関するお知らせ",
       disclosure_type: "dividend_forecast_revision"
@@ -175,7 +175,7 @@ describe("Fixture: 配当予想の修正 (dividend_forecast_revision)", () => {
     });
     expect(rows).toHaveLength(1);
     expect(rows[0].event_type).toBe("year_end");
-    expect(rows[0].change_type).toBe("increase");
+    expect(rows[0].change_type).toBeNull();
     expect(rows[0].extracted_dividend_per_share).toBe(50);
     expect(rows[0].previous_dividend_per_share).toBe(40);
   });
@@ -232,7 +232,7 @@ describe("Fixture: 剰余金の配当 (dividend_decision)", () => {
     });
     expect(rows).toHaveLength(1);
     expect(rows[0].event_type).toBe("year_end");
-    expect(rows[0].change_type).toBe("unchanged");
+    expect(rows[0].change_type).toBeNull();
   });
 });
 
@@ -495,7 +495,7 @@ describe("Fixture: 復配 (resumed dividend)", () => {
     expect(isStrongDividendDisclosure("配当予想の修正（復配）に関するお知らせ", "other")).toBe(true);
   });
 
-  it("produces a year_end row with resumed change_type", () => {
+  it("produces a year_end row and leaves resumed classification to approval-time logic", () => {
     const disclosure = makeDisclosure({ title: "配当予想の修正（復配）に関するお知らせ" });
     const rows = buildReviewRows({
       disclosure,
@@ -503,7 +503,7 @@ describe("Fixture: 復配 (resumed dividend)", () => {
       validationWarnings: [],
       textExtraction: DEFAULT_TEXT_EXTRACTION
     });
-    expect(rows[0].change_type).toBe("resumed");
+    expect(rows[0].change_type).toBeNull();
   });
 });
 

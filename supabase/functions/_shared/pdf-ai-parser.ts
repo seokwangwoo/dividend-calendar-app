@@ -157,7 +157,7 @@ export type AiDividendEvent = {
   fiscal_period: AiFiscalPeriod;
   dividend_type: AiDividendType;
   status: AiEventStatus;
-  change_type: AiChangeType;
+  change_type?: AiChangeType | null;
   dividend_per_share: number | null;
   previous_dividend_per_share: number | null;
   currency: "JPY";
@@ -384,7 +384,7 @@ function buildDividendExtractionPrompt(text: string, context: DisclosurePromptCo
 2. 중간배당, 기말배당, 특별배당, 기념배당, 무배, 복배, 배당예상 수정 등을 각각 별도 이벤트로 분리해야 합니다.
 3. "예상", "수정 예상", "확정", "결의", "지급 완료", "미정"을 반드시 구분해야 합니다.
 4. 추정하지 말고, 공시 원문에 근거가 있는 값만 추출하세요.
-5. 원문에 없는 값은 null로 둡니다.
+5. 단, expected_payment_year / expected_payment_month / fiscal_year / fiscal_month 는 가능한 한 이벤트마다 완성하세요.
 6. 금액 단위는 반드시 1주당 배당금 기준으로 추출하세요.
 7. 일본어 표현을 기준으로 판단하되, 최종 출력은 지정된 enum 값을 사용하세요.
 8. 같은 공시 안에 "중間配当の決定"과 "期末配当予想の修正"이 함께 있으면 최소 2개의 이벤트로 분리하세요.
@@ -419,7 +419,6 @@ ${text}
       "fiscal_period": "interim" | "year_end" | "q1" | "q2" | "q3" | "q4" | "annual" | "unknown",
       "dividend_type": "ordinary" | "special" | "commemorative" | "mixed" | "no_dividend" | "unknown",
       "status": "estimated" | "forecast" | "revised_forecast" | "resolved" | "confirmed" | "paid" | "undecided" | "unknown",
-      "change_type": "increase" | "decrease" | "unchanged" | "no_dividend" | "resumed" | "special" | "commemorative" | "forecast_revision" | "data_update" | "none" | "unknown",
       "dividend_per_share": number | null,
       "previous_dividend_per_share": number | null,
       "currency": "JPY",
@@ -465,21 +464,7 @@ ${text}
 - "未定" → "undecided"
 - 판단 불가 → "unknown"
 
-4. change_type 판단
-- previous_dividend_per_share와 dividend_per_share를 비교합니다.
-- 새 금액 > 이전 금액 → "increase"
-- 새 금액 < 이전 금액 → "decrease"
-- 새 금액 = 이전 금액 → "unchanged"
-- 새 금액이 0 또는 무배 전환 → "no_dividend"
-- 이전이 0 또는 무배였고 새 금액이 0보다 크면 → "resumed"
-- 특별배당 발생 → "special"
-- 기념배당 발생 → "commemorative"
-- 금액 비교가 불가능하지만 예상 수정 공시이면 → "forecast_revision"
-- 날짜나 지급월만 변경되었으면 → "data_update"
-- 변경 없음 → "none"
-- 판단 불가 → "unknown"
-
-5. 금액 추출 규칙
+4. 금액 추출 규칙
 - 반드시 1주당 배당금만 추출하세요.
 - "1株当たり配当金", "１株当たり配当金", "円銭" 등의 표를 우선 사용하세요.
 - "15円00銭"은 15.00으로 변환하세요.
@@ -488,20 +473,21 @@ ${text}
 - 연간 합계만 있는 경우 fiscal_period를 "annual"로 두세요.
 - 중간/기말이 분리되어 있으면 각각 별도 이벤트로 추출하세요.
 
-6. 날짜 추출 규칙
+5. 날짜 추출 규칙
 - "基準日" → record_date
 - "権利落ち日" 또는 명확한 ex-dividend date → ex_dividend_date
 - "支払開始予定日", "効力発生日", "支払開始日" → exact date가 있으면 expected_payment_year(YYYY)와 expected_payment_month(1~12)를 추출하세요.
 - 정확한 날짜가 없고 "6月下旬", "12月予定"처럼 월만 있으면 expected_payment_month에 월 숫자를 넣고 payment_date_text에 원문을 넣으세요.
-- 연도가 애매하면 fiscal_year, published_at, 원문 문맥을 보고 판단하되, 확실하지 않으면 expected_payment_year = null로 두고 warnings에 이유를 쓰세요.
-- fiscal_month(決算月)는 공시 원문에서 명시되면 1~12 범위의 숫자로 추출하고, 없으면 null로 두세요.
+- 연도가 애매하면 fiscal_year, published_at, 원문 문맥을 보고 최대한 expected_payment_year를 완성하세요.
+- fiscal_month(決算月)는 공시 원문과 제목/문맥에서 판단해 1~12 범위의 숫자로 반드시 채우세요.
+- 정확한 지급 연월이 없더라도 fiscal_year, fiscal_month, fiscal_period를 근거로 expected_payment_year와 expected_payment_month를 반드시 채우세요.
 
-7. evidence_text 규칙
+6. evidence_text 규칙
 - 각 이벤트마다 판단 근거가 되는 원문 일부를 반드시 넣으세요.
 - 너무 길게 복사하지 말고 핵심 문장 또는 표 행만 넣으세요.
 - evidence_text만 봐도 왜 해당 이벤트가 생성되었는지 알 수 있어야 합니다.
 
-8. confidence_score 기준
+7. confidence_score 기준
 - 0.90 이상: 표와 문구가 명확하고 금액/기간/상태가 모두 확실함
 - 0.70 ~ 0.89: 대부분 확실하지만 일부 날짜나 기간이 애매함
 - 0.50 ~ 0.69: 배당 관련 내용은 있으나 기간/상태 판단이 불완전함
@@ -1074,9 +1060,12 @@ function normalizeEvent(rawEvent: unknown): AiDividendEvent | null {
     fiscal_period: fiscalPeriod,
     dividend_type: dividendType,
     status,
-    change_type: VALID_CHANGE_TYPES.has(String(rawEvent.change_type))
-      ? (rawEvent.change_type as AiChangeType)
-      : "unknown",
+    change_type:
+      rawEvent.change_type === null || rawEvent.change_type === undefined
+        ? null
+        : VALID_CHANGE_TYPES.has(String(rawEvent.change_type))
+          ? (rawEvent.change_type as AiChangeType)
+          : "unknown",
     dividend_per_share:
       rawEvent.dividend_per_share === null || rawEvent.dividend_per_share === undefined
         ? null
@@ -1209,6 +1198,14 @@ function mapFiscalPeriodToReviewEventType(
   return "other";
 }
 
+function completeExpectedPaymentYearMonth(event: AiDividendEvent): { year: number | null; month: number | null } {
+  const inferred = deriveExpectedPaymentYearMonth(event);
+  return {
+    year: event.expected_payment_year ?? inferred.year,
+    month: event.expected_payment_month ?? inferred.month
+  };
+}
+
 export function validateAiOutput(
   raw: unknown,
   disclosureTicker: string | null
@@ -1273,7 +1270,7 @@ export function validateAiOutput(
       };
     }
 
-    if (
+    if (event.change_type !== null && event.change_type !== undefined && (
       event.change_type !== "increase" &&
       event.change_type !== "decrease" &&
       event.change_type !== "no_dividend" &&
@@ -1285,10 +1282,22 @@ export function validateAiOutput(
       event.change_type !== "data_update" &&
       event.change_type !== "none" &&
       event.change_type !== "unknown"
-    ) {
+    )) {
       return {
         valid: false,
         error: `ai_output_event_${i}_invalid_change_type:${event.change_type}`
+      };
+    }
+
+    if (
+      event.fiscal_year === null ||
+      event.fiscal_year === undefined ||
+      typeof event.fiscal_year !== "number" ||
+      !Number.isInteger(event.fiscal_year)
+    ) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_missing_fiscal_year`
       };
     }
 
@@ -1371,10 +1380,29 @@ export function validateAiOutput(
         error: `ai_output_event_${i}_invalid_fiscal_month:${event.fiscal_month}`
       };
     }
+    if (event.fiscal_month === null || event.fiscal_month === undefined) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_missing_fiscal_month`
+      };
+    }
     if (typeof event.evidence_text !== "string" || event.evidence_text.trim().length === 0) {
       return {
         valid: false,
         error: `ai_output_event_${i}_missing_evidence_text`
+      };
+    }
+
+    const completedPayment = completeExpectedPaymentYearMonth(event as AiDividendEvent);
+    const reviewEventType = mapFiscalPeriodToReviewEventType(
+      normalizeFiscalPeriod(event.fiscal_period) ?? "unknown",
+      normalizeDividendType(event.dividend_type) ?? "unknown"
+    );
+    const requiresPaymentFields = reviewEventType === "interim" || reviewEventType === "year_end";
+    if (requiresPaymentFields && (completedPayment.year === null || completedPayment.month === null)) {
+      return {
+        valid: false,
+        error: `ai_output_event_${i}_missing_expected_payment_year_month`
       };
     }
   }
@@ -1419,7 +1447,7 @@ export function validateAiOutput(
         error: `ai_output_event_${i}_invalid_dividend_type:${event.dividend_type}`
       };
     }
-    if (!VALID_CHANGE_TYPES.has(String(event.change_type))) {
+    if (event.change_type !== null && event.change_type !== undefined && !VALID_CHANGE_TYPES.has(String(event.change_type))) {
       return {
         valid: false,
         error: `ai_output_event_${i}_invalid_change_type:${event.change_type}`
@@ -1775,13 +1803,9 @@ export function buildReviewRows(params: {
     });
 
     // Apply inference if AI did not provide expected_payment_year/month
-    let paymentYear = event.expected_payment_year;
-    let paymentMonth = event.expected_payment_month;
-    if (paymentYear == null && paymentMonth == null && event.fiscal_month != null) {
-      const inferred = deriveExpectedPaymentYearMonth(event);
-      paymentYear = inferred.year;
-      paymentMonth = inferred.month;
-    }
+    const completedPayment = completeExpectedPaymentYearMonth(event);
+    const paymentYear = completedPayment.year;
+    const paymentMonth = completedPayment.month;
 
     rows.push({
       stock_id: stockId,
@@ -1795,7 +1819,7 @@ export function buildReviewRows(params: {
       extracted_fiscal_month: event.fiscal_month ?? null,
       extracted_record_date: event.record_date ?? null,
       extracted_ex_dividend_date: event.ex_dividend_date ?? null,
-      change_type: event.change_type,
+      change_type: null,
       evidence_text: event.evidence_text,
       warning_message:
         adjusted.warnings.length > 0 ? adjusted.warnings.join("; ") : null,
