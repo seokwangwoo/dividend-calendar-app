@@ -155,7 +155,8 @@ Bullet list of the work to perform. Be specific enough that an executor can turn
 - Run `npm run lint`.
 - Run `npm run typecheck`.
 - Run `npm run build`.
-- Run `npm run test` (if tests exist from earlier phases).
+- Run `npm run test:unit`.
+- Run `npm run test:integration` — must cover every boundary (API routes, DB interactions, external service calls) introduced or modified in this phase.
 - Manual verification steps with exact routes or actions to check.
 
 ## Completion Criteria
@@ -183,11 +184,17 @@ Rules for `plan.md`:
 
 ## Phase Design Rules
 
-1. **Ordered and small**
+1. **User-perspective coherence**
+   - Before writing any phase, ask: *"If a user sees this change land in the product, does it make sense on its own, or does it feel broken or incomplete?"*
+   - Each phase must leave the product in a state that is coherent and non-regressive from the user's point of view — even if only a subset of the final feature is delivered.
+   - Prefer phases that deliver a visible, testable slice of value over phases that only move internal implementation forward without any user-observable outcome.
+   - If a phase produces a state that would confuse or mislead a user (e.g. UI appears but does nothing, data is stored but never shown), split the phase or reorder so the user experience is always consistent.
+
+2. **Ordered and small**
    - Each phase should be implementable in one focused session.
    - A phase should not require redesigning architecture introduced in an earlier phase.
 
-2. **No scope bleed**
+3. **No scope bleed**
    - If a feature is excluded from Phase N, it must be explicitly included in a later phase or in the plan's excluded list.
    - Do not leave gaps: every must-have feature appears in at least one phase's Implementation Scope.
 
@@ -277,6 +284,7 @@ When the user asks for a new plan:
     - Ensure each phase's Prerequisites match the previous phase's Completion Criteria.
     - Ensure every must-have feature appears in at least one phase.
     - Keep each file under 500 lines.
+    - For each phase, apply the **user-perspective coherence** test before finalising: mentally walk through the product as a user after only this phase is deployed. Ask *"Does this make sense? Is anything visibly broken or misleadingly incomplete?"* If yes, redesign the phase boundary before continuing.
 
 6. **Cross-check**
     - Verify that no phase implements excluded scope.
@@ -304,13 +312,78 @@ When the user asks for a new plan:
       - `docs/issue/decision/*.md` — decision records that are superseded or extended
     - The plan itself should reference the updated specs, and the specs should reference the new plan.
 
-10. **Final report**
+10. **Sub-agent plan audit**
+    - Before spawning the sub-agent, compile the **grill-me summary**: a structured list of every decision, constraint, and clarification the user provided during steps 2 and 7. This summary must be passed verbatim into the sub-agent prompt.
+    - Spawn a sub-agent with the following prompt (substitute `<PLAN_DIR>` with the actual plan directory path and `<GRILL_ME_SUMMARY>` with the compiled summary):
+
+      ```
+      You are a plan auditor. Your job is to evaluate a development plan for quality and fitness.
+
+      Plan directory: <PLAN_DIR>
+
+      ## User requirements (from grill-me interview)
+
+      <GRILL_ME_SUMMARY>
+
+      Step 1 — Understand purpose
+      Read README.md and articulate the user promise this plan is meant to deliver in one sentence.
+
+      Step 2 — Fitness check
+      Determine whether the phases as designed are sufficient to fulfil that user promise. For each phase, mentally walk through the product as a user after only that phase is deployed and ask: "Does this make sense? Is anything visibly broken or misleadingly incomplete?" Look for missing features, uncovered scope, logical gaps between phases, and any phase that leaves the user experience in an incoherent or regressive state.
+
+      Step 3 — Phase size check
+      Read every phase_*/plan.md file. Count lines in each file. Flag any file that exceeds 500 lines.
+
+      Step 4 — Test coverage check
+      For every phase plan.md, verify that the ## Test Plan section includes both `npm run test:unit` and `npm run test:integration`, and that integration tests cover API routes, DB interactions, or external service calls introduced or modified in that phase. Cross-reference against the user requirements above to ensure nothing introduced by the user's decisions is left untested. Flag any phase where either test command is missing or integration coverage is clearly insufficient.
+
+      Respond ONLY in the following fixed format — do not add any other text:
+
+      ## Audit Result
+
+      **PASS** or **FAIL**
+
+      ### Purpose
+      <one sentence>
+
+      ### Fitness
+      PASS or FAIL — <one-line reason>
+
+      ### Phase Size
+      PASS or FAIL
+      | Phase | Lines | Status |
+      |---|---|---|
+      | phase_01_... | NNN | OK / OVER |
+      ...
+
+      ### Test Coverage
+      PASS or FAIL
+      | Phase | Unit Tests | Integration Tests | Status |
+      |---|---|---|---|
+      | phase_01_... | present / missing | present / missing | OK / FAIL |
+      ...
+
+      ### Issues
+      - <issue 1, or "none">
+      - <issue 2>
+      ...
+
+      ### Verdict
+      PASS — plan is ready for execution.
+      or
+      FAIL — return to plan design step 4 and address the issues listed above.
+      ```
+
+    - If the sub-agent's **Verdict** is `FAIL`, stop and **restart the workflow from step 4** (Draft README.md), addressing all issues listed in the audit output before proceeding.
+    - If the sub-agent's **Verdict** is `PASS`, continue to step 11.
+
+11. **Final report**
     - List all created and modified files.
     - Summarize phase count and total estimated scope.
     - Highlight any assumptions or blockers that need user confirmation before execution begins.
     - Confirm that the plan is ready for the `phase_executor` to consume.
 
-11. **Merge to main and delete git worktree**
+12. **Merge to main and delete git worktree**
     - After the final report is delivered, commit all plan files in the worktree.
     - Merge the worktree branch into `main` (e.g. `git checkout main && git merge <worktree-branch>`).
     - Only after the merge is complete, delete the git worktree to clean up.
