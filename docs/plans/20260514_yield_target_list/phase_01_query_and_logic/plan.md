@@ -40,6 +40,9 @@
 3. **단위 테스트 작성**
    - `src/features/notifications/yield-target.test.ts` 신규 파일.
    - 6개 케이스: gte 달성, gte 미달성, gte + null yield, lte 달성, lte 미달성, lte + null yield.
+   - `src/features/notifications/queries.test.ts`에 `getActiveYieldTargets` 테스트 추가.
+     - 기존 패턴(`vi.mock('@/lib/supabase/server')` + `createMockQuery`)을 따른다.
+     - 활성 룰 반환 케이스, 빈 배열 반환 케이스 작성.
 
 ## Test Plan
 
