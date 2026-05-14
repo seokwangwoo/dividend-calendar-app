@@ -2,6 +2,8 @@
 name: issue-writer
 description: >
   Write a high-quality, reproducible issue document under docs/issue/active/.
+  This skill is for investigation and issue publication only; do not modify
+  application code, tests, migrations, configuration, or runtime behavior.
   Trigger when the user says things like:
   - "docs/issue에 이슈를 작성해줘"
   - "이 버그를 이슈로 정리해줘"
@@ -19,7 +21,9 @@ description: >
 
 2. **Gather evidence**
    - Read the relevant UI page components, queries, RPC functions, and tests.
+   - Treat all source files as read-only evidence. Do not patch, refactor, format, or otherwise modify code while using this skill.
    - If a database discrepancy is suspected, run SQL/Node queries against Supabase (using the service role key from `.env.local`) to fetch actual rows.
+   - Database access must be investigative only: use read-only queries unless the user explicitly switches away from issue writing and asks for an implementation task.
    - Read related E2E or integration tests to see how values are currently asserted.
    - Never write "maybe" or "probably" — replace with verified facts.
 
@@ -31,6 +35,7 @@ description: >
 
 4. **Update the index**
    - Append the new issue to `docs/issue/README.md` under the **미해결 이슈 (Open)** table.
+   - Do not update any files outside `docs/issue/` as part of this skill.
 
 5. **Deliver**
    - Report back to the user with the file path and a one-paragraph summary.
@@ -129,6 +134,8 @@ Present **at least two** alternatives. For each:
 
 ## Rules
 
+- **Issue-only scope**: This skill may create or edit issue documentation under `docs/issue/` only. It must not modify application code, tests, migrations, scripts, package files, configuration, or generated assets.
+- **No implementation work**: Do not fix the reported issue, refactor related code, add tests, run formatters that write files, or make preparatory code changes. If the user asks for a fix, first finish or hand off the issue document, then treat the fix as a separate task outside this skill.
 - **Fact-based only**: Every numeric discrepancy must be traceable to a specific DB row or code line.
 - **Reproducible**: Another engineer must be able to follow the "재현 방법" and see the same result.
 - **No speculation in Root Cause**: If the exact cause is unclear after investigation, state what is known and what remains to be verified.
