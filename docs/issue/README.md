@@ -16,6 +16,8 @@ docs/issue/
 
 | 이슈 | 유형 | 생성일 |
 |------|------|--------|
+| [포트폴리오에서 `stocks.expected_annual_dividend_per_share` 폴백 없이 "配当データ確認中"이 표시됨](active/20260517-portfolio-confirming-message-missing-stocks-fallback.md) | bug | 2026-05-17 |
+| [process-jobs 에러 직렬화가 실제 실패 원인을 숨김](active/20260517-process-jobs-error-serialization-hides-root-cause.md) | bug | 2026-05-17 |
 | [공시 배당표 斜線 셀로 인한 AI 파서 컬럼 정렬 오류](active/20260517-ai-parser-diagonal-cell-column-misalignment.md) | bug | 2026-05-17 |
 | [승인 배당 이벤트 기반 종목 예상 배당 동기화 및 산식 근거 표시 필요](active/20260514-stock-expected-dividend-sync-and-simulation-basis.md) | bug | 2026-05-14 |
 | [종목 상세 데이터 소스 미표시 필요](active/20260514-stock-detail-hide-source.md) | bug | 2026-05-14 |
