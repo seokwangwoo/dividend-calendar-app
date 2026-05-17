@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -17,56 +18,67 @@ export default async function SettingsPage() {
     <div className="space-y-5">
       <PageHeader title="設定" />
 
-      <Card className="space-y-4 p-5">
-        <div>
-          <p className="text-sm text-muted">アカウント</p>
-          <p className="mt-1 font-medium">{email}</p>
+      <Card>
+        <div className="space-y-4 p-5">
+          <div>
+            <p className="text-sm text-muted">アカウント</p>
+            <p className="mt-1 font-medium">{email}</p>
+          </div>
+          <form action={updateSettings} className="space-y-4">
+            <label className="flex items-center gap-3 text-sm">
+              <Checkbox
+                name="emailNotificationEnabled"
+                defaultChecked={settings.email_notification_enabled}
+              />
+              メール通知を有効にする
+            </label>
+            <label className="flex items-center gap-3 text-sm">
+              <Checkbox
+                name="inAppNotificationEnabled"
+                defaultChecked={settings.in_app_notification_enabled}
+              />
+              アプリ内通知を有効にする
+            </label>
+
+            <FormField label="金額表示" htmlFor="defaultAmountBasis">
+              <Select
+                id="defaultAmountBasis"
+                name="defaultAmountBasis"
+                defaultValue={settings.default_amount_basis}
+                options={AMOUNT_BASIS_OPTIONS}
+              />
+            </FormField>
+
+            <FormField label="通貨" htmlFor="currency">
+              <Input id="currency" value="JPY" readOnly />
+            </FormField>
+
+            <FormField label="年間税引後配当目標額" htmlFor="annualDividendGoalAmount">
+              <Input
+                id="annualDividendGoalAmount"
+                name="annualDividendGoalAmount"
+                type="number"
+                min="0"
+                step="1"
+                defaultValue={settings.annual_dividend_goal_amount ?? ""}
+                placeholder="600000"
+              />
+            </FormField>
+
+            <Button type="submit" className="w-full">
+              保存
+            </Button>
+          </form>
         </div>
-        <form action={updateSettings} className="space-y-4">
-          <label className="flex items-center gap-3 text-sm">
-            <Checkbox
-              name="emailNotificationEnabled"
-              defaultChecked={settings.email_notification_enabled}
-            />
-            メール通知を有効にする
-          </label>
-          <label className="flex items-center gap-3 text-sm">
-            <Checkbox
-              name="inAppNotificationEnabled"
-              defaultChecked={settings.in_app_notification_enabled}
-            />
-            アプリ内通知を有効にする
-          </label>
-
-          <FormField label="金額表示" htmlFor="defaultAmountBasis">
-            <Select
-              id="defaultAmountBasis"
-              name="defaultAmountBasis"
-              defaultValue={settings.default_amount_basis}
-              options={AMOUNT_BASIS_OPTIONS}
-            />
-          </FormField>
-
-          <FormField label="通貨" htmlFor="currency">
-            <Input id="currency" value="JPY" readOnly />
-          </FormField>
-
-          <FormField label="年間税引後配当目標額" htmlFor="annualDividendGoalAmount">
-            <Input
-              id="annualDividendGoalAmount"
-              name="annualDividendGoalAmount"
-              type="number"
-              min="0"
-              step="1"
-              defaultValue={settings.annual_dividend_goal_amount ?? ""}
-              placeholder="600000"
-            />
-          </FormField>
-
-          <Button type="submit" className="w-full">
-            保存
-          </Button>
-        </form>
+        <Link
+          href="/app/settings/yield-targets"
+          className="flex items-center justify-between border-t border-line p-4 text-sm font-medium transition hover:bg-paper"
+        >
+          <span>目標利回り管理</span>
+          <span aria-hidden="true" className="text-lg leading-none text-muted">
+            ›
+          </span>
+        </Link>
       </Card>
 
       <Card className="space-y-3 p-5">
