@@ -1,15 +1,23 @@
-# Issue TDD Skill
+---
+name: issue-tdd
+description: >
+  TDD-driven issue resolution harness backed by scripts/issue-harness. Spawns
+  an isolated git worktree, scaffolds a failing test from a docs/issue/active
+  file, and enforces the Red → Green → Refactor → Finish loop with full
+  project verification (lint, typecheck, unit, integration, e2e) before
+  commit.
+  Trigger when the user says things like:
+  - "이 이슈를 TDD로 고쳐줘"
+  - "이슈 해결해줘"
+  - "issue fix with TDD"
+  - "bug fix with test"
+  - Any request that starts from a docs/issue/active/<file>.md and asks for
+    a test-first fix.
+---
 
 ## Overview
 
 TDD(Test-Driven Development) 기반으로 이슈를 해결하기 위한 자동화 harness입니다. Git worktree로 격리된 환경에서 Red-Green-Refactor 사이클을 강제하며, 이슈 문서 파싱 → 테스트 스캐폴드 생성 → 코드 수정 → 전체 검증 → 커밋까지의 전체 흐름을 지원합니다.
-
-## Trigger
-
-Use this skill when:
-- 사용자가 "이슈 해결", "issue fix", "TDD로 수정", "bug fix with test" 등을 요청할 때
-- `docs/issue/active/` 아래의 이슈 문서를 기반으로 작업을 시작할 때
-- Git worktree 기반 격리된 개발 환경이 필요할 때
 
 ## Tools
 
