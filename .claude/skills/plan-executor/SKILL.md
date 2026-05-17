@@ -155,10 +155,13 @@ for phase in remaining_phases:
 
   3. REGRESSION SMOKE  (skip after the first phase; nothing prior to smoke)
      - Identify the last 1–2 completed phases (the just-finished one + the one before, if any).
-     - Pick the core verification commands available in package.json:
-         npm run lint
-         npm run typecheck
-         npm run test:integration   (if defined; else npm run test)
+     - The smoke set is a strict subset of phase-executor's verification command list
+       (see phase-executor § "Verification Command Strategy"). Use the project-appropriate
+       package manager (pnpm/yarn/npm — detect from the lockfile) and run only the cheap,
+       broad checks:
+         - lint
+         - typecheck
+         - test:integration  (fall back to test when test:integration is undefined)
      - Issue all available commands as parallel Bash calls in a single message.
      - Capture status + failure tail (~50 lines).
      - If any command FAILs:
@@ -278,20 +281,16 @@ On halt:
 
 ## phase-executor Delegation
 
-Each phase is executed by a single `phase-executor` sub-agent call. Prompt template:
+Each phase is executed by a single `phase-executor` sub-agent call. The sub-agent loads the `phase-executor` skill itself, so the prompt only carries inputs and the required return contract — it does not restate the skill's workflow.
 
 ```text
-You are executing one phase of an already-designed plan.
+Use the phase-executor skill to execute exactly this one phase.
 
-Plan root: <PLAN_ROOT>
-Plan README: <PLAN_README_PATH>
-Phase plan: <PHASE_PLAN_PATH>
-Reference files (from README "Source Specifications"): <REFERENCE_PATHS>
-
-Execute this single phase end-to-end using the phase-executor skill's
-architecture: PARSE → SETUP worktree → IMPLEMENT → VERIFY (parallel) →
-EVIDENCE → AUDIT (single or three-way per the split trigger) → LOOP
-(Fixer cold-spawn on FAIL, max 5 rounds) → COMMIT → MERGE.
+Inputs:
+- Plan root: <PLAN_ROOT>
+- Plan README: <PLAN_README_PATH>
+- Phase plan: <PHASE_PLAN_PATH>
+- Reference files (from README "Source Specifications"): <REFERENCE_PATHS>
 
 Return exactly this format when done:
 
