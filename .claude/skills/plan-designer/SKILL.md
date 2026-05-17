@@ -262,14 +262,13 @@ When the user asks for a new plan:
     - Before starting any plan design work, create a dedicated git worktree for isolated plan authoring.
     - Run: `git worktree add .worktrees/plan-design-<YYYYMMDD>_<short_kebab_name>`
     - All subsequent file creation and editing must happen inside this worktree directory.
-    - This ensures the main working tree remains clean and allows safe experimentation.
+    - Why a worktree (even for docs-only changes): step 9 may update existing `docs/*.md` specification files, which can conflict with main-branch work-in-progress. The worktree keeps the user's main tree clean while the plan iterates through clarifications and audits, and lets a draft be discarded without polluting main if the plan is abandoned.
 
-2. **Clarify scope**
-    - If the user promise, fixed stack, hard exclusions, or any other plan-critical detail is ambiguous or missing, **invoke the `grill-me` skill**.
-    - Interview the user relentlessly about every aspect of the plan until a shared understanding is reached. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one.
-    - For each question, provide your recommended answer.
-    - Ask the questions one at a time.
-    - If a question can be answered by exploring the codebase, explore the codebase instead of asking the user.
+2. **Pre-draft clarification — conditional `grill-me`**
+    - Purpose: resolve enough ambiguity to start drafting. This is the *first* of two grill-me passes; the second (step 7) validates the completed draft.
+    - Trigger: only when the user promise, fixed stack, hard exclusions, or any other plan-critical detail is ambiguous or missing. If the user's request is already concrete, skip this step and proceed to drafting.
+    - When triggered, **invoke the `grill-me` skill** and walk down each branch of the design tree, resolving dependencies between decisions one-by-one.
+    - For each question, provide your recommended answer. Ask one question at a time. If the answer is in the codebase, explore the codebase instead of asking.
 
 3. **Choose directory name**
     - Format: `docs/plans/<YYYYMMDD>_<short_kebab_name>/`
@@ -291,12 +290,10 @@ When the user asks for a new plan:
     - Verify that phase folder names sort correctly.
     - Verify that README links point to `phase_XX_name/plan.md`.
 
-7. **Mandatory `grill-me` review**
-    - After the initial plan draft is complete, **you MUST invoke the `grill-me` skill** to interview the user about the plan.
-    - The `grill-me` process is not optional — it is a required step before the plan can be considered final.
-    - During `grill-me`, walk down every branch of the design tree: architecture decisions, data flow, edge cases, operational concerns, and inter-phase dependencies.
-    - For each question, provide your recommended answer and ask the user to confirm or override.
-    - If a question can be answered by exploring the codebase, explore the codebase instead of asking the user.
+7. **Post-draft validation — mandatory `grill-me`**
+    - Purpose: stress-test the *completed draft* against everything that was not visible at step 2 — phase boundaries, inter-phase dependencies, data flow, edge cases, operational concerns. This pass is not optional even when step 2 was skipped or thorough.
+    - Trigger: always, before the plan can be considered final.
+    - **Invoke the `grill-me` skill** and walk every branch of the design tree. For each question, provide your recommended answer and ask the user to confirm or override. If a question can be answered by exploring the codebase, explore the codebase instead of asking.
 
 8. **Update plan files based on `grill-me` outcomes**
     - As the user answers questions during `grill-me`, **immediately edit the generated plan files** (`README.md`, `phase_*/plan.md`) to reflect the resolved decisions.
