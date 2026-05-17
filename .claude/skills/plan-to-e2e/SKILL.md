@@ -1,9 +1,10 @@
 ---
 name: plan-to-e2e
 description: >
-  Orchestrate the full development lifecycle: design a phased plan, implement each phase via
-  isolated sub-agents, then run E2E tests. The main agent only orchestrates — all plan design,
-  phase implementation, and E2E fixing are delegated to sub-agents.
+  Orchestrate the full development lifecycle as a thin composition of three
+  skills: plan-designer → plan-executor → e2e-parallel. The main agent only
+  sequences sub-agents and reports; all design, phase execution, and E2E
+  fixing are delegated to their respective skills.
   Trigger when the user says things like:
   - "계획 세우고 구현해줘"
   - "Plan and execute"
@@ -14,170 +15,168 @@ description: >
 
 ## Purpose
 
-You are the **Orchestrator**. You do not write application code directly. Your only job is to:
+You are the **Orchestrator**. You compose three existing skills in sequence and never duplicate their logic:
 
-1. Delegate plan design to a Plan Designer sub-agent.
-2. Delegate each phase implementation to a Phase Executor sub-agent, one phase at a time.
-3. After all phases pass, delegate E2E testing to an E2E sub-agent.
-4. Report the final outcome to the user.
+1. **plan-designer** — design a phased plan from the user's goal.
+2. **plan-executor** — execute all phases (with preflight, regression smoke, optional plan audit).
+3. **e2e-parallel** — run and fix Playwright E2E tests.
 
-You never implement code yourself. You never run lint, typecheck, or build yourself. If you find yourself about to edit a source file, stop and spawn a sub-agent instead.
+You do not implement code, design phases, run verifications, or fix E2E tests yourself. Each step is a single sub-agent invocation.
 
 ---
 
-## Step 1 — Plan Design (sub-agent)
-
-Spawn a **Plan Designer** sub-agent with the user's goal and all relevant context. The sub-agent runs the full `plan-designer` skill workflow: clarifies scope via `grill-me`, drafts `README.md` and all `phase_*/plan.md` files, and confirms the plan is ready for execution.
-
-Sub-agent prompt template:
+## Architecture
 
 ```
-You are running the plan-designer skill for this repository.
+ORCHESTRATOR (main thread, very thin)
+ ├─ [1] DESIGN     : spawn sub-agent → plan-designer skill
+ │                   ← PLAN_ROOT
+ ├─ [2] EXECUTE    : spawn sub-agent → plan-executor skill
+ │                   ← per-phase commits, halt status
+ ├─ [3] E2E        : spawn sub-agent → e2e-parallel skill   (skippable)
+ │                   ← pass/fail table
+ └─ [4] REPORT     : aggregate the three structured replies
+```
 
-SKILL INSTRUCTIONS:
-<paste the full contents of .claude/skills/plan-designer/SKILL.md here>
+Sequential by necessity: each step's output is the next step's input.
+
+---
+
+## Step 1 — Plan Design
+
+Spawn a sub-agent and instruct it to run the `plan-designer` skill. Do not paste skill content; the sub-agent loads the skill itself.
+
+Sub-agent prompt:
+
+```text
+Use the plan-designer skill to design a phased plan for the user goal below.
+Follow the skill's full workflow including the mandatory grill-me review.
 
 USER GOAL:
-<paste the user's original request here>
+<paste the user's original request>
 
 CONTEXT:
-- Working directory: <repo root>
 - Today's date: <YYYY-MM-DD>
-- Existing plans are under docs/plans/ — read them to understand conventions.
-- Read CLAUDE.md for architecture, domain invariants, and tooling.
+- Working directory: <repo root>
+- Existing plans live under docs/plans/.
+- Read CLAUDE.md for architecture and tooling.
 
-Complete the full plan-designer workflow including the mandatory grill-me review.
-When the plan is final and all files are written, reply with:
+When the plan is final, reply with exactly:
   PLAN_ROOT: <relative path to the plan directory>
-  PHASES: <ordered list of phase folder names, one per line>
+  PHASES: <count>
 ```
 
-Wait for the sub-agent to return `PLAN_ROOT` and `PHASES` before proceeding.
-
-If the sub-agent does not return a valid `PLAN_ROOT`, stop and ask the user to verify the plan was created correctly.
+If the sub-agent does not return a valid `PLAN_ROOT`, halt and ask the user to verify the plan.
 
 ---
 
-## Step 2 — Phase Implementation (sub-agent per phase, sequential)
+## Step 2 — Execute Plan
 
-For each phase in the `PHASES` list, in order:
+Spawn a single sub-agent and instruct it to run the `plan-executor` skill against `PLAN_ROOT`. The `plan-executor` skill owns the per-phase loop, preflight, regression smoke, and conditional plan audit — do not reimplement them here.
 
-1. Spawn a **Phase Executor** sub-agent for that single phase.
-2. Wait for the sub-agent to return `PASS` before spawning the next.
-3. If the sub-agent reports `FAIL` after 5 audit rounds, stop and report the blockers to the user before continuing.
+Sub-agent prompt:
 
-Do **not** spawn multiple phase sub-agents in parallel. Phases are sequential because each phase's output is the next phase's prerequisite.
+```text
+Use the plan-executor skill to execute this plan end-to-end.
 
-Sub-agent prompt template (fill in placeholders before spawning):
+PLAN_ROOT: <PLAN_ROOT>
 
-```
-You are running the phase-executor skill for one phase of a development plan.
+Follow the skill's full workflow: discovery, preflight, sequential per-phase
+delegation to phase-executor, regression smoke between phases, conditional
+plan audit, and halt-on-failure policy.
 
-SKILL INSTRUCTIONS:
-<paste the full contents of .claude/skills/phase-executor/SKILL.md here>
-
-PLAN ROOT: <PLAN_ROOT>
-CURRENT PHASE: <phase folder name, e.g. phase_02_auth_foundation>
-PHASE PLAN FILE: <PLAN_ROOT>/<phase folder>/plan.md
-
-CONTEXT:
-- Main repo path: <absolute path to main repo>
-- Base branch: <current git branch>
-- Read CLAUDE.md for architecture, domain invariants, and tooling.
-- Do not implement scope from any other phase.
-
-Execute only this phase:
-1. Create a git worktree and branch for this phase.
-2. Implement the phase scope inside the worktree.
-3. Run the phase Test Plan inside the worktree.
-4. Write verification evidence to <PLAN_ROOT>/<phase folder>/verification/verification.md.
-5. Run the Auditor sub-agent loop until PASS or 5 rounds exhausted.
-6. Commit and merge back to the base branch.
-
-When done, reply with:
-  PHASE: <phase folder name>
-  STATUS: PASS | FAIL
-  COMMIT: <hash> <message>
-  BLOCKERS: <none or list of unresolved issues>
+When done, reply with exactly:
+  STATUS: COMPLETED | HALTED at <phase>
+  PHASE_COMMITS:
+    - <hash> <phase folder>: <message>
+    - ...
+  PLAN_AUDIT: <PASS | FAIL | skipped>
+  BLOCKERS: <none, or list>
 ```
 
-After each phase, record the commit hash and status in your orchestration log before proceeding to the next phase.
+If `STATUS: HALTED`, skip Step 3 and proceed directly to Step 4 with the halt context.
 
 ---
 
-## Step 3 — E2E Tests (sub-agent)
+## Step 3 — E2E Tests
 
-After all phases report `STATUS: PASS`, spawn a single **E2E** sub-agent.
+Only run when Step 2 returns `STATUS: COMPLETED` **and** the user has not requested to skip E2E.
 
-Sub-agent prompt template:
+The user may opt out by saying "skip e2e", "e2e 건너뛰어", "no e2e" anywhere in the original request. In that case, skip Step 3 and proceed to Step 4.
 
-```
-You are running the e2e-parallel skill for this repository.
+Sub-agent prompt:
 
-SKILL INSTRUCTIONS:
-<paste the full contents of .claude/skills/e2e-parallel/SKILL.md here>
+```text
+Use the e2e-parallel skill to run and, if necessary, fix the Playwright E2E
+suite for this repository.
 
 CONTEXT:
 - All implementation phases are complete.
-- The dev server may need to be started; check whether it is already running before starting it.
+- The dev server may already be running; check before starting one.
 - Do not modify playwright.config.ts.
-- Do not restart the dev server if it is already running.
 
-Run the full E2E suite. Fix any failures following the e2e-parallel workflow.
-When done, reply with a summary table:
-  | File | Tests fixed | Root cause | Files changed |
+When done, reply with exactly:
+  E2E_STATUS: PASS | PARTIAL | FAIL
+  SUMMARY_TABLE:
+    | File | Tests fixed | Root cause | Files changed |
+    | ... |
+  REMAINING_FAILURES: <none, or list>
 ```
 
-If the E2E sub-agent reports remaining failures it could not fix, list them to the user and ask whether to retry or proceed.
+If `E2E_STATUS: PARTIAL` or `FAIL`, list remaining failures to the user in Step 4 — do not auto-retry.
 
 ---
 
 ## Step 4 — Final Report
 
-After E2E completes, report to the user:
+Aggregate the three structured replies. Do not re-read raw logs.
 
-```
+```text
 ## Orchestration Complete
 
 ### Plan
 - Plan root: <PLAN_ROOT>
 - Phases: <count>
 
-### Phase Commits
-- <hash> phase_01_...: <message>
-- <hash> phase_02_...: <message>
-- ...
+### Execution
+- Status: <COMPLETED | HALTED at phase_XX_...>
+- Plan audit: <PASS | FAIL | skipped>
+- Commits:
+  - <hash> phase_01_...: <message>
+  - ...
 
-### E2E Result
-<pass count> / <total count> tests passing.
-<table from E2E sub-agent, if any fixes were made>
+### E2E
+<one of:
+ - "Skipped (user request)"
+ - "Skipped (execution halted)"
+ - E2E_STATUS line + SUMMARY_TABLE
+>
 
 ### Blockers
-<none, or list of unresolved issues with the phase and reason>
+- <unresolved item from any step, or "None">
+
+### Recommended next actions
+- <e.g., "Restart plan-executor after resolving regression in phase_04">
+- <e.g., "Investigate remaining E2E failures in tests/e2e/foo.spec.ts">
 ```
 
 ---
 
 ## Orchestrator Rules
 
-- You are the **only agent** that reads the `PHASES` list and decides what to spawn next.
-- You must read `PLAN_ROOT/README.md` after the Plan Designer sub-agent finishes to extract the ordered phase list, in case the sub-agent's reply is incomplete.
-- You do not modify plan files unless a phase sub-agent explicitly tells you to update the orchestration log.
-- You do not skip a phase, even if it looks trivial.
-- You do not combine phases into a single sub-agent call.
-- You do not run `git` commands yourself unless checking branch state before spawning a phase.
-- If any sub-agent stops with an unresolvable blocker, surface it immediately and wait for the user's decision before continuing.
-- If the user says "skip e2e" or "e2e 건너뛰어", omit Step 3 and go directly to Step 4.
+- Do not paste any sub-skill's SKILL.md content into prompts — reference by name only.
+- Do not implement, design, verify, or fix anything yourself. If you would touch a source file, you have lost the plot.
+- Do not duplicate plan-executor's per-phase loop. One sub-agent call covers all phases.
+- Do not auto-retry on halt or partial E2E failure — surface to the user and stop.
+- Do not run `git` commands beyond inspecting branch state, if needed, before Step 1.
 
 ---
 
-## Sub-agent Skill Content
+## Stop Conditions
 
-When building sub-agent prompts, paste the **full raw text** of the relevant SKILL.md file into the prompt. Do not summarize or paraphrase the skill instructions — the sub-agent must receive the complete specification.
+Halt and ask the user when:
 
-Skill file paths (relative to repo root):
-- Plan Designer: `.claude/skills/plan-designer/SKILL.md`
-- Phase Executor: `.claude/skills/phase-executor/SKILL.md`
-- E2E Parallel:  `.claude/skills/e2e-parallel/SKILL.md`
-
-Read these files immediately before spawning each sub-agent so the content is current.
+- Step 1 sub-agent does not return a valid `PLAN_ROOT`.
+- Step 2 sub-agent returns `HALTED`.
+- Step 3 sub-agent returns `PARTIAL` or `FAIL` with remaining failures.
+- The user's original request is too ambiguous to hand to plan-designer without first clarifying (in that case, ask before spawning Step 1).
