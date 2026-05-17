@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createClient } from "@/lib/supabase/server";
-import { getNotificationRulesForStock, getNotifications } from "./queries";
+import {
+  getActiveYieldTargets,
+  getNotificationRulesForStock,
+  getNotifications
+} from "./queries";
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 
@@ -66,6 +70,63 @@ describe("getNotificationRulesForStock", () => {
     await expect(getNotificationRulesForStock("stock-1")).rejects.toThrow(
       "DB fail"
     );
+  });
+});
+
+describe("getActiveYieldTargets", () => {
+  it("returns active yield targets with stock data", async () => {
+    const rows = [
+      {
+        id: "rule-1",
+        stock_id: "stock-1",
+        operator: "gte",
+        target_yield: 3.5,
+        stocks: {
+          id: "stock-1",
+          name: "Test Stock",
+          ticker: "TEST",
+          expected_dividend_yield: 4.2
+        }
+      }
+    ];
+    const query = createMockQuery({ data: rows, error: null });
+    mockSupabase.from.mockReturnValue(query);
+
+    const result = await getActiveYieldTargets();
+
+    expect(result).toEqual([
+      {
+        ruleId: "rule-1",
+        stockId: "stock-1",
+        stockName: "Test Stock",
+        ticker: "TEST",
+        operator: "gte",
+        targetYield: 3.5,
+        expectedDividendYield: 4.2
+      }
+    ]);
+    expect(mockSupabase.from).toHaveBeenCalledWith("notification_rules");
+    expect(query.select).toHaveBeenCalledWith(
+      "id, stock_id, operator, target_yield, stocks(id, name, ticker, expected_dividend_yield)"
+    );
+    expect(query.eq).toHaveBeenCalledWith("status", "active");
+    expect(query.order).toHaveBeenCalledWith("created_at", { ascending: false });
+  });
+
+  it("returns empty array when active yield target data is null", async () => {
+    const query = createMockQuery({ data: null, error: null });
+    mockSupabase.from.mockReturnValue(query);
+
+    const result = await getActiveYieldTargets();
+
+    expect(result).toEqual([]);
+  });
+
+  it("throws when database returns an error", async () => {
+    const query = createMockQuery({ data: null, error: { message: "DB fail" } });
+    mockSupabase.from.mockReturnValue(query);
+
+    await expect(getActiveYieldTargets()).rejects.toThrow("DB fail");
   });
 });
 
