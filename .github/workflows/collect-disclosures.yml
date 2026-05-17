@@ -2,8 +2,8 @@ name: Collect TDnet Disclosures
 
 on:
   schedule:
-    # Hourly, 24 times daily
-    - cron: "0 * * * *"
+    # Daily at 02:00 JST/KST (17:00 UTC)
+    - cron: "0 17 * * *"
   workflow_dispatch:
     inputs:
       date:
@@ -34,17 +34,32 @@ on:
       limit:
         description: "Yanoshin list limit"
         required: false
-        default: "300"
+        default: "500"
         type: string
       process_batch_size:
-        description: "process-jobs batch size after collection"
+        description: "process-jobs batch size per iteration"
         required: false
-        default: "5"
+        default: "2"
+        type: string
+      download_iterations:
+        description: "Number of process-jobs calls in the download loop"
+        required: false
+        default: "500"
+        type: string
+      extract_batch_size:
+        description: "Number of disclosures to extract per iteration"
+        required: false
+        default: "50"
+        type: string
+      extract_iterations:
+        description: "Number of extraction loop iterations"
+        required: false
+        default: "20"
         type: string
       parse_iterations:
         description: "Number of process-jobs calls in the parse loop"
         required: false
-        default: "20"
+        default: "500"
         type: string
 
 jobs:
@@ -98,18 +113,20 @@ jobs:
           console.log(text);
           if (!response.ok) process.exit(1);
           NODE
+
   download:
     runs-on: ubuntu-latest
     needs: collect
     if: always()
     steps:
-      - name: Invoke process-jobs (download only)
+      - name: Invoke process-jobs (download loop)
         env:
           SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           PROCESS_BATCH_SIZE: ${{ inputs.process_batch_size || vars.PROCESS_JOBS_BATCH_SIZE || '5' }}
+          DOWNLOAD_ITERATIONS: ${{ inputs.download_iterations || vars.DOWNLOAD_ITERATIONS || '20' }}
         run: |
           set -euo pipefail
           node <<'NODE'
@@ -126,21 +143,38 @@ jobs:
             return `${baseUrl}/functions/v1/${functionName}`;
           }
 
-          const response = await fetch(getFunctionUrl("process-jobs"), {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              batch_size: Number(process.env.PROCESS_BATCH_SIZE || "5"),
-              supported_types: ["download_disclosure_pdf"]
-            })
-          });
-          const text = await response.text();
-          console.log(text);
-          if (!response.ok) process.exit(1);
+          const batchSize = Number(process.env.PROCESS_BATCH_SIZE || "5");
+          const iterations = Math.min(Number(process.env.DOWNLOAD_ITERATIONS || "20"), 100);
+          let totalClaimed = 0;
+
+          for (let i = 0; i < iterations; i++) {
+            const response = await fetch(getFunctionUrl("process-jobs"), {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                batch_size: batchSize,
+                supported_types: ["download_disclosure_pdf"]
+              })
+            });
+            const text = await response.text();
+            console.log(`[iteration ${i + 1}/${iterations}] ${text}`);
+            if (!response.ok) process.exit(1);
+
+            let result;
+            try { result = JSON.parse(text); } catch { break; }
+            totalClaimed += result.claimed ?? 0;
+            if (result.claimed === 0) {
+              console.log("No jobs claimed, stopping early.");
+              break;
+            }
+          }
+
+          console.log(`Total claimed: ${totalClaimed}`);
           NODE
+
   extract:
     runs-on: ubuntu-latest
     needs: download
@@ -150,13 +184,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y poppler-utils
-      - name: Extract PDF text with pdftotext
+      - name: Extract PDF text with pdftotext (loop)
         env:
           SUPABASE_REST_URL: ${{ secrets.SUPABASE_REST_URL }}
           SUPABASE_FUNCTION_URL: ${{ secrets.SUPABASE_FUNCTION_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EXTRACT_BATCH_SIZE: ${{ inputs.extract_batch_size || vars.EXTRACT_BATCH_SIZE || '50' }}
+          EXTRACT_ITERATIONS: ${{ inputs.extract_iterations || vars.EXTRACT_ITERATIONS || '20' }}
         run: |
           set -euo pipefail
           node <<'NODE'
@@ -183,72 +219,89 @@ jobs:
             "apikey": key,
             "Content-Type": "application/json"
           };
-          const LIMIT = 50;
-
-          const listRes = await fetch(
-            `${restUrl}/rest/v1/disclosures?select=id,storage_path&storage_path=not.is.null&extracted_text=is.null&document_url=not.like.*example.com*&limit=${LIMIT}`,
-            { headers }
-          );
-          if (!listRes.ok) {
-            console.error("Failed to list disclosures", await listRes.text());
-            process.exit(1);
-          }
-
-          const disclosures = await listRes.json();
-          console.log(`Disclosures pending extraction: ${disclosures.length}`);
-          if (disclosures.length === 0) process.exit(0);
+          const batchSize = Math.min(Number(process.env.EXTRACT_BATCH_SIZE || "50"), 200);
+          const iterations = Math.min(Number(process.env.EXTRACT_ITERATIONS || "20"), 100);
 
           const { spawnSync } = await import("child_process");
           const fs = await import("fs");
           const os = await import("os");
           const path = await import("path");
 
-          let extracted = 0;
-          let failed = 0;
-          for (const d of disclosures) {
-            const tmpPdf = path.join(os.tmpdir(), `disclosure_${d.id}.pdf`);
-            const tmpTxt = path.join(os.tmpdir(), `disclosure_${d.id}.txt`);
-            try {
-              const signRes = await fetch(
-                `${restUrl}/storage/v1/object/sign/disclosures/${d.storage_path}`,
-                { method: "POST", headers, body: JSON.stringify({ expiresIn: 120 }) }
-              );
-              if (!signRes.ok) throw new Error(`sign_failed:${await signRes.text()}`);
+          let totalExtracted = 0;
+          let totalFailed = 0;
 
-              const signed = await signRes.json();
-              const signedUrl = signed.signedURL?.startsWith("http")
-                ? signed.signedURL
-                : signed.signedURL?.startsWith("/storage/v1/")
-                  ? `${restUrl}${signed.signedURL}`
-                  : `${restUrl}/storage/v1${signed.signedURL}`;
-              if (!signedUrl) throw new Error("sign_failed:missing_signed_url");
-
-              const dlResult = spawnSync("curl", ["-sLf", signedUrl, "-o", tmpPdf], { encoding: "utf8" });
-              if (dlResult.status !== 0) throw new Error(`download_failed:${dlResult.stderr}`);
-
-              const ptResult = spawnSync("pdftotext", ["-layout", tmpPdf, tmpTxt], { encoding: "utf8" });
-              if (ptResult.status !== 0) throw new Error(`pdftotext_failed:${ptResult.stderr}`);
-
-              const text = fs.readFileSync(tmpTxt, "utf8");
-              const patchRes = await fetch(
-                `${restUrl}/rest/v1/disclosures?id=eq.${d.id}`,
-                { method: "PATCH", headers, body: JSON.stringify({ extracted_text: text }) }
-              );
-              if (!patchRes.ok) throw new Error(`patch_failed:${await patchRes.text()}`);
-
-              console.log(`extracted id=${d.id} chars=${text.length}`);
-              extracted++;
-            } catch (err) {
-              console.error(`failed id=${d.id} reason=${err instanceof Error ? err.message : String(err)}`);
-              failed++;
-            } finally {
-              fs.rmSync(tmpPdf, { force: true });
-              fs.rmSync(tmpTxt, { force: true });
+          for (let i = 0; i < iterations; i++) {
+            const listRes = await fetch(
+              `${restUrl}/rest/v1/disclosures?select=id,storage_path&storage_path=not.is.null&extracted_text=is.null&document_url=not.like.*example.com*&limit=${batchSize}`,
+              { headers }
+            );
+            if (!listRes.ok) {
+              console.error("Failed to list disclosures", await listRes.text());
+              process.exit(1);
             }
+
+            const disclosures = await listRes.json();
+            console.log(`[iteration ${i + 1}/${iterations}] Disclosures pending extraction: ${disclosures.length}`);
+            if (disclosures.length === 0) {
+              console.log("No disclosures pending extraction, stopping early.");
+              break;
+            }
+
+            let iterationExtracted = 0;
+            let iterationFailed = 0;
+
+            for (const d of disclosures) {
+              const tmpPdf = path.join(os.tmpdir(), `disclosure_${d.id}.pdf`);
+              const tmpTxt = path.join(os.tmpdir(), `disclosure_${d.id}.txt`);
+              try {
+                const signRes = await fetch(
+                  `${restUrl}/storage/v1/object/sign/disclosures/${d.storage_path}`,
+                  { method: "POST", headers, body: JSON.stringify({ expiresIn: 120 }) }
+                );
+                if (!signRes.ok) throw new Error(`sign_failed:${await signRes.text()}`);
+
+                const signed = await signRes.json();
+                const signedUrl = signed.signedURL?.startsWith("http")
+                  ? signed.signedURL
+                  : signed.signedURL?.startsWith("/storage/v1/")
+                    ? `${restUrl}${signed.signedURL}`
+                    : `${restUrl}/storage/v1${signed.signedURL}`;
+                if (!signedUrl) throw new Error("sign_failed:missing_signed_url");
+
+                const dlResult = spawnSync("curl", ["-sLf", signedUrl, "-o", tmpPdf], { encoding: "utf8" });
+                if (dlResult.status !== 0) throw new Error(`download_failed:${dlResult.stderr}`);
+
+                const ptResult = spawnSync("pdftotext", ["-layout", tmpPdf, tmpTxt], { encoding: "utf8" });
+                if (ptResult.status !== 0) throw new Error(`pdftotext_failed:${ptResult.stderr}`);
+
+                const text = fs.readFileSync(tmpTxt, "utf8");
+                const patchRes = await fetch(
+                  `${restUrl}/rest/v1/disclosures?id=eq.${d.id}`,
+                  { method: "PATCH", headers, body: JSON.stringify({ extracted_text: text }) }
+                );
+                if (!patchRes.ok) throw new Error(`patch_failed:${await patchRes.text()}`);
+
+                console.log(`extracted id=${d.id} chars=${text.length}`);
+                iterationExtracted++;
+              } catch (err) {
+                console.error(`failed id=${d.id} reason=${err instanceof Error ? err.message : String(err)}`);
+                iterationFailed++;
+              } finally {
+                fs.rmSync(tmpPdf, { force: true });
+                fs.rmSync(tmpTxt, { force: true });
+              }
+            }
+
+            totalExtracted += iterationExtracted;
+            totalFailed += iterationFailed;
+            console.log(
+              `[iteration ${i + 1}/${iterations}] Summary: extracted=${iterationExtracted} failed=${iterationFailed}`
+            );
           }
 
-          console.log(`Summary: extracted=${extracted} failed=${failed}`);
+          console.log(`Total extraction summary: extracted=${totalExtracted} failed=${totalFailed}`);
           NODE
+
   parse:
     runs-on: ubuntu-latest
     needs: extract
