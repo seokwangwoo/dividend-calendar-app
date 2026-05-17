@@ -1,14 +1,18 @@
 ---
 name: phase-executor
 description: >
-  Execute a phased development plan one phase at a time with git worktree isolation,
-  using an Orchestrator + specialized sub-agents architecture for efficient execution.
+  Execute exactly one phase of a phased development plan with git worktree
+  isolation, using an Orchestrator + specialized sub-agents architecture
+  (Implementer / Verifiers / Auditor / Fixer). Single phase only — for
+  running every phase of a plan end-to-end, the user should reach
+  plan-executor instead.
   Trigger when the user says things like:
-  - "이 계획을 실행해줘"
-  - "Execute this plan"
+  - "Phase 02만 실행해줘"
+  - "다음 phase 구현해줘"
   - "Run the next phase"
   - "Implement phase 02"
-  - Any request to execute a plan under docs/plans/.
+  - "이 phase 하나만 실행해줘"
+  - Any request that names a single phase under docs/plans/ to execute.
 ---
 
 ## Purpose
