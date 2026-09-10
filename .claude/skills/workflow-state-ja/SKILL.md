@@ -1,81 +1,73 @@
 ---
 name: workflow-state-ja
 description: >
-  Phaseベース開発Workflowの進行状態をDocs/STATE.mdに保存・復元・整合確認する。
+  Phase WorkflowとQuick Change Workflowの進行状態をDocs/STATE.mdに保存・復元・整合確認する。
   実装途中の変更要求はCHANGE_CONTROLとして追跡する。
-  「作業状態を更新して」「どこまで進んだ？」「前回の続きから再開して」「STATE.mdを作って」など、
-  セッションをまたぐ進捗管理やWorkflow再開時に使用する。
 ---
 
 # Workflow State Management
 
 ## 目的
 
-Phaseベース開発Workflowの**現在位置だけを、短く・永続的・再検証可能な形で保存する**。
+開発Workflowの**現在位置だけを、短く・永続的・再検証可能な形で保存する**。
 
 `Docs/STATE.md`は仕様書でも作業ログでもない。
 
+対応するWork Type:
+
+- `PHASE`
+- `QUICK_CHANGE`
+
 管理対象:
 
-- 現在のPhase
-- 現在のWorkflow stage
-- Taskごとの状態
-- 現在作業中のTask
+- Work Type
+- Current PhaseまたはCurrent Quick Change
+- Workflow Stage
+- Current Task
+- Task / Quick Change Status
 - Review retry回数
 - Active Change
 - Active Findings
 - Blocker
 - Last Verification
-- 次に実行すべきAction
+- Next Action
 
-詳細なRequirement、Research、設計判断、Review本文、Change Request本文、長い実行ログをSTATEへ複製しない。
+詳細なSpec、Research、Task本文、Review本文、Change Request本文、長い実行ログはSTATEへ複製しない。
 
 ## 基本原則
 
-### 1. STATEはキャッシュでありRepository truthではない
+### STATEはRepository truthより下位
 
 矛盾した場合の優先順位:
 
 1. git / source / test結果
-2. Task / Review / Phase / Change Requestなどのdurable artifact
+2. Task / Review / Phase / Quick Contract / Change Requestなどのdurable artifact
 3. `Docs/STATE.md`
 
-### 2. 状態だけを保存する
+### Next Actionは常に1つ
 
-STATEへ本文をコピーせず、path / ID / short statusだけを記録する。
+再開Agentが次の処理を再判断しなくてよいようにする。
 
-### 3. Next Actionは常に1つ
+### transition時に即時更新
 
-再開Agentが次の処理を再判断しなくてよいように、`Next Action`を一意にする。
-
-### 4. Workflow transition時に即時更新する
-
-少なくとも以下で更新する。
-
-- Phase開始
-- Research開始/完了
-- Planning開始/完了
-- Task開始
-- Implementation完了/BLOCKED/CHANGE_CONTROL
-- Verification完了/FAIL
-- Review開始/PASS/FAIL
-- Repair開始/完了
-- Change Control開始/完了
-- Task完了
-- Phase Close開始
-- Phase COMPLETE/INCOMPLETE/BLOCKED
+Workflow stageが変わるたびに更新する。
 
 ## Default Path
 
-原則:
-
 `Docs/STATE.md`
 
-Repositoryに既存のstate/status規則がある場合はそちらを優先する。
+Repositoryに既存規則がある場合はそちらを優先する。
 
 ## 状態モデル
 
+### Work Type
+
+- `PHASE`
+- `QUICK_CHANGE`
+
 ### Phase Status
+
+PHASE時のみ使用:
 
 - `NOT_STARTED`
 - `RESEARCHING`
@@ -88,6 +80,8 @@ Repositoryに既存のstate/status規則がある場合はそちらを優先す�
 
 ### Task Status
 
+PHASE Taskで使用:
+
 - `PENDING`
 - `READY`
 - `IMPLEMENTING`
@@ -97,15 +91,32 @@ Repositoryに既存のstate/status規則がある場合はそちらを優先す�
 - `PASS`
 - `BLOCKED`
 
+### Quick Change Status
+
+QUICK_CHANGE時に使用:
+
+- `DRAFTING`
+- `READY`
+- `IMPLEMENTING`
+- `VERIFYING`
+- `REVIEWING`
+- `REPAIRING`
+- `COMPLETE`
+- `BLOCKED`
+- `ESCALATED`
+
 ### Stage
 
 - `IDLE`
-- `PHASE_RESEARCH`
 - `PHASE_PLAN`
+- `PHASE_REVIEW`
+- `PHASE_RESEARCH`
+- `TASK_PLAN`
 - `TASK_IMPLEMENT`
 - `TASK_VERIFY`
 - `TASK_REVIEW`
 - `TASK_REPAIR`
+- `QUICK_CHANGE`
 - `CHANGE_CONTROL`
 - `PHASE_CLOSE`
 - `DONE`
@@ -120,68 +131,63 @@ Repositoryに既存のstate/status規則がある場合はそちらを優先す�
 
 ## Current
 
-Phase: `Phase3`
-Phase File: `Docs/Plans/Phase3.md`
-Phase Status: `EXECUTING`
-Stage: `TASK_REVIEW`
-Current Task: `T002`
+Work Type: `PHASE | QUICK_CHANGE`
+Phase: `Phase3 | None`
+Phase File: `Docs/Plans/Phase3.md | None`
+Phase Status: `EXECUTING | None`
+Current Quick Change: `QC-003 | None`
+Quick Change Status: `REVIEWING | None`
+Stage: `TASK_REVIEW | QUICK_CHANGE | ...`
+Current Task: `T002 | QC-003 | None`
 Updated At: `YYYY-MM-DD HH:mm`
 
 ## Next Action
 
-`T002`のIndependent Reviewを実行する。
+<次に行うActionを1つだけ書く>
 
-Use Skill: `task-review-ja`
+Use Skill: `<skill-name>`
 
 ## Artifacts
 
 - Spec: `Docs/Spec.md`
 - Architecture: `Docs/Architecture.md`
-- Phase: `Docs/Plans/Phase3.md`
-- Research: `Docs/Research/Phase3.md`
-- Tasks: `Docs/Tasks/Phase3/`
+- Phase: `... | None`
+- Research: `... | None`
+- Tasks: `... | None`
+- Quick Change: `Docs/QuickChanges/QC-003.md | None`
 
 ## Task Status
 
 | Task | Status | Review Rounds | Depends On | Last Result |
 |---|---|---:|---|---|
-| T001 | PASS | 1 | - | Review PASS |
-| T002 | REVIEWING | 0 | T001 | Verification PASS |
-| T003 | PENDING | 0 | T002 | - |
+
+Quick Changeのみの場合は省略可。
 
 ## Active Change
 
 - None
 
-または:
-
-Change: `Docs/Changes/CR-003.md`
-Type: `REQUIREMENT_CHANGE`
-Requested During: `Phase3 / T002 / TASK_IMPLEMENT`
-Current Work: `PARTIALLY_REUSABLE`
-Affected Tasks: `T002, T003`
-Preserved Tasks: `T001`
+またはCR path / classification / affected tasksだけを短く記録。
 
 ## Active Findings
 
 - None
 
 または:
-
 - `T002 / R001 / MAJOR`
+- `QC-003 / R002 / BLOCKER`
 
 ## Blockers
 
 - None
 
 または:
-
 - `B001`: <短い説明> — Evidence: `<path or command>`
 
 ## Last Verification
 
-Task: `T002`
-Result: `PASS`
+Contract: `T002 | QC-003`
+Result: `PASS | FAIL | SKIPPED`
 Checks:
 - `<command>`: PASS
 
@@ -190,150 +196,78 @@ Checks:
 再開時に必要な短い注意点のみ。最大5項目程度。
 ```
 
-## 初期化
+## 初期化・再開
 
-`Docs/STATE.md`が存在しない場合:
+STATEがない場合、対象Work Typeを判断し、実際のArtifactとgit/source状態から最小STATEを構築する。
 
-1. 対象Phaseを特定する。
-2. Research artifactの有無を確認する。
-3. Task directoryの有無を確認する。
-4. Review / Change Request / verification artifactを必要範囲で確認する。
-5. git status / current source stateを軽く確認する。
-6. 実状態からSTATEを再構築する。
+再開時は:
 
-会話だけを根拠に完了状態を作らない。
-
-## Resume
-
-再開時:
-
-1. STATEを読む。
-2. Current Phase / Stage / Current Task / Next Action / Active Change / Active Findings / Blockersを抽出する。
-3. cheap consistency checkを行う。
-4. 整合していれば`Next Action`から再開する。
-5. 矛盾があればRepository truthに合わせてSTATEを修正する。
+1. STATEを読む
+2. Current Work / Stage / Next Actionを抽出
+3. cheap consistency checkを行う
+4. 整合していればNext Actionから再開
+5. 矛盾があればRepository truthへ補正
 
 Cheap consistency check例:
 
-- Phase fileが存在するか
-- Current Task fileが存在するか
-- PASS TaskにReview PASS evidenceがあるか
+- Current Phase / Quick Contractが存在するか
+- Current Taskが存在するか
+- PASS/COMPLETEにReview evidenceがあるか
 - Active Change pathが存在するか
-- current git stateがSTATEと明らかに矛盾していないか
+- git stateが明らかに矛盾していないか
 
 毎回Repository全体を再調査しない。
 
-## Transition Rules
+## PHASE Transition Rules
 
-### Phase開始
+### Phase Plan
+
+```text
+Work Type = PHASE
+Stage = PHASE_PLAN
+```
+
+### Phase Review
+
+```text
+Stage = PHASE_REVIEW
+```
+
+### Research
 
 ```text
 Phase Status = RESEARCHING
 Stage = PHASE_RESEARCH
-Current Task = None
-Next Action = phase-research-ja
 ```
 
-### Research完了
+### Task Planning
 
 ```text
 Phase Status = PLANNING
-Stage = PHASE_PLAN
-Next Action = phase-task-plan-ja
-```
-
-### Task Planning完了
-
-```text
-Phase Status = EXECUTING
-Stage = TASK_IMPLEMENT
-Current Task = 最初のREADY Task
-Next Action = task-implement-ja
+Stage = TASK_PLAN
 ```
 
 ### Task開始
 
 ```text
-Task Status = IMPLEMENTING
+Phase Status = EXECUTING
 Stage = TASK_IMPLEMENT
 Current Task = Txxx
+Task Status = IMPLEMENTING
 ```
 
-### Implementation完了
+### Verification
 
 ```text
-Task Status = VERIFYING
 Stage = TASK_VERIFY
-Next Action = Task Verification
+Task Status = VERIFYING
 ```
 
-### Implementation中にTask Contract外変更が発生
+### Review
 
 ```text
-Phase Status = EXECUTING
-Stage = CHANGE_CONTROL
-Current Task = Txxx
-Task Status = IMPLEMENTING
-Next Action = change-control-ja
-```
-
-この時点ではcurrent diffを自動revertしない。
-
-### Change Control開始
-
-Active Changeへ以下を記録する。
-
-- Change Request path またはInline Change
-- Classification
-- Requested During
-- Current Work reuse status
-- Affected Tasks
-- Preserved Tasks
-
-詳細Requirement本文はSTATEへ書かない。
-
-### Change Control完了
-
-上位Artifactと影響Taskの更新が完了し、通常Workflowへ戻れる場合:
-
-```text
-Phase Status = EXECUTING
-Stage = TASK_IMPLEMENT
-Current Task = 次のREADY Task
-Next Action = task-implement-ja
-Active Change = None または直近CR pathのみ
-```
-
-Task statusはChange Control結果に従い再計算する。
-
-- 影響なし → `PASS`維持
-- 再実装必要 → `READY` / `PENDING`
-- 再検証のみ必要 → 実装を維持し、Workflow上でverificationへ戻す
-
-### Change Controlで未決事項が残る
-
-```text
-Phase Status = BLOCKED
-Stage = CHANGE_CONTROL
-Next Action = 未決decisionを解消する
-```
-
-### Verification PASS
-
-```text
-Task Status = REVIEWING
 Stage = TASK_REVIEW
-Next Action = task-review-ja
-```
-
-### Verification FAIL
-
-Task起因なら:
-
-```text
-Task Status = IMPLEMENTING
-Stage = TASK_IMPLEMENT
-Next Action = verification failureの限定修正
+Task Status = REVIEWING
 ```
 
 ### Review PASS
@@ -343,14 +277,12 @@ Task Status = PASS
 Review Rounds += 1
 ```
 
-次のdependencyを再評価する。
-
 全Task PASSなら:
 
 ```text
 Phase Status = CLOSING
-Current Task = None
 Stage = PHASE_CLOSE
+Current Task = None
 Next Action = phase-close-ja
 ```
 
@@ -360,34 +292,15 @@ Next Action = phase-close-ja
 Task Status = REPAIRING
 Review Rounds += 1
 Stage = TASK_REPAIR
-Active Findings = BLOCKER/MAJOR Finding IDs
 Next Action = task-repair-ja
 ```
 
-ただしReview中に**新RequirementまたはTask Contract変更が必要と判明した場合**はrepairへ送らない。
+### Contract外変更
 
 ```text
 Stage = CHANGE_CONTROL
 Next Action = change-control-ja
 ```
-
-### Repair完了
-
-```text
-Task Status = VERIFYING
-Stage = TASK_VERIFY
-Next Action = Verification再実行
-```
-
-### Review FAIL 3回
-
-```text
-Task Status = BLOCKED
-Phase Status = BLOCKED
-Stage = BLOCKED
-```
-
-root cause候補をSpec / Architecture / Research / Task Plan / Implementation / Environmentへ分類する。
 
 ### Phase COMPLETE
 
@@ -395,76 +308,129 @@ root cause候補をSpec / Architecture / Research / Task Plan / Implementation /
 Phase Status = COMPLETE
 Stage = DONE
 Current Task = None
-Next Action = 次Phaseを開始、またはWorkflow終了
-Active Change = None
-Active Findings = None
-Blockers = None
 ```
 
-## Task Dependency更新
+## QUICK_CHANGE Transition Rules
 
-TaskがPASS、再計画、またはinvalidateされるたびにdependencyを再評価する。
+### Quick Change Draft
 
-- dependencyがすべてPASS → `READY`
-- dependency未完了 → `PENDING`
-- dependency BLOCKED → 原則`PENDING`
+```text
+Work Type = QUICK_CHANGE
+Current Phase = None
+Phase Status = None
+Stage = QUICK_CHANGE
+Current Quick Change = QC-xxx
+Quick Change Status = DRAFTING
+Current Task = QC-xxx
+Next Action = Quick Contract作成
+```
 
-PASS済みTaskはChange Controlで明示的に`INVALIDATE`または`REVERIFY`されない限りPASSを保持する。
+### Ready
 
-## Active Change管理
+```text
+Quick Change Status = READY
+Next Action = task-implement-ja
+```
 
-STATEはChange Request本文を保存しない。
+### Implement
+
+```text
+Quick Change Status = IMPLEMENTING
+Stage = QUICK_CHANGE
+Current Task = QC-xxx
+```
+
+### Verify
+
+```text
+Quick Change Status = VERIFYING
+Stage = QUICK_CHANGE
+```
+
+### Review
+
+```text
+Quick Change Status = REVIEWING
+Stage = QUICK_CHANGE
+Next Action = task-review-ja
+```
+
+### Review FAIL
+
+```text
+Quick Change Status = REPAIRING
+Review Rounds += 1
+Next Action = task-repair-ja
+```
+
+### Review PASS
+
+```text
+Quick Change Status = COMPLETE
+Stage = DONE
+Current Task = None
+Next Action = 次の作業、またはWorkflow終了
+```
+
+### Quick Eligibility喪失
+
+```text
+Quick Change Status = ESCALATED
+Stage = QUICK_CHANGE
+Next Action = phase-plan-ja
+```
+
+現在diffは自動revertしない。
+
+### Quick BLOCKED
+
+```text
+Quick Change Status = BLOCKED
+Stage = BLOCKED
+```
+
+## Review Retry
+
+Phase Task / Quick Changeともに、同一ContractでIndependent Review FAILが3回続いた場合は無限retryしない。
+
+- Phase Task: 上位Artifact問題を診断
+- Quick Change: Phase昇格またはroot cause診断
+
+## Active Change / Finding管理
+
+STATEには本文を書かない。
 
 保存するのは:
 
-- CR path
+- path / ID
 - classification
-- affected/preserved tasks
-- current work reuse status
+- severity
+- affected scope
 
-Change Control完了後は古い詳細を削除する。
-履歴は`Docs/Changes/`とgit historyへ任せる。
-
-## Active Findings管理
-
-STATEにはReview本文を保存せず、`Task / Finding ID / Severity`のみ保持する。
-
-## Blocker
-
-Blockerは`B001`, `B002`...で管理し、必ずevidenceを付ける。
+解決済み情報は削除する。履歴はArtifactとgit historyへ任せる。
 
 ## STATE Size Rule
 
-`Docs/STATE.md`は原則150行以内を目標にする。
-
-長くなったら:
-
-- 完了Task詳細を削る
-- 古いverification詳細を削る
-- 解決済みBlockerを削る
-- 完了済みChangeの詳細を削る
+原則150行以内を目標にする。
 
 append-only logにしない。
 
 ## 禁止事項
 
-- STATEに仕様を新規決定しない。
-- STATEだけを根拠にTaskをPASSにしない。
-- ReviewなしでTaskをPASSにしない。
-- Change Request本文をSTATEへ複製しない。
-- Task Contract外変更を通常repairとして扱わない。
-- conversation transcriptを貼らない。
-- STATEと実状態の矛盾を無視しない。
+- STATEにRequirementやArchitecture decisionを新規定義しない
+- STATEだけを根拠にPASS/COMPLETEにしない
+- Independent ReviewなしでPASS/COMPLETEにしない
+- transcriptや長いlogを貼らない
+- Current WorkとRepository truthの矛盾を無視しない
 
 ## 完了チェック
 
-- [ ] Current Phaseが一意
-- [ ] Phase Status / Stage / Task Statusが許可値
-- [ ] Current TaskとTask tableが整合する
+- [ ] Work Typeが明確
+- [ ] Current PhaseまたはCurrent Quick Changeが一意
+- [ ] Status / Stageが許可値
+- [ ] Current TaskとArtifactが整合
 - [ ] Review Roundsが最新
-- [ ] Active ChangeがChange Requestと整合する
-- [ ] Active Findingsが最新Reviewと整合する
+- [ ] Active Change / Findingsが最新
 - [ ] Blockerにevidenceがある
-- [ ] Next Actionが1つに決まっている
-- [ ] 詳細Artifactを重複コピーしていない
+- [ ] Next Actionが1つ
 - [ ] STATEがRepository truthと大きく矛盾していない
