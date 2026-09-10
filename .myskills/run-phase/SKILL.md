@@ -1,7 +1,7 @@
 ---
 name: run-phase
 description: >
-  新しいPhase要求をphase-intentからResearch、Planning、Review、Task Planning、Implement、Verify、Independent Review、Repair、Phase CloseまでOrchestrationする。
+  Phase級の変更要求を、phase-cycleによるIntent/Research/Plan/Cold Review準備からTask Planning、Implement、Verify、Independent Review、Repair、Phase CloseまでOrchestrationする。
   既存STATEがある場合は整合確認後、途中stageから再開する。
 ---
 
@@ -9,28 +9,22 @@ description: >
 
 ## 目的
 
-Phase級の変更要求を、**Intent → Research → Plan → Review → Tasks → Implementation**の順で安全に進める。
+Phase級の変更要求を、ユーザーに手動セッション切替を要求せず、準備から実装完了まで安全に進める。
 
-既に途中まで進んでいる場合は`Docs/STATE.md`とdurable artifactを確認し、完了済みstageを不必要にやり直さない。
+Phase準備は`phase-cycle`へ委譲する。
+`run-phase`自身がPlannerとReviewerを同一contextで連続実行して独立性を壊してはならない。
 
 ## New Phase Workflow
 
 ```text
-phase-intent
-  ↓ session-only Intent Brief
-phase-research
-  ↓ Docs/Research/PhaseN.md
-phase-plan
-  ↓ Docs/Plans/PhaseN.md
-phase-review
-  ├─ PASS → phase-task-plan
-  ├─ FAIL(PHASE_PLAN) → phase-plan → phase-review
-  └─ UPSTREAM_BLOCKED
-       ├─ PHASE_RESEARCH → phase-research
-       ├─ PHASE_INTENT → phase-intent → phase-research
-       ├─ SPEC → Spec/change-control
-       └─ ARCHITECTURE → Architecture/change-control
-  ↓
+phase-cycle
+  ├─ phase-intent
+  ├─ phase-research
+  ├─ phase-plan
+  ├─ cold phase-review
+  ├─ targeted correction / upstream routing
+  └─ PASS
+       ↓
 phase-task-plan
   ↓
 READY Taskごとに
@@ -38,27 +32,29 @@ READY Taskごとに
     ↓
   deterministic verification
     ↓
-  task-review
+  cold task-review
     ├─ PASS → 次READY Task
-    ├─ FAIL → task-repair → verification → task-review
+    ├─ FAIL → task-repair → verification → new cold task-review
     └─ Contract変更必要 → change-control
   ↓
 全Task PASS
   ↓
-phase-close
+cold phase-close
 ```
 
-## Intent Interaction
+`phase-cycle`が`BLOCKED`で終了した場合、Task Planningへ進まない。
 
-新しいPhaseでは、要求がすでに十分明確でない限り`phase-intent`を使用する。
+## Existing Prepared Phase
 
-- 質問は1回に1つ。
-- 推奨回答を提示する。
-- codebaseで分かることをユーザーへ質問しない。
-- Intent Briefはファイルへ保存しない。
-- Intent確定後は同一セッションで`phase-research`へ渡す。
+既に以下が成立している場合は`phase-cycle`を再実行しない。
 
-Intentが明らかにQuick Change規模なら`quick-change`へrouteしてよい。
+- `Docs/Research/PhaseN.md`が現在Requirement/Architectureに対して有効
+- `Docs/Plans/PhaseN.md`が存在
+- 最新`phase-review`がPASS
+
+この場合は`phase-task-plan`またはSTATEのNext Actionから再開する。
+
+Phase Planが存在していてもReview PASS evidenceがなければ、必要に応じて`phase-cycle`のReview側から再開する。
 
 ## Resume Workflow
 
@@ -67,14 +63,21 @@ Intentが明らかにQuick Change規模なら`quick-change`へrouteしてよい�
 1. `workflow-state`でcheap consistency checkを行う。
 2. durable artifactとSTATEが矛盾すればRepository truthへ合わせる。
 3. `Next Action`から再開する。
-4. Intent Briefはdurableではないため、Research artifactがまだ存在しない状態でsessionが切れている場合は`phase-intent`を短く再実行する。
+4. Intent Briefはdurableではないため、Research artifactがまだ存在せずsessionも切れている場合は`phase-cycle`内で`phase-intent`を短く再実行する。
 
 ## Context Isolation
 
-- Intent: user request + relevant Spec + 必要最小限のcontext
-- Research: Intent Brief + Spec + Architecture + source
-- Phase Planning: Intent summary + Spec + Architecture + Research
-- Phase Review: Phase + Research + Spec + Architecture + 必要なspot-check source
+### Phase Preparation
+
+`phase-cycle`のContext Isolation Ruleを使用する。
+
+特に:
+- PlannerとPhase Reviewerを分離
+- 再Reviewは可能ならnew cold reviewer
+- Planner reasoningをReviewer evidenceとして渡さない
+
+### Implementation
+
 - Task Planning: Spec + Architecture + Phase + Research
 - Implement: target Task + Architecture + relevant source + 必要箇所だけ
 - Task Review: Task + diff + relevant source + verification
@@ -87,7 +90,7 @@ Intentが明らかにQuick Change規模なら`quick-change`へrouteしてよい�
 ## State Management
 
 `phase-intent`自体はSTATEへ保存しない。
-Intent確定後、`phase-research`開始時から`workflow-state`でdurable stateを管理する。
+`phase-cycle`はResearch開始からdurable stateを管理する。
 
 標準stage order:
 
@@ -96,23 +99,31 @@ PHASE_RESEARCH
 → PHASE_PLAN
 → PHASE_REVIEW
 → TASK_PLAN
-→ TASK_IMPLEMENT / VERIFY / REVIEW / REPAIR
+→ TASK_IMPLEMENT
+→ TASK_VERIFY
+→ TASK_REVIEW
+→ TASK_REPAIR（必要時）
 → PHASE_CLOSE
 → DONE
 ```
 
-## Phase Review Routing
+Phase Review PASS時:
 
-`phase-review`のFindingにある`Fix At`を必ず尊重する。
+```text
+Stage = TASK_PLAN
+Next Action = phase-task-plan
+```
 
-- `PHASE_PLAN`: Phase文書だけを修正して再Review
-- `PHASE_RESEARCH`: evidenceを追加/訂正してからPlanを更新
-- `PHASE_INTENT`: product/user behavior decisionを再確認し、Researchから下流を更新
-- `SPEC`: Spec source-of-truthを修正/確認
-- `ARCHITECTURE`: architecture decisionを解決
+## Phase Review Cycle
 
-すべてのFindingを`phase-plan`へ押し戻さない。
-同じFindingが繰り返す場合は上位原因を疑う。
+Phase準備のReview/修正loopは`phase-cycle`へ任せる。
+
+ルール:
+- Reviewerはcold contextを優先
+- Findingの`Fix At`に従う
+- MINORだけでFAIL loopを継続しない
+- 最大3 Review rounds
+- upstream problemをPhase Plannerだけで解決しようとしない
 
 ## Task Scheduling
 
@@ -121,12 +132,40 @@ PHASE_RESEARCH
 - 同一file / 広いshared stateを触るTaskは原則serial。
 - TaskをIndependent Review PASS前に完了扱いしない。
 
+## Task Review Independence
+
+`task-implement`を行ったAgentがそのまま最終承認してはならない。
+
+推奨:
+
+```text
+Implementer Agent A
+  ↓ diff + verification
+Reviewer Agent B (cold)
+  ↓ FAIL
+Repair Agent / Implementer
+  ↓
+Reviewer Agent C (cold)
+```
+
+Reviewer input:
+- Task Contract
+- actual diff
+- relevant source
+- verification result
+- 必要なSpec/Researchだけ
+
+Implementerの説明・自己評価をevidenceとして扱わない。
+
 ## Task Review Loop
 
 Review FAIL:
-1. Findingを`task-repair`へ渡す。
-2. 修正後Verification。
-3. cold/independent contextで`task-review`再実行。
+1. Findingがexisting Task Contractへの実装不良か確認する。
+2. 実装不良なら`task-repair`へFindingだけ渡す。
+3. 修正後Verification。
+4. new cold contextで`task-review`再実行。
+
+Requirement/Contract変更が必要なら`task-repair`ではなく`change-control`へrouteする。
 
 同一Taskで3回FAILしたら停止し、BLOCKED reportを作る。
 
@@ -142,14 +181,31 @@ root cause候補:
 ## Change Control
 
 新Requirement、Scope変更、Architecture変更はrepairへ流さない。
-`change-control`でSource of Truthを更新し、必要ならIntent clarification → Research → Phase Planの順で影響範囲だけ再構築する。
+
+`change-control`でSource of Truthを更新し、必要なら:
+
+```text
+phase-intent
+→ phase-research
+→ phase-plan
+→ cold phase-review
+```
+
+を`phase-cycle`相当の方法で影響範囲だけ再構築する。
+
 PASS済みで影響なしのTaskは保持する。
+
+## Phase Close Independence
+
+全Task PASS後、可能なら`phase-close`もImplementation Agentとは別のcold contextで実行する。
+
+目的は個別Taskでは見落としやすいintegration gap、Requirement coverage、cross-task contract不一致を独立確認すること。
 
 ## 完了条件
 
 Phase COMPLETEは以下すべて必要。
 
-- Phase Review PASS
+- `phase-cycle`または同等手順によるPhase Review PASS
 - 全必須TaskがIndependent Review PASS
 - Phase-level Requirement Coverage成立
 - Integration gapなし
@@ -165,8 +221,9 @@ Phase COMPLETEは以下すべて必要。
 ## Result
 COMPLETE | INCOMPLETE | BLOCKED
 
-## Phase
-...
+## Phase Preparation
+Review: PASS
+Review Rounds: <n>
 
 ## Task Summary
 | Task | Status | Review Rounds |
