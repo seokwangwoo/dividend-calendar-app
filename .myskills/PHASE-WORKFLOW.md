@@ -207,6 +207,8 @@ Reviewerには原則として次を渡す。
 
 Findingには`Fix At`を付け、すべてを`phase-plan`へ戻さない。
 
+通常は`phase-cycle`からcold Reviewerとして実行し、手動で別セッションを開かない。
+
 ## Quick Change Workflow
 
 ```text
@@ -235,7 +237,7 @@ Quick ChangeがPhaseへ昇格する際、古いQC Contractだけを新PhaseのSo
 | `phase-intent` | Phase前のGoal/Scope/Outcomeを対話で明確化。session-only |
 | `phase-research` | Intentを起点に実コードのentry/flow/pattern/evidenceを調査 |
 | `phase-plan` | Research evidenceを基にPhase文書を作成 |
-| `phase-review` | Phase文書が安全に実装開始可能か独立Quality Gate |
+| `phase-review` | Phase文書が安全に実装開始可能かcold/independent Quality Gate |
 | `phase-cycle` | IntentからPhase Review PASSまでをcold review付きで自動Orchestration |
 | `phase-task-plan` | 承認済みPhase + Researchを実行Taskへ分解 |
 | `task-implement` | 1 Contractだけ実装・Verification・STATE更新 |
