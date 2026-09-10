@@ -1,5 +1,5 @@
 ---
-name: phase-close-ja
+name: phase-close
 description: >
   Phase内の全Taskが完了した後に、Task単体ではなくPhase全体としてRequirement・Integration・Verificationを満たすか確認する。
   「Phaseを完了判定して」「全Taskをまとめて確認して」など、Phase完了判定に使用する。

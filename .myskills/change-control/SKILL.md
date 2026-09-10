@@ -1,5 +1,5 @@
 ---
-name: change-control-ja
+name: change-control
 description: >
   Phase Planning完了後またはTask実行中に発生した仕様変更・追加要求・設計変更を分類し、
   必要な上位文書だけを更新して影響Taskを再計画する。
@@ -15,7 +15,7 @@ description: >
 **変更が発生した抽象化レベルまでだけ戻ってSource of Truthを更新し、影響を受ける下位Artifactだけを再計画する。**
 
 このSkillは通常のReview Finding修正には使用しない。
-Reviewで既存Task Contractへの違反が見つかっただけなら`task-repair-ja`を使用する。
+Reviewで既存Task Contractへの違反が見つかっただけなら`task-repair`を使用する。
 
 ## Core Rule
 
@@ -258,7 +258,7 @@ Stage: `TASK_IMPLEMENT` 等
 ```text
 Stage = CHANGE_CONTROL
 Current Task = Txxx
-Next Action = change-control-ja
+Next Action = change-control
 ```
 
 必要ならPhase Statusは`EXECUTING`のまま維持する。
@@ -353,7 +353,7 @@ Affected Tasks
 
 ## STATE Update
 
-Change Control中は`workflow-state-ja`の方針に従い、STATEへ詳細要求を複製せずChange Request pathを記録する。
+Change Control中は`workflow-state`の方針に従い、STATEへ詳細要求を複製せずChange Request pathを記録する。
 
 推奨:
 
@@ -379,7 +379,7 @@ Preserved Tasks:
 
 ```text
 Next Action = CR-003に基づきSpec.mdを更新する
-Use Skill = change-control-ja
+Use Skill = change-control
 ```
 
 変更反映が完了したら:
@@ -388,17 +388,17 @@ Use Skill = change-control-ja
 - Task dependencyを再評価する
 - current Taskを次の`READY` Taskへ設定する
 - `Stage = TASK_IMPLEMENT`
-- `Next Action = task-implement-ja`
+- `Next Action = task-implement`
 
 ## Repairとの境界
 
-`task-repair-ja`を使用する条件:
+`task-repair`を使用する条件:
 
 - Requirementは変わっていない
 - Task Contractも正しい
 - Review Findingが実装不備を指摘している
 
-`change-control-ja`を使用する条件:
+`change-control`を使用する条件:
 
 - 新しい要求が追加された
 - Task Contract自体を変える必要がある

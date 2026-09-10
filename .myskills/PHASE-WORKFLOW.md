@@ -10,8 +10,8 @@
 Change Request
    ↓
 Small / local / single outcome ?
-   ├─ YES → quick-change-ja
-   └─ NO  → phase-plan-ja
+   ├─ YES → quick-change
+   └─ NO  → phase-plan
 ```
 
 ## Quick Change Workflow
@@ -19,18 +19,18 @@ Small / local / single outcome ?
 Phaseを作るほどではない小規模修正は次の流れで進めます。
 
 ```text
-quick-change-ja
+quick-change
    ↓
 Docs/QuickChanges/QC-xxx.md
    ↓
-task-implement-ja
+task-implement
    ↓
 Verification
    ↓
-task-review-ja
+task-review
    ├─ PASS → COMPLETE
-   ├─ FAIL → task-repair-ja → 再Verification → 再Review
-   └─ scope拡大 → phase-plan-jaへ昇格
+   ├─ FAIL → task-repair → 再Verification → 再Review
+   └─ scope拡大 → phase-planへ昇格
 ```
 
 Quick Changeの目安:
@@ -56,30 +56,30 @@ Quick Changeの目安:
 ```text
 Spec / Architecture / Change Request
           ↓
-     phase-plan-ja
+     phase-plan
           ↓
-    phase-review-ja
-      ├─ FAIL → phase-plan-jaでFinding修正 → 再Review
+    phase-review
+      ├─ FAIL → phase-planでFinding修正 → 再Review
       └─ PASS
           ↓
-   phase-research-ja
+   phase-research
           ↓
- phase-task-plan-ja
+ phase-task-plan
           ↓
      Ready Task
           ↓
-  task-implement-ja
+  task-implement
           ↓
  Deterministic Verification
           ↓
-   task-review-ja
+   task-review
       ├─ PASS → 次Task
-      ├─ FAIL → task-repair-ja → 再Verification → 再Review
-      └─ CHANGE → change-control-ja
+      ├─ FAIL → task-repair → 再Verification → 再Review
+      └─ CHANGE → change-control
           ↓
     全Task PASS
           ↓
-    phase-close-ja
+    phase-close
           ↓
    STATE = COMPLETE
 ```
@@ -88,18 +88,18 @@ Spec / Architecture / Change Request
 
 | Skill | 役割 |
 |---|---|
-| `workflow-state-ja` | Phase / Quick Change両方の進捗保存・復元・整合確認 |
-| `quick-change-ja` | Phase不要の小規模修正を軽量Contract付きで実行 |
-| `phase-plan-ja` | Phase文書そのものを作成・更新 |
-| `phase-review-ja` | Phase文書を実装前に独立レビュー |
-| `phase-research-ja` | 承認済みPhaseのコードベース詳細調査 |
-| `phase-task-plan-ja` | Phase + Researchを実装Taskへ分解 |
-| `task-implement-ja` | Phase Task / Quick Changeを1件実装しVerificationとSTATE更新 |
-| `task-review-ja` | Phase Task / Quick Changeの独立Review |
-| `task-repair-ja` | FAIL Findingだけを限定修正 |
-| `change-control-ja` | 実行中のRequirement/Scope/Architecture変更を分類・再計画 |
-| `phase-close-ja` | Phase全体の完成を統合確認 |
-| `run-phase-ja` | 承認済みPhaseのResearch以降をSTATE付きでOrchestration |
+| `workflow-state` | Phase / Quick Change両方の進捗保存・復元・整合確認 |
+| `quick-change` | Phase不要の小規模修正を軽量Contract付きで実行 |
+| `phase-plan` | Phase文書そのものを作成・更新 |
+| `phase-review` | Phase文書を実装前に独立レビュー |
+| `phase-research` | 承認済みPhaseのコードベース詳細調査 |
+| `phase-task-plan` | Phase + Researchを実装Taskへ分解 |
+| `task-implement` | Phase Task / Quick Changeを1件実装しVerificationとSTATE更新 |
+| `task-review` | Phase Task / Quick Changeの独立Review |
+| `task-repair` | FAIL Findingだけを限定修正 |
+| `change-control` | 実行中のRequirement/Scope/Architecture変更を分類・再計画 |
+| `phase-close` | Phase全体の完成を統合確認 |
+| `run-phase` | 承認済みPhaseのResearch以降をSTATE付きでOrchestration |
 
 ## 想定ドキュメント構成
 
