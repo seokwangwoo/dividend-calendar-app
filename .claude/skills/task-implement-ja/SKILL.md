@@ -2,6 +2,7 @@
 name: task-implement-ja
 description: >
   計画済みのTaskを1件だけ実装し、指定されたVerificationを実行した後、Docs/STATE.mdの作業状態を更新する。
+  実装中にTask Contract外の変更要求が発生した場合は実装へ混ぜず、change-control-jaへ移行する。
   「T001を実装して」「次のTaskを実装して」など、Task単位の実装に使用する。
 ---
 
@@ -35,7 +36,8 @@ description: >
 
 ## 使用する関連Skill
 
-作業状態の更新には `workflow-state-ja` の状態モデルと更新規則を使用する。
+- 状態更新: `workflow-state-ja`
+- Task Contract外の変更要求: `change-control-ja`
 
 ## 言語ルール
 
@@ -50,6 +52,53 @@ description: >
 ただし、Task内の前提が現在のRepositoryと矛盾する場合は、古い指示を盲目的に実装しない。
 
 また、Task終了時にSTATEを更新せず終了してはならない。
+
+## Change Request Gate
+
+実装中にユーザー・仕様担当・装置担当などから追加要求または変更要求が入った場合、まず現在Task Contract内かを判定する。
+
+### Current Task Contract内
+
+以下をすべて満たす場合は通常実装を継続してよい。
+
+- Goalが変わらない
+- Requirement / Acceptance Criteriaが変わらない
+- Non-Goalsへscope leakしない
+- Architecture boundaryが変わらない
+- TaskのDone Whenを変更する必要がない
+
+単なるimplementation detail差分は`Deviations`へ記録する。
+
+### Current Task Contract外
+
+以下のいずれかに該当する場合は、その場で実装へ混ぜてはならない。
+
+- 新しいuser/device/system behaviorが追加された
+- Requirement / Acceptance Criteriaを変更する必要がある
+- TaskのGoal / Done When / Non-Goalsを変更する必要がある
+- Phase scopeを変更する必要がある
+- Architecture boundary / flow / responsibilityが変わる
+- future Taskのdependencyやscopeへ影響する
+
+この場合:
+
+1. 現在diffをrevertしない。
+2. current Taskとgit diffを保持する。
+3. `Docs/STATE.md`を以下へ更新する。
+
+```text
+Phase Status = EXECUTING
+Stage = CHANGE_CONTROL
+Current Task = Txxx
+Task Status = IMPLEMENTING
+Next Action = 変更要求をchange-control-jaで分類する
+Use Skill = change-control-ja
+```
+
+4. `change-control-ja`へ処理を渡す。
+5. Change Control完了まで追加要求を実装しない。
+
+変更要求を通常のReview Findingとして`task-repair-ja`へ送らない。
 
 ## 手順
 
@@ -70,7 +119,7 @@ description: >
 
 `Docs/STATE.md`が存在する場合、現在のRepository状態と大きな矛盾がないことを軽く確認する。
 
-対象Taskを開始する時点で、次の状態へ更新する。
+対象Taskを開始する時点で:
 
 - Phase Status: `EXECUTING`
 - Stage: `TASK_IMPLEMENT`
@@ -78,9 +127,7 @@ description: >
 - 対象Task Status: `IMPLEMENTING`
 - Next Action: 対象Taskの実装を継続する
 
-`Docs/STATE.md`が存在しない場合は、`workflow-state-ja` の初期化規則に従って最小STATEを作成する。
-
-会話だけを根拠に既存TaskをPASS扱いにしない。
+STATEが存在しない場合は`workflow-state-ja`で初期化する。
 
 ### 3. 前提を実コードで再確認する
 
@@ -120,9 +167,9 @@ TaskのDone条件を証明するために必要なtestを追加する。
 
 無関係なtest rewriteは行わない。
 
-### 6. 実装完了後、Verification開始状態へ更新する
+### 6. Verification開始状態へ更新する
 
-コード変更が完了し、Verificationへ移る直前にSTATEを更新する。
+コード変更が完了したら:
 
 - Phase Status: `EXECUTING`
 - Stage: `TASK_VERIFY`
@@ -147,7 +194,6 @@ Taskの`Verification`に記載されたcommandを実行する。
 Task外の既存failureを発見した場合は勝手に大規模修正せず、区別して報告する。
 
 Verification結果はSTATEの`Last Verification`へ短く記録する。
-
 長いtest log全文はSTATEへコピーしない。
 
 ### 8. Diff Self Reviewを行う
@@ -162,15 +208,11 @@ Verification結果はSTATEの`Last Verification`へ短く記録する。
 - missing test
 - scope leak
 
-を確認する。
-
 ### 9. 終了状態を必ず更新する
 
-最終報告を返す前に、`workflow-state-ja` の規則に従って `Docs/STATE.md` を更新する。
+最終報告を返す前に`workflow-state-ja`の規則に従ってSTATEを更新する。
 
 #### A. IMPLEMENTED + Verification成功
-
-TaskをIndependent Reviewへ渡せる状態なら:
 
 - Phase Status: `EXECUTING`
 - Stage: `TASK_REVIEW`
@@ -181,12 +223,9 @@ TaskをIndependent Reviewへ渡せる状態なら:
 - Use Skill: `task-review-ja`
 
 この時点ではTaskを`PASS`にしてはならない。
-
 `PASS`へ遷移できるのはIndependent ReviewがPASSした後だけである。
 
 #### B. Verification未解決FAIL
-
-このSkill内で安全に解消できないVerification failureが残る場合:
 
 - Phase Status: `EXECUTING`
 - Stage: `TASK_VERIFY`
@@ -194,26 +233,31 @@ TaskをIndependent Reviewへ渡せる状態なら:
 - 対象Task Status: `VERIFYING`
 - Last Result: `Verification FAIL`
 - BlockersまたはRemaining Concernsへfailure evidenceを記録
-- Next Action: failure原因を確認し、Task範囲内で修正または上位問題へescalateする
+- Next Action: failure原因をTask範囲内で限定修正、または上位問題へescalateする
 
 この場合はIndependent Reviewへ進まない。
 
 #### C. BLOCKED
-
-Requirement / Architecture / dependencyなどにより実装を継続できない場合:
 
 - Phase Status: `BLOCKED`
 - Stage: `BLOCKED`
 - Current Task: 対象 `Txxx`
 - 対象Task Status: `BLOCKED`
 - Blockers: blocker ID + 短い説明 + evidence
-- Next Action: blockerの原因をSpec / Architecture / Research / Task Plan / dependency / environmentのいずれかへ分類し、解消する
+- Next Action: blocker原因をSpec / Architecture / Research / Task Plan / dependency / environmentへ分類する
 
-不明点を推測で埋めて`IMPLEMENTED`にしない。
+#### D. CHANGE_CONTROL
+
+追加・変更要求がTask Contract外の場合:
+
+- Phase Status: 原則`EXECUTING`
+- Stage: `CHANGE_CONTROL`
+- Current Task: 対象 `Txxx`
+- 対象Task Status: `IMPLEMENTING`
+- Next Action: `change-control-ja`で変更要求を分類・反映する
+- Use Skill: `change-control-ja`
 
 ## STATE更新ルール
-
-STATE更新では以下を守る。
 
 - Task本文をSTATEへコピーしない。
 - diff全文をSTATEへコピーしない。
@@ -222,11 +266,11 @@ STATE更新では以下を守る。
 - `Updated At`を更新する。
 - `Next Action`は常に1つにする。
 - 他Taskのstatusを根拠なく変更しない。
-- STATEと実Repositoryが矛盾する場合はRepository truthを優先し、STATEを補正する。
+- STATEと実Repositoryが矛盾する場合はRepository truthを優先する。
 
 ## BLOCKED条件
 
-以下によりTask Contractを安全に満たせない場合は、推測で埋めず`BLOCKED`を返す。
+以下によりTask Contractを安全に満たせない場合は`BLOCKED`を返す。
 
 - Requirementの重大な欠落・矛盾
 - Architecture前提の誤り
@@ -241,7 +285,7 @@ STATE更新では以下を守る。
 
 ## Result
 
-IMPLEMENTED | BLOCKED
+IMPLEMENTED | BLOCKED | CHANGE_CONTROL
 
 ## Changed Files
 
@@ -260,25 +304,17 @@ IMPLEMENTED | BLOCKED
 ## State Update
 
 - `Docs/STATE.md`: UPDATED
-- Stage: `TASK_REVIEW` | `TASK_VERIFY` | `BLOCKED`
-- Task Status: `REVIEWING` | `VERIFYING` | `BLOCKED`
+- Stage: `TASK_REVIEW` | `TASK_VERIFY` | `CHANGE_CONTROL` | `BLOCKED`
+- Task Status: `REVIEWING` | `VERIFYING` | `IMPLEMENTING` | `BLOCKED`
 - Next Action: ...
 
 ## Deviations
 
-None
-
-または
-
-- 計画との差異
-- 実コード上の根拠
-- なぜこの変更が最小か
+None または計画との差異。
 
 ## Remaining Concerns
 
-None
-
-または具体的な懸念のみ記載。
+None または具体的懸念。
 ```
 
 ## 完了条件
@@ -290,6 +326,6 @@ None
 - 必須Verificationが成功、または正当なSKIPPED理由がある
 - Non-Goalsへscope leakしていない
 - 独立Reviewerへ渡せる状態である
-- `Docs/STATE.md`が次のActionを示す状態へ更新されている
+- STATEが次Actionを示す状態へ更新されている
 
-最終報告を返す前にSTATE更新の完了を確認する。
+Task Contract外の変更要求が未処理なら`IMPLEMENTED`にせず`CHANGE_CONTROL`とする。
