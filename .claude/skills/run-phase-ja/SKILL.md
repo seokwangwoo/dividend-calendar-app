@@ -1,7 +1,7 @@
 ---
 name: run-phase-ja
 description: >
-  1つのPhaseについて、State復元 → Research → Task Planning → Task Implementation → Verification → Independent Review → Repair → Phase Closeを順番に実行する。
+  1つのPhaseについて、State復元 → Research → Task Planning → Task Implementation → Verification → Independent Review → Repair / Change Control → Phase Closeを順番に実行する。
   「このPhaseを一通り進めて」「前回の続きからPhaseを進めて」「次のPhaseを完了まで実行して」など、Phase全体のオーケストレーションに使用する。
 ---
 
@@ -12,8 +12,7 @@ description: >
 対象Phaseを標準Workflowに従って最後まで進める。
 
 このSkillはOrchestratorとして振る舞い、各工程の専門責務は対応Skillへ委譲する。
-
-Workflowの進行状態は`workflow-state-ja`を使用してdurable stateとして保存する。
+Workflowの進行状態は`workflow-state-ja`を使用して`Docs/STATE.md`へ保存する。
 
 ## 使用するSkill
 
@@ -22,23 +21,9 @@ Workflowの進行状態は`workflow-state-ja`を使用してdurable stateとし�
 3. `phase-task-plan-ja`
 4. `task-implement-ja`
 5. `task-review-ja`
-6. `task-repair-ja`（FAIL時のみ）
-7. `phase-close-ja`
-
-## 入力
-
-必須:
-
-- 対象 `Docs/Plans/PhaseN.md`
-- `Docs/Spec.md`
-- `Docs/Architecture.md`
-- Repository source
-
-状態管理:
-
-- `Docs/STATE.md`（存在する場合）
-
-既存のパスやRepository規則が異なる場合はそちらを優先する。
+6. `task-repair-ja`（既存Task Contractへの実装不備のみ）
+7. `change-control-ja`（新要求・Task Contract変更・Spec/Architecture変更時）
+8. `phase-close-ja`
 
 ## Workflow
 
@@ -51,19 +36,26 @@ STATE load / consistency check
           ↓
     Task Planning
           ↓
-     Ready Task
+      Ready Task
           ↓
       Implement
+          │
+          ├─ Task Contract外の変更要求
+          │          ↓
+          │    Change Control
+          │          ↓
+          │   影響Artifact更新
+          │          ↓
+          │    影響Taskだけ再計画
+          │          ↓
+          └──────→ Ready Taskへ復帰
           ↓
 Deterministic Verification
           ↓
  Independent Review
-    ├─ PASS → state更新 → 次Task
-    └─ FAIL → state更新 → Repair
-                         ↓
-                    Verification
-                         ↓
-                       Review
+    ├─ PASS → 次Task
+    ├─ FAIL(実装不備) → Repair → Verify → Review
+    └─ Contract変更必要 → Change Control
           ↓
       全Task PASS
           ↓
@@ -74,65 +66,57 @@ Deterministic Verification
 
 ## State First Rule
 
-新規実行・再開を問わず、最初に`workflow-state-ja`の規則を適用する。
+新規実行・再開を問わず、最初に`workflow-state-ja`を適用する。
 
-### STATEが存在する場合
+STATEが存在する場合:
 
 1. `Docs/STATE.md`を読む。
-2. Current Phase / Stage / Current Task / Next Actionを抽出する。
+2. Current Phase / Stage / Current Task / Next Action / Active Changeを抽出する。
 3. cheap consistency checkを行う。
 4. Repository truthと整合していれば`Next Action`から再開する。
 5. 矛盾があればSTATEを修正してから再開する。
 
+STATEが存在しない場合は、既存ArtifactとRepository stateから最小STATEを構築する。
+
 会話履歴だけを根拠に現在位置を決めない。
-
-### STATEが存在しない場合
-
-`workflow-state-ja`で初期化する。
-
-既にResearch/Task/Review artifactが存在する場合は、実態を確認して途中状態を再構築する。
-
-すべてを最初からやり直さない。
 
 ## State Update Rule
 
 Workflow stageが変わるたびにSTATEを更新する。
 
-少なくとも以下のtransitionで更新する。
+最低限:
 
 - Phase開始
 - Research開始/完了
 - Planning開始/完了
 - Task開始
-- Implementation完了/BLOCKED
+- Implementation完了/BLOCKED/CHANGE_CONTROL
 - Verification PASS/FAIL
 - Review PASS/FAIL
 - Repair開始/完了
+- Change Control開始/完了
 - Task PASS
 - Phase Close開始
 - Phase COMPLETE/INCOMPLETE/BLOCKED
 
-STATE更新は「あとでまとめて」行わない。
+STATE更新は後回しにしない。
 
-## 詳細手順
+## 0. Resume / Initialize
 
-### 0. Resume / Initialize
-
-`workflow-state-ja`を使用する。
-
-次を確定する。
+`workflow-state-ja`で以下を確定する。
 
 - target Phase
 - current Stage
 - current Task
 - Task status table
+- active change
 - active findings
 - blockers
 - next action
 
-既にPhaseが`COMPLETE`なら、ユーザーが明示的に再検証を求めない限り再実装しない。
+Phaseが既に`COMPLETE`なら、明示的な再検証要求がない限り再実装しない。
 
-### 1. Research
+## 1. Research
 
 STATE:
 
@@ -141,16 +125,16 @@ Phase Status = RESEARCHING
 Stage = PHASE_RESEARCH
 ```
 
-`phase-research-ja`を使用して対象Phaseの調査結果を作成する。
+`phase-research-ja`を実行する。
 
-Researchが重大な`UNKNOWN`や文書とコードの矛盾によりPlanning不能と判断した場合:
+重大な`UNKNOWN`や文書/コード矛盾でPlanning不能なら:
 
 ```text
 Phase Status = BLOCKED
 Stage = BLOCKED
 ```
 
-としてevidence付きBlockerをSTATEへ記録し、無理に次へ進まない。
+として停止する。
 
 Research完了後:
 
@@ -160,71 +144,131 @@ Stage = PHASE_PLAN
 Next Action = phase-task-plan-ja
 ```
 
-### 2. Task Planning
+## 2. Task Planning
 
-`phase-task-plan-ja`を使用する。
+`phase-task-plan-ja`を実行する。
 
-Task dependencyとRequirement Coverageを確認する。
-
-Planning完了後、Task status tableをSTATEへ作成する。
+Planning完了後:
 
 - dependencyなし → `READY`
 - dependency未完了 → `PENDING`
 
-その後:
+STATE:
 
 ```text
 Phase Status = EXECUTING
 Current Task = 最初のREADY Task
 Stage = TASK_IMPLEMENT
+Next Action = task-implement-ja
 ```
 
-### 3. Ready Taskを選ぶ
+## 3. Ready Task Selection
 
-以下を満たすTaskのみ実装可能。
+実装可能なのは:
 
 - `READY`
-- `Depends On`がすべてPASS済み
+- `Depends On`がすべてPASS
 - BLOCKEDでない
 
-TaskがPASSするたびにdependencyを再評価する。
+TaskがPASS、再計画、invalidateされるたびにdependencyを再評価する。
 
-安全な場合、独立Taskは並列実行してよい。
-ただし同一ファイルを広く編集するTaskは原則直列にする。
-
-### 4. Task Implementation
-
-Task開始前:
-
-```text
-Task Status = IMPLEMENTING
-Stage = TASK_IMPLEMENT
-Current Task = Txxx
-```
+## 4. Task Implementation
 
 `task-implement-ja`で1 Taskだけ実装する。
 
-Implementerが`BLOCKED`を返した場合はrepair loopへ入れない。
+### IMPLEMENTED
 
-原因を以下に分類する。
+Verificationへ進む。
 
-- Spec
-- Architecture
-- Research
-- Task Plan
-- External dependency
-- Environment
+### BLOCKED
 
-STATEを`BLOCKED`へ更新し、evidenceを残す。
+repair loopへ入れない。
+原因をSpec / Architecture / Research / Task Plan / External dependency / Environmentへ分類し、STATEをBLOCKEDへ更新する。
 
-実装完了後:
+### CHANGE_CONTROL
+
+Task Contract外の変更要求を検出した場合、通常実装を停止して`change-control-ja`へ移行する。
+
+STATE:
 
 ```text
-Task Status = VERIFYING
-Stage = TASK_VERIFY
+Phase Status = EXECUTING
+Stage = CHANGE_CONTROL
+Current Task = Txxx
+Next Action = change-control-ja
 ```
 
-### 5. Deterministic Verification
+current diffは原則revertしない。
+
+## 5. Change Control
+
+以下の状況では`change-control-ja`を使用する。
+
+- 新しいRequirementが追加された
+- observable behaviorが変更された
+- Task Goal / Done When / Non-Goalsを変更する必要がある
+- Phase scopeが変わる
+- Architecture boundary / flow / responsibilityが変わる
+- Review中に「実装不備」ではなくTask Contract自体の変更が必要と判明した
+
+### 使用しない状況
+
+既存Task Contractは正しく、実装がそれを満たしていないだけなら`task-repair-ja`を使用する。
+
+### Change Control処理
+
+1. current diff / current Taskを保持する。
+2. 変更を分類する。
+3. 必要なら`Docs/Changes/CR-xxx.md`を作成する。
+4. 上位Artifactを必要な範囲だけ更新する。
+5. PASS済みTaskを`PRESERVE / REVERIFY / INVALIDATE`で評価する。
+6. 影響Taskだけを再計画する。
+7. Requirement Coverageとdependencyを再確認する。
+8. STATEを更新する。
+9. 次の`READY` Taskから通常Workflowへ復帰する。
+
+変更分類:
+
+```text
+IMPLEMENTATION_DETAIL
+TASK_SCOPE_CHANGE
+REQUIREMENT_CHANGE
+ARCHITECTURE_CHANGE
+```
+
+上位変更ほど戻る範囲を広げる。
+
+```text
+TASK_SCOPE_CHANGE
+  → Research必要範囲 → Plan/Task
+
+REQUIREMENT_CHANGE
+  → Spec → Research validity check → Plan/Task
+
+ARCHITECTURE_CHANGE
+  → Architecture → Spec consistency → Research → Plan/Task
+```
+
+変更と無関係なPASS済みTaskはやり直さない。
+
+Change Control完了後:
+
+```text
+Phase Status = EXECUTING
+Stage = TASK_IMPLEMENT
+Current Task = 次のREADY Task
+Next Action = task-implement-ja
+```
+
+未決事項が残る場合:
+
+```text
+Phase Status = BLOCKED
+Stage = CHANGE_CONTROL
+Next Action = 未決decisionを解消する
+```
+
+## 6. Deterministic Verification
 
 Taskに定義されたverificationを実行する。
 
@@ -237,9 +281,9 @@ Taskに定義されたverificationを実行する。
 - integration test
 - static analysis
 
-Verification結果はSTATEの`Last Verification`へ短く記録する。
+結果はSTATEの`Last Verification`へ短く記録する。
 
-#### PASS
+### PASS
 
 ```text
 Task Status = REVIEWING
@@ -247,23 +291,16 @@ Stage = TASK_REVIEW
 Next Action = task-review-ja
 ```
 
-#### FAIL
+### FAIL
 
-Task変更が原因なら、意味的Reviewerを呼ぶ前に限定修正する。
+Task変更に起因するfailureなら、semantic review前に限定修正する。
+既存failure / environment failureはTask defectと混同しない。
 
-```text
-Task Status = IMPLEMENTING
-Stage = TASK_IMPLEMENT
-Next Action = verification failureの限定修正
-```
-
-既存failureや環境要因はTask defectと混同せず、evidence付きで区別する。
-
-### 6. Independent Review
+## 7. Independent Review
 
 `task-review-ja`をcold/independent contextで実行することを優先する。
 
-Reviewerへ渡す主要Context:
+主要Context:
 
 - Task Contract
 - actual diff
@@ -272,17 +309,12 @@ Reviewerへ渡す主要Context:
 
 実装Agentの説明はcorrectness evidenceとして扱わない。
 
-#### PASS
-
-STATEを更新する。
+### PASS
 
 ```text
 Task Status = PASS
 Review Rounds += 1
-Active Findingsから当該TaskのBLOCKER/MAJORを削除
 ```
-
-次のdependencyを再評価する。
 
 次Taskがある場合:
 
@@ -292,7 +324,7 @@ Stage = TASK_IMPLEMENT
 Next Action = task-implement-ja
 ```
 
-全Task PASSの場合:
+全Task PASSなら:
 
 ```text
 Phase Status = CLOSING
@@ -301,170 +333,125 @@ Stage = PHASE_CLOSE
 Next Action = phase-close-ja
 ```
 
-#### FAIL
+### FAIL: Implementation Defect
+
+Requirement / Task Contractが正しく、実装不備なら:
 
 ```text
 Task Status = REPAIRING
 Review Rounds += 1
 Stage = TASK_REPAIR
-Active Findings = BLOCKER/MAJOR Finding IDs
+Active Findings = BLOCKER/MAJOR IDs
 Next Action = task-repair-ja
 ```
 
-### 7. Repair Loop
+### FAIL: Contract / Requirement Change Needed
 
-`task-repair-ja`を使用し、Active Findingsのみを限定修正する。
-
-Repair完了後:
+Reviewerが新Requirement不足、Task Contract誤り、Architecture変更必要などを発見した場合はrepairへ送らない。
 
 ```text
-Task Status = VERIFYING
-Stage = TASK_VERIFY
+Stage = CHANGE_CONTROL
+Next Action = change-control-ja
 ```
 
-必ず次の順で再確認する。
+## 8. Repair Loop
+
+`task-repair-ja`は**既存Task Contractへの実装不備だけ**を修正する。
+
+Repair後:
 
 1. Verification
 2. Independent Review
 
 Repair Agent自身の「修正完了」を最終PASSに使わない。
 
-### 8. Retry Limit
+同一TaskでReview FAILが3回になった場合は停止し、root causeを上位Artifact含めて再評価する。
 
-同一TaskでIndependent Review FAILが3回になった場合、無限retryをやめる。
-
-STATE:
-
-```text
-Task Status = BLOCKED
-Phase Status = BLOCKED
-Stage = BLOCKED
-```
-
-次を報告する。
-
-```markdown
-## Escalation
-
-Task: Txxx
-Failed Review Rounds: 3
-
-### Unresolved Findings
-
-### Repairs Attempted
-
-### Suspected Root Cause
-
-- Spec issue
-- Architecture issue
-- Research issue
-- Task planning issue
-- Implementation issue
-- Environment/dependency issue
-
-### Recommended Next Action
-```
-
-Task全体を闇雲に再実装しない。
-
-### 9. Phase Close
+## 9. Phase Close
 
 全必須TaskがPASSしたら`phase-close-ja`を実行する。
 
-実行前:
-
-```text
-Phase Status = CLOSING
-Stage = PHASE_CLOSE
-```
-
-#### COMPLETE
+### COMPLETE
 
 ```text
 Phase Status = COMPLETE
 Stage = DONE
 Current Task = None
+Active Change = None
 Active Findings = None
 Blockers = None
 ```
 
-#### INCOMPLETE
+### INCOMPLETE
 
-原因を分類する。
+原因を以下へ分類する。
 
 - missing Task
 - integration gap
 - Spec / Plan gap
 - verification gap
 
-```text
-Phase Status = INCOMPLETE
-Stage = BLOCKED
-```
-
-必要最小限の追加Planningへ戻す。
+必要最小限のPlanningまたはChange Controlへ戻す。
 
 ## Context Isolation Rule
 
 全文書を全Agentへ自動投入しない。
 
 ### State Manager
-
 - STATE
 - current Task/Phase artifact
-- cheap repository evidenceのみ
+- cheap repository evidence
 
 ### Research
-
 - Spec
 - Architecture
 - Phase
 - source
 
 ### Planner
-
 - Spec
 - Architecture
 - Phase
 - Research
 
 ### Implementer
-
 - target Task
 - Architecture
 - relevant source
 - 必要なSpec/Research箇所のみ
 
 ### Reviewer
-
 - target Task
 - diff
 - relevant source
 - verification results
 
 ### Repair
-
 - target Task
 - failing findings
 - relevant current source
 
+### Change Control
+- change request
+- STATE
+- current Task / diff
+- Spec / Architecture / Phase
+- impacted Research/Tasksのみ
+
 ### Phase Close
-
 - Phase
-- Spec関連箇所
-- 全Task status/review
+- relevant Spec
+- final Task statuses/reviews
 - integrated repository state
-
-STATEは各Agentへ全文配布する必要はない。
-Orchestratorが必要なCurrent/Next情報だけを渡す。
 
 ## Scope Rule
 
 - Phaseを飛ばさない。
 - 後続Phaseのscopeを先取りしない。
 - Task実装中にPlanを勝手に拡張しない。
-- 現在のRepository truthと文書が矛盾する場合はRepository truthを優先し差異を記録する。
-- STATEへ新しい仕様や設計判断を書き込まない。
+- Task Contract外変更はchange-control-jaへ送る。
+- 新Requirementをtask-repair-jaで実装しない。
+- Repository truthと文書が矛盾する場合はRepository truthを優先して差異を記録する。
 
 ## 完了報告
 
@@ -472,51 +459,49 @@ Orchestratorが必要なCurrent/Next情報だけを渡す。
 # Phase Workflow Result
 
 ## Phase
-
 <Phase path/title>
 
 ## Result
-
 COMPLETE | INCOMPLETE | BLOCKED
 
 ## State
-
 - Stage: ...
 - Current Task: ...
+- Active Change: ...
 - Next Action: ...
 
-## Research
-
-- Output: ...
-- Key unknowns: ...
-
 ## Tasks
-
 | Task | Status | Review Rounds |
 |---|---|---:|
 | T001 | PASS | 1 |
 
-## Verification
+## Changes During Execution
+- None
 
-主要checkの結果。
+または:
+- CR-xxx: classification / affected tasks
+
+## Verification
+主要check結果。
 
 ## Phase Close
-
 COMPLETE / INCOMPLETE
 
 ## Remaining Issues
-
 None または具体的内容。
 ```
 
 ## Orchestrator完了チェック
 
 - [ ] STATEとRepository truthのcheap consistency checkを行った
-- [ ] 各stage transitionでSTATEを更新した
+- [ ] stage transitionごとにSTATEを更新した
 - [ ] READYでないTaskを実装していない
+- [ ] Task Contract外変更を実装へ混ぜていない
+- [ ] 新Requirementをrepairとして扱っていない
+- [ ] Change Controlで影響Taskだけを再計画した
 - [ ] Verification PASS前にsemantic PASS扱いしていない
 - [ ] Independent ReviewなしでTaskをPASSにしていない
-- [ ] FAIL時はActive Findingsだけをrepairした
-- [ ] Review FAIL 3回で停止した
+- [ ] FAIL時は実装不備かContract変更かを分類した
+- [ ] Review FAIL 3回で無限retryを停止した
 - [ ] 全Task PASS後にPhase Closeを実行した
 - [ ] 最終STATEがPhase結果と整合している
