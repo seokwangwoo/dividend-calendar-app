@@ -1,300 +1,288 @@
 ---
 name: task-implement-ja
 description: >
-  計画済みのTaskを1件だけ実装し、指定されたVerificationを実行した後、Docs/STATE.mdの作業状態を更新する。
-  実装中にTask Contract外の変更要求が発生した場合は実装へ混ぜず、change-control-jaへ移行する。
-  「T001を実装して」「次のTaskを実装して」など、Task単位の実装に使用する。
+  Phase TaskまたはQuick Change Contractを1件だけ実装し、VerificationとDocs/STATE.md更新まで行う。
+  実装中にContract外の変更要求が発生した場合は実装へ混ぜず、change-control-jaまたはPhase昇格へ移行する。
 ---
 
 # Task Implementation
 
 ## 目的
 
-計画済みTaskを1件だけ、既存Architectureと既存Patternに従って最小変更で実装する。
+1つの実行Contractを、既存Architectureと既存Patternに従って最小変更で実装する。
 
-実装とVerificationが終了したら、**必ずWorkflow Stateを更新してから終了する**。
+対応するContract:
+
+- Phase Task: `Docs/Tasks/PhaseN/Txxx.md`
+- Quick Change: `Docs/QuickChanges/QC-xxx.md`
+
+実装とVerification終了後、必ず`Docs/STATE.md`を更新する。
 
 ## 入力
 
 必須:
 
-- 対象Task文書 `Docs/Tasks/PhaseN/Txxx.md`
-- `Docs/Architecture.md`
+- 対象Contract
+- `Docs/Architecture.md`（存在する場合）
 - 実際のソースコード
 
-存在する場合は読む:
+存在する場合:
 
 - `Docs/STATE.md`
 
-必要な場合のみ読む:
+Phase Taskで必要な場合のみ:
 
 - `Docs/Spec.md` の関連箇所
-- 対象 `Docs/Plans/PhaseN.md`
-- `Docs/Research/PhaseN.md` の関連箇所
+- 対象Phase
+- 関連Research
 
-無関係なTaskやPhaseを全て読み込まない。
+Quick Changeでは無関係なPhase/Researchを読み込まない。
 
-## 使用する関連Skill
+## 関連Skill
 
 - 状態更新: `workflow-state-ja`
-- Task Contract外の変更要求: `change-control-ja`
-
-## 言語ルール
-
-- 作業報告は日本語で記述する。
-- code identifier / file path / API名 / log / errorは原文を保持する。
-- 既存のコメント言語・命名規則を尊重する。
+- Phase実行中のContract外変更: `change-control-ja`
+- Quick Changeが大きくなった場合: `phase-plan-ja`
+- 実装後Review: `task-review-ja`
 
 ## Core Rule
 
-**Taskを実装する。Taskを再設計しない。Scopeを拡張しない。**
+**Contractを実装する。Contractを再設計しない。Scopeを拡張しない。**
 
-ただし、Task内の前提が現在のRepositoryと矛盾する場合は、古い指示を盲目的に実装しない。
+Repository truthとContractが重大に矛盾する場合は、古い指示を盲目的に実装しない。
 
-また、Task終了時にSTATEを更新せず終了してはならない。
+## Contract Type判定
+
+開始時にどちらかを確定する。
+
+```text
+PHASE_TASK
+QUICK_CHANGE
+```
+
+### PHASE_TASK
+
+Task ID: `Txxx`
+通常のPhase dependency / Requirement Coverageを尊重する。
+
+### QUICK_CHANGE
+
+Task ID: `QC-xxx`
+Quick ContractのGoal / IN / OUT / Constraints / Verification / Done WhenをContractとして扱う。
+
+Quick Change中に以下が必要と判明したら`ESCALATE_TO_PHASE`とする。
+
+- Architecture boundary変更
+- 大きなRequirement追加
+- 非自明なDB schema / public API / protocol変更
+- 複数の独立Outcome
+- 広範なcodebase Research
+- 実装Agent自身による大きな設計判断
 
 ## Change Request Gate
 
-実装中にユーザー・仕様担当・装置担当などから追加要求または変更要求が入った場合、まず現在Task Contract内かを判定する。
+実装中の追加要求が現在Contract内か判定する。
 
-### Current Task Contract内
+Contract内なら通常実装を継続し、必要に応じて`Deviations`へ記録する。
 
-以下をすべて満たす場合は通常実装を継続してよい。
+Contract外ならその場で実装へ混ぜない。
 
-- Goalが変わらない
-- Requirement / Acceptance Criteriaが変わらない
-- Non-Goalsへscope leakしない
-- Architecture boundaryが変わらない
-- TaskのDone Whenを変更する必要がない
-
-単なるimplementation detail差分は`Deviations`へ記録する。
-
-### Current Task Contract外
-
-以下のいずれかに該当する場合は、その場で実装へ混ぜてはならない。
-
-- 新しいuser/device/system behaviorが追加された
-- Requirement / Acceptance Criteriaを変更する必要がある
-- TaskのGoal / Done When / Non-Goalsを変更する必要がある
-- Phase scopeを変更する必要がある
-- Architecture boundary / flow / responsibilityが変わる
-- future Taskのdependencyやscopeへ影響する
-
-この場合:
-
-1. 現在diffをrevertしない。
-2. current Taskとgit diffを保持する。
-3. `Docs/STATE.md`を以下へ更新する。
+### Phase Taskの場合
 
 ```text
-Phase Status = EXECUTING
+Result = CHANGE_CONTROL
 Stage = CHANGE_CONTROL
-Current Task = Txxx
-Task Status = IMPLEMENTING
-Next Action = 変更要求をchange-control-jaで分類する
-Use Skill = change-control-ja
+Next Action = change-control-ja
 ```
 
-4. `change-control-ja`へ処理を渡す。
-5. Change Control完了まで追加要求を実装しない。
+### Quick Changeの場合
 
-変更要求を通常のReview Findingとして`task-repair-ja`へ送らない。
+小さなContract修正で済むならQuick Contractを更新して再確認してよい。
+
+ただしQuick Eligibilityを失う場合:
+
+```text
+Result = ESCALATE_TO_PHASE
+Stage = QUICK_CHANGE
+Next Action = phase-plan-ja
+```
+
+現在diffは自動revertしない。
 
 ## 手順
 
-### 1. Task Contractを理解する
+### 1. Contract確認
 
-変更前に次を確認する。
+最低限確認する。
 
 - Goal
-- Requirement Coverage
-- Existing Code Evidence
+- Scope / Non-Goals
 - Constraints
-- Non-Goals
-- Dependencies
 - Verification
 - Done When
+- dependency（Phase Taskの場合）
 
-### 2. Workflow Stateを開始状態へ更新する
+### 2. STATE開始更新
 
-`Docs/STATE.md`が存在する場合、現在のRepository状態と大きな矛盾がないことを軽く確認する。
+#### Phase Task
 
-対象Taskを開始する時点で:
+```text
+Work Type = PHASE
+Phase Status = EXECUTING
+Stage = TASK_IMPLEMENT
+Current Task = Txxx
+Task Status = IMPLEMENTING
+```
 
-- Phase Status: `EXECUTING`
-- Stage: `TASK_IMPLEMENT`
-- Current Task: 対象 `Txxx`
-- 対象Task Status: `IMPLEMENTING`
-- Next Action: 対象Taskの実装を継続する
+#### Quick Change
 
-STATEが存在しない場合は`workflow-state-ja`で初期化する。
+```text
+Work Type = QUICK_CHANGE
+Stage = QUICK_CHANGE
+Current Quick Change = QC-xxx
+Current Task = QC-xxx
+Quick Change Status = IMPLEMENTING
+```
 
-### 3. 前提を実コードで再確認する
+`Next Action`は対象Contract実装継続とする。
 
-Taskの重要な前提が現在のコードと一致するか確認する。
+### 3. 前提を実コードで再確認
 
-差異がある場合:
+重要なAnchor / type / symbol / flowが現在コードと一致するか必要範囲で確認する。
 
-1. 実コードを調査する
-2. Repositoryの現在状態をtruthとして扱う
-3. Taskの目的を満たす最小の適応を行う
-4. 最終報告の`Deviations`に差異と理由を書く
+差異が軽微ならRepository truthへ合わせて最小適応し、`Deviations`へ記録する。
 
-重大な矛盾で安全に判断できない場合は無理に実装せず`BLOCKED`とする。
+重大ならBLOCKEDまたはESCALATEする。
 
-### 4. 最小変更で実装する
+### 4. 最小変更で実装
 
-優先して再利用する。
+優先:
 
 - existing abstraction
-- utility
-- naming convention
-- error handling pattern
-- state / lifecycle pattern
-- test helper
+- existing pattern
+- utility / helper
+- established error handling
+- existing state/lifecycle model
+- existing test helper
 
 避ける:
 
 - unrelated refactoring
 - cosmetic cleanup
 - speculative abstraction
-- later Task scope
-- debug codeの残存
+- future scope
+- debug code残存
 
-### 5. 必要なTestを追加・更新する
+### 5. 必要なTestを追加・更新
 
-TaskのDone条件を証明するために必要なtestを追加する。
+Done Whenを証明する最小のtestを追加する。
 
-無関係なtest rewriteは行わない。
+### 6. Verification状態へ更新
 
-### 6. Verification開始状態へ更新する
+#### Phase Task
 
-コード変更が完了したら:
+```text
+Stage = TASK_VERIFY
+Task Status = VERIFYING
+```
 
-- Phase Status: `EXECUTING`
-- Stage: `TASK_VERIFY`
-- Current Task: 対象 `Txxx`
-- 対象Task Status: `VERIFYING`
-- Next Action: Taskに定義されたVerificationを実行する
+#### Quick Change
 
-### 7. Deterministic Verificationを実行する
+```text
+Stage = QUICK_CHANGE
+Quick Change Status = VERIFYING
+```
 
-Taskの`Verification`に記載されたcommandを実行する。
+### 7. Deterministic Verification
+
+Contract記載のcheckを実行する。
 
 例:
 
 - compiler / build
+- unit/integration test
 - lint
 - typecheck
-- unit test
-- integration test
+- static analysis
 
-このTaskが原因のfailureは修正する。
+この変更が原因のfailureはContract範囲内で修正する。
+既存failure / environment failureは区別して報告する。
 
-Task外の既存failureを発見した場合は勝手に大規模修正せず、区別して報告する。
+STATEの`Last Verification`へ短く記録し、長いlog全文は入れない。
 
-Verification結果はSTATEの`Last Verification`へ短く記録する。
-長いtest log全文はSTATEへコピーしない。
+### 8. Diff Self Review
 
-### 8. Diff Self Reviewを行う
-
-完了前にdiffを確認する。
+確認:
 
 - accidental change
-- debug log
+- debug code
 - dead code
-- unnecessary refactoring
-- missing error path
+- unrelated refactor
+- missing failure path
 - missing test
 - scope leak
 
-### 9. 終了状態を必ず更新する
+### 9. 終了STATE更新
 
-最終報告を返す前に`workflow-state-ja`の規則に従ってSTATEを更新する。
+#### IMPLEMENTED + Verification PASS: Phase Task
 
-#### A. IMPLEMENTED + Verification成功
+```text
+Stage = TASK_REVIEW
+Task Status = REVIEWING
+Current Task = Txxx
+Next Action = task-review-ja
+```
 
-- Phase Status: `EXECUTING`
-- Stage: `TASK_REVIEW`
-- Current Task: 対象 `Txxx`
-- 対象Task Status: `REVIEWING`
-- Last Result: `Implementation complete / Verification PASS`
-- Next Action: 対象TaskのIndependent Reviewを実行する
-- Use Skill: `task-review-ja`
+#### IMPLEMENTED + Verification PASS: Quick Change
 
-この時点ではTaskを`PASS`にしてはならない。
-`PASS`へ遷移できるのはIndependent ReviewがPASSした後だけである。
+```text
+Stage = QUICK_CHANGE
+Quick Change Status = REVIEWING
+Current Quick Change = QC-xxx
+Current Task = QC-xxx
+Next Action = task-review-ja
+```
 
-#### B. Verification未解決FAIL
+Independent Review前にPASS / COMPLETEへしない。
 
-- Phase Status: `EXECUTING`
-- Stage: `TASK_VERIFY`
-- Current Task: 対象 `Txxx`
-- 対象Task Status: `VERIFYING`
-- Last Result: `Verification FAIL`
-- BlockersまたはRemaining Concernsへfailure evidenceを記録
-- Next Action: failure原因をTask範囲内で限定修正、または上位問題へescalateする
+#### Verification FAIL
 
-この場合はIndependent Reviewへ進まない。
+対象ContractをVERIFYING状態に保ち、failure evidenceと次Actionを記録する。
 
-#### C. BLOCKED
+#### BLOCKED
 
-- Phase Status: `BLOCKED`
-- Stage: `BLOCKED`
-- Current Task: 対象 `Txxx`
-- 対象Task Status: `BLOCKED`
-- Blockers: blocker ID + 短い説明 + evidence
-- Next Action: blocker原因をSpec / Architecture / Research / Task Plan / dependency / environmentへ分類する
+根拠付きBlockerをSTATEへ記録する。
 
-#### D. CHANGE_CONTROL
+#### CHANGE_CONTROL
 
-追加・変更要求がTask Contract外の場合:
+Phase TaskのContract外変更を`change-control-ja`へ渡す。
 
-- Phase Status: 原則`EXECUTING`
-- Stage: `CHANGE_CONTROL`
-- Current Task: 対象 `Txxx`
-- 対象Task Status: `IMPLEMENTING`
-- Next Action: `change-control-ja`で変更要求を分類・反映する
-- Use Skill: `change-control-ja`
+#### ESCALATE_TO_PHASE
 
-## STATE更新ルール
+Quick Changeを停止し、次をSTATEへ記録する。
 
-- Task本文をSTATEへコピーしない。
-- diff全文をSTATEへコピーしない。
-- test log全文をSTATEへコピーしない。
-- Review前にTaskを`PASS`へしない。
-- `Updated At`を更新する。
-- `Next Action`は常に1つにする。
-- 他Taskのstatusを根拠なく変更しない。
-- STATEと実Repositoryが矛盾する場合はRepository truthを優先する。
+```text
+Stage = QUICK_CHANGE
+Quick Change Status = ESCALATED
+Next Action = phase-plan-ja
+```
 
-## BLOCKED条件
-
-以下によりTask Contractを安全に満たせない場合は`BLOCKED`を返す。
-
-- Requirementの重大な欠落・矛盾
-- Architecture前提の誤り
-- Researchの重大な誤り
-- 必要な外部依存・credential不足
-- 上位Task dependency未完了
-
-## 完了報告フォーマット
+## 出力
 
 ```markdown
-# Implementation Result: Txxx
+# Implementation Result: <Txxx | QC-xxx>
 
 ## Result
 
-IMPLEMENTED | BLOCKED | CHANGE_CONTROL
+IMPLEMENTED | BLOCKED | CHANGE_CONTROL | ESCALATE_TO_PHASE
 
 ## Changed Files
 
-- `path`: 変更理由
+- `path`: reason
 
 ## Verification
 
-- `<command>`: PASS / FAIL / SKIPPED
-  - Summary: ...
+- `<command>`: PASS | FAIL | SKIPPED
 
 ## Done When Check
 
@@ -303,14 +291,13 @@ IMPLEMENTED | BLOCKED | CHANGE_CONTROL
 
 ## State Update
 
-- `Docs/STATE.md`: UPDATED
-- Stage: `TASK_REVIEW` | `TASK_VERIFY` | `CHANGE_CONTROL` | `BLOCKED`
-- Task Status: `REVIEWING` | `VERIFYING` | `IMPLEMENTING` | `BLOCKED`
+- Stage: ...
+- Contract Status: ...
 - Next Action: ...
 
 ## Deviations
 
-None または計画との差異。
+None または具体的差異。
 
 ## Remaining Concerns
 
@@ -319,13 +306,13 @@ None または具体的懸念。
 
 ## 完了条件
 
-`IMPLEMENTED`は以下を全て満たす場合のみ使用する。
+`IMPLEMENTED`は以下をすべて満たす場合のみ使用する。
 
-- TaskのGoalを満たす
+- Goalを満たす
 - Done Whenを満たす
 - 必須Verificationが成功、または正当なSKIPPED理由がある
-- Non-Goalsへscope leakしていない
-- 独立Reviewerへ渡せる状態である
-- STATEが次Actionを示す状態へ更新されている
+- Scope leakがない
+- Independent Reviewerへ渡せる
+- STATEが次Actionを示す
 
-Task Contract外の変更要求が未処理なら`IMPLEMENTED`にせず`CHANGE_CONTROL`とする。
+Quick ChangeがQuick Eligibilityを失った場合は`IMPLEMENTED`にせず`ESCALATE_TO_PHASE`とする。
