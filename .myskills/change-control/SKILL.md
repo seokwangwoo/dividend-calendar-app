@@ -1,7 +1,7 @@
 ---
 name: change-control
 description: >
-  実行中に発生した仕様変更・追加要求・Task scope変更・Architecture変更を分類し、必要な上位Artifactだけを更新して影響範囲だけ再計画する。
+  実行中に発生した仕様変更・追加要求・Task scope変更・Architecture変更を分類し、必要なSource of Truthだけを更新して影響範囲をResearch→Planの順で再構築する。
 ---
 
 # Change Control
@@ -12,8 +12,8 @@ Task Contract外の変更を現在実装へ混ぜず、変更が発生した抽�
 
 ## Classification
 
-- `IMPLEMENTATION_DETAIL`: WHAT/ACは変わらずHOWだけ変わる。
-- `TASK_SCOPE_CHANGE`: Requirementは同じだがTask境界/依存が変わる。
+- `IMPLEMENTATION_DETAIL`: WHAT / ACは変わらずHOWだけ変わる。
+- `TASK_SCOPE_CHANGE`: Requirementは同じだがTask境界 / dependencyが変わる。
 - `REQUIREMENT_CHANGE`: observable behavior / ACが変わる。
 - `ARCHITECTURE_CHANGE`: component boundary / ownership / flow / persistence / protocol / threading等が変わる。
 
@@ -24,32 +24,87 @@ Task Contract外の変更を現在実装へ混ぜず、変更が発生した抽�
 
 - 変更要求
 - `Docs/STATE.md`
-- 関連Spec / Architecture / Phase / Task / Quick Change
+- 関連Spec / Architecture / Research / Phase / Task / Quick Change
 - current repository state / git diff
-- 必要に応じてResearch / Review
+- 必要に応じてReview
 
 ## 手順
 
 1. 現在作業を安全な位置で止める。current diffを自動revertしない。
 2. 変更を4分類する。
 3. current workを`REUSABLE | PARTIALLY_REUSABLE | OBSOLETE | UNKNOWN`で評価する。
-4. Upstream/Downstream impactを確認する。
+4. Upstream / Downstream impactを確認する。
 5. PASS済みTaskを`PRESERVE | REVERIFY | INVALIDATE`で評価する。
-6. 必要な上位Artifactだけ更新する。
-7. 影響Taskだけ再計画する。
-8. dependency / Requirement Coverageを再計算する。
-9. `workflow-state`のActive Change / Next Actionを更新する。
+6. Requirement / observable behaviorが変わり、その意図が曖昧なら`phase-intent`でsession内 clarificationを行う。
+7. 必要なSource of Truthを更新する。
+8. 必要な範囲だけResearchを更新する。
+9. Research evidenceを基にPhase / Task Planを更新する。
+10. dependency / Requirement Coverageを再計算する。
+11. `workflow-state`のActive Change / Next Actionを更新する。
 
 ## Artifact Update Order
 
-TASK_SCOPE_CHANGE:
+### IMPLEMENTATION_DETAIL
+
+`current Task内で最小適応 → Verification`
+
+Spec / Phase Planを原則変更しない。
+
+### TASK_SCOPE_CHANGE
+
 `Research(必要範囲) → Phase/Task Plan → affected Tasks`
 
-REQUIREMENT_CHANGE:
-`Spec → Research validity check → Research(必要時) → Phase Plan → affected Tasks`
+### REQUIREMENT_CHANGE
 
-ARCHITECTURE_CHANGE:
-`Architecture → Spec consistency → Research → Phase Plan → affected Tasks`
+```text
+変更要求
+  ↓
+phase-intent（observable behaviorが曖昧な場合のみ）
+  ↓
+Spec更新
+  ↓
+Research validity check / 追加Research
+  ↓
+Phase Plan更新
+  ↓
+Phase Review
+  ↓
+affected Tasks再計画
+```
+
+### ARCHITECTURE_CHANGE
+
+```text
+Architecture decision / update
+  ↓
+Spec consistency check
+  ↓
+Research
+  ↓
+Phase Plan
+  ↓
+Phase Review
+  ↓
+affected Tasks再計画
+```
+
+**Researchが必要な変更で、Phase Planを先に書かない。**
+
+## Intent Clarification Rule
+
+`phase-intent`を使うのは、変更後のWHATが不明な場合だけ。
+
+使う例:
+- failure時に旧behaviorを維持するか不明
+- 新しいuser/device outcomeが複数解釈できる
+- IN / OUTが変わるが境界が不明
+
+使わない例:
+- 既にRequirementが明確
+- HOWだけの変更
+- codebaseを調べれば答えられる問題
+
+Intent Briefはファイルへ保存しない。同一セッションでResearchへ渡す。
 
 ## Change Request Artifact
 
@@ -71,27 +126,33 @@ Plan以上を変更する場合は原則 `Docs/Changes/CR-xxx.md` を作る。
 ## Resume Condition
 ```
 
+Intent Brief本文はCRへ複製しない。CRには確定した変更内容だけを簡潔に残す。
+
 ## Repairとの境界
 
 `task-repair`:
-- Requirement/Contractは正しい
+- Requirement / Contractは正しい
 - Reviewが実装不良を指摘
 
 `change-control`:
 - 新要求追加
 - Contract変更必要
-- Spec/Architecture/Phase変更必要
+- Spec / Architecture / Phase変更必要
 
 ## State
 
 変更評価中:
 - Stage=`CHANGE_CONTROL`
-- Current Task/Quick Changeを保持
-- Active ChangeへCR path/classification/affected workを記録
+- Current Task / Quick Changeを保持
+- Active ChangeへCR path / classification / affected workを記録
 - Next Actionは1つだけ
 
-変更反映後は、影響WorkをREADY/PENDING/REVERIFYへ戻し、再開地点を一意に決める。
+`phase-intent`はsession-onlyなのでSTATEのStageには追加しない。
+Intent clarificationが必要ならNext Actionにその旨だけ記載し、Intent本文は保存しない。
+
+変更反映後は、影響WorkをREADY / PENDING / REVERIFYへ戻し、再開地点を一意に決める。
 
 ## STOP
 
 要求矛盾、重大互換性影響不明、Architecture責任範囲不明などで安全に判断できない場合は推測せずBLOCKEDにする。
+Phase Planを何度も書き直して解決しようとせず、問題がIntent / Research / Spec / Architectureのどこにあるか明示する。
