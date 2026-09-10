@@ -1,48 +1,91 @@
 ---
 name: phase-research
 description: >
-  承認済みPhaseが既存コードへどのように接続されるかを実コードで調査し、Planningに必要なevidenceをDocs/Research/PhaseN.mdへ整理する。
+  phase-intentで確定したsession-only Intent BriefとSpec・Architectureを起点に、Phase Planning前のコードベース調査を行い、Planningに必要なevidenceをDocs/Research/PhaseN.mdへ整理する。
 ---
 
 # Phase Research
 
 ## 目的
 
-Phaseを実装する前に、entry point、実際のexecution flow、既存Pattern、data structure、test、constraintを確認する。
-実装・Task分解・Architecture再設計は行わない。
+Phase Planを書く前に、Intentを既存コードへどう接続すべきか判断できる事実を集める。
+entry point、実execution flow、既存Pattern、data structure、test、constraint、unknownを確認する。
+
+このSkillは実装・Task分解・Phase設計の確定を行わない。
+
+## 前提
+
+原則として同一セッションで`phase-intent`が完了し、会話内に`Phase Intent Brief`が存在すること。
+Intent Briefを別ファイルとして作成しない。
+
+既に十分明確な要求が会話にあり、`phase-intent`のStop Ruleを満たしている場合は、形式的なInterviewを再実行せず同等のIntentを会話から使用してよい。
 
 ## 入力
 
-- `Docs/Spec.md`
-- `Docs/Architecture.md`
-- 対象 `Docs/Plans/PhaseN.md`
+必須:
+
+- session内の`Phase Intent Brief`または同等に明確なIntent
+- `Docs/Spec.md`（存在する場合）
+- `Docs/Architecture.md`（存在する場合）
 - Repository source
-- 必要に応じてRepository固有instruction
+
+必要に応じて:
+
+- 前Phase Handoff
+- 既存Plans / Research
+- `Docs/STATE.md`
+- Repository固有instruction
+
+**対象Phase文書は入力として要求しない。Phase PlanはこのResearchの後に作る。**
+
+## Phase Identity
+
+既存命名規則から対象Phase IDを一意に決められる場合はそれを使用する。
+例: 既存がPhase1〜Phase3なら次をPhase4とする。
+
+一意に決められない場合は推測で既存Phaseを上書きせず、暫定TitleをResearch headingに使い、Plannerへ命名decisionを明示する。
 
 ## 出力
 
+原則:
+
 `Docs/Research/PhaseN.md`
+
+Repositoryに既存命名規則があれば従う。
 
 ## Evidence Labels
 
-- `VERIFIED`: 実コード/設定/testから直接確認
-- `INFERENCE`: 強く示唆されるが未確認
+- `VERIFIED`: 実コード / config / testから直接確認
+- `INFERENCE`: evidenceから強く示唆されるが未確認
 - `UNKNOWN`: 現時点で判断不能
 
-UNKNOWNを仮定へ変換しない。
+`UNKNOWN`を仮定へ変換しない。
 
-## 手順
+## 調査手順
 
-1. Phase Goal / Scope / ACを理解する。
-2. Entry Pointを特定する。例: UI action, API, event, callback, worker, device message。
-3. 実際のcall/data/event flowを追跡する。
-4. 関連file/symbolと責務を記録する。
-5. 類似する既存実装Patternを探す。
-6. type/interface/model/schema/protocol/stateを確認する。
-7. test/helper/build/validation conventionを確認する。
-8. error/lifecycle/threading/persistence/external I/O等のconstraintを確認する。
-9. regression riskとunknownを整理する。
-10. Plannerが使えるImplementation Implicationsだけを書く。Task listは作らない。
+1. Intent BriefのGoal / IN / OUT / Success / Failure / Constraintsを把握する。
+2. Relevant RequirementsをSpecと照合する。
+3. Entry Pointを特定する。例: UI action, API, event, callback, worker, device message。
+4. 実際のcall / data / event flowを追跡する。
+5. 関連file / symbolと責務を記録する。
+6. 類似する既存実装Patternを探す。
+7. type / interface / model / schema / protocol / state ownershipを確認する。
+8. test / helper / build / validation conventionを確認する。
+9. error / lifecycle / threading / persistence / external I/O等のconstraintを確認する。
+10. regression riskとunknownを整理する。
+11. Plannerが判断に使える`Planning Implications`を書く。Task listやPhase Designそのものは確定しない。
+
+## Research Question Handling
+
+Intent Briefの`Research Questions`を優先的に解消する。
+
+新しい疑問が出た場合:
+
+- codebaseで答えられる → 調査してevidenceを残す
+- product behaviorのdecisionが必要 → `UNKNOWN / PRODUCT_DECISION_REQUIRED`として明示し、推測しない
+- Architecture decisionが必要 → 現行Architectureと選択肢のevidenceだけ整理し、勝手に決めない
+
+重大なProduct Decisionが未解決でPlanを安全に作れない場合は、`phase-plan`へ進めず`phase-intent`へ戻すべき事項として記録する。
 
 ## Evidence Format
 
@@ -54,7 +97,7 @@ UNKNOWNを仮定へ変換しない。
 ```markdown
 # Research: Phase N - <name>
 
-## Phase Goal
+## Intent Summary
 
 ## Relevant Requirements
 
@@ -68,7 +111,7 @@ UNKNOWNを仮定へ変換しない。
 
 ## Data Structures / Contracts
 
-## Existing Tests
+## Existing Tests / Validation
 
 ## Constraints
 
@@ -79,19 +122,39 @@ UNKNOWNを仮定へ変換しない。
 ## Planning Implications
 ```
 
+## Planning Implications Rule
+
+ここでは以下は書いてよい。
+
+- 再利用すべき既存boundary / pattern
+- 避けるべき既存制約
+- Phase Planで決める必要がある論点
+- evidence上もっとも自然な方向
+
+以下は書かない。
+
+- Task breakdown
+- exact patch
+- line-level implementation
+- evidenceのない新規abstraction
+
 ## Rules
 
 - actual codeと文書が矛盾したらactual codeを優先し、矛盾を記録する。
 - 実装候補を断定する前にevidenceを示す。
-- 新しいabstractionを提案しない。
-- Taskを作らない。
+- Phase Planを先回りして完成させない。
 - Phase外の広い調査へ無制限に拡張しない。
+- Intent BriefをResearch文書へ全文コピーしない。必要な要約だけ残す。
 
 ## 完了チェック
 
-- [ ] 重要entry pointを確認
-- [ ] main flowを追跡
-- [ ] 類似Patternを確認
-- [ ] test/verification locationを確認
-- [ ] VERIFIED/INFERENCE/UNKNOWNを区別
-- [ ] Architecture主張にevidenceあり
+- [ ] Intentの重要Research Questionsを確認した
+- [ ] 重要entry pointを確認した
+- [ ] main flowを追跡した
+- [ ] 類似Patternを確認した
+- [ ] test / verification locationを確認した
+- [ ] VERIFIED / INFERENCE / UNKNOWNを区別した
+- [ ] Planningに必要なArchitecture主張にevidenceがある
+- [ ] Planを止めるProduct Decisionが残る場合は明示した
+
+完了後のNext Actionは`phase-plan`。
