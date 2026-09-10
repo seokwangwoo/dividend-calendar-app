@@ -1,48 +1,42 @@
 # 日本語 Phase Workflow Skills
 
-このドキュメントは、Phaseベース開発をResearch・Task化・実装・独立Review・変更管理・状態管理まで含めて運用するSkillセットです。
+このドキュメントは、Phaseベース開発を以下の流れで実行するためのSkillセットをまとめたものです。
+
+## 全体Workflow
 
 ```text
-                 Docs/STATE.md
-                      │
-                      ▼
-          Spec / Architecture / Phase
-                      ↓
-              phase-research-ja
-                      ↓
-            phase-task-plan-ja
-                      ↓
-                  Task群
-                      ↓
-             task-implement-ja
-                 │         │
-                 │         └─ Task Contract外の変更
-                 │                    ↓
-                 │          change-control-ja
-                 │                    ↓
-                 │          影響Artifact/Task更新
-                 │                    ↓
-                 └───────────────→ Taskへ復帰
-                      ↓
-          Deterministic Verification
-                      ↓
-               task-review-ja
-              ├─ PASS → 次Task
-              ├─ FAIL(実装不備)
-              │      ↓
-              │ task-repair-ja
-              │      ↓
-              │ 再Verify → 再Review
-              │
-              └─ Contract変更必要
-                     ↓
-              change-control-ja
-                      ↓
-                全Task PASS
-                      ↓
-               phase-close-ja
-                      ↓
-              STATE = COMPLETE
+Spec / Architecture / Change Request
+          ↓
+     phase-plan-ja
+   Phase文書を作成
+          ↓
+    phase-review-ja
+   独立Quality Gate
+      ├─ FAIL → phase-plan-jaでFinding修正 → 再Review
+      └─ PASS
+          ↓
+   phase-research-ja
+   コードベース詳細調査
+          ↓
+ phase-task-plan-ja
+   実行Taskへ分解
+          ↓
+     Ready Task
+          ↓
+  task-implement-ja
+          ↓
+ Deterministic Verification
+          ↓
+   task-review-ja
+      ├─ PASS → STATE更新 → 次Task
+      ├─ FAIL(実装不良) → task-repair-ja → 再Verification → 再Review
+      └─ CHANGE(要求/設計変更) → change-control-ja
+          ↓
+    全Task PASS
+          ↓
+    phase-close-ja
+          ↓
+   STATE = COMPLETE
 ```
 
 ## Skills
@@ -50,14 +44,101 @@
 | Skill | 役割 |
 |---|---|
 | `workflow-state-ja` | `Docs/STATE.md`による進捗保存・復元・整合確認 |
-| `phase-research-ja` | Phase実装前のコードベース調査 |
-| `phase-task-plan-ja` | Researchを実行可能なTaskへ分解 |
-| `task-implement-ja` | Taskを1件だけ実装し、VerificationとSTATE更新まで行う |
-| `task-review-ja` | Task Contractに対して実装を独立レビュー |
-| `task-repair-ja` | 既存Task Contractに対するFAIL Findingだけを限定修正 |
-| `change-control-ja` | 実行途中の仕様・Task scope・Architecture変更を分類し、影響範囲だけ再計画 |
-| `phase-close-ja` | Phase全体のRequirement/Integration完了判定 |
-| `run-phase-ja` | State・Change Controlを含むWorkflow全体のOrchestration |
+| `phase-plan-ja` | Spec/Architecture/既存コードを基にPhase文書そのものを作成・更新 |
+| `phase-review-ja` | Phase文書を実装前に独立レビューするQuality Gate |
+| `phase-research-ja` | 承認済みPhaseを実装するためのコードベース詳細調査 |
+| `phase-task-plan-ja` | Phase + Researchを小さな実装Taskへ分解 |
+| `task-implement-ja` | Taskを1件だけ実装しVerificationとSTATE更新を行う |
+| `task-review-ja` | Task実装を独立レビュー |
+| `task-repair-ja` | Review FAIL Findingだけを限定修正 |
+| `change-control-ja` | 実行中のRequirement/Scope/Architecture変更を分類・影響分析・再計画 |
+| `phase-close-ja` | 全Task完了後にPhase全体の完成を統合確認 |
+| `run-phase-ja` | 承認済みPhaseのResearch以降をSTATE付きでOrchestration |
+
+## Phase Definition Gate
+
+新しいPhaseを開始するときは、原則として実装へ直接進まない。
+
+```text
+phase-plan-ja
+      ↓
+phase-review-ja
+      ├─ PASS → phase-research-ja
+      └─ FAIL → phase-plan-jaでFindingのみ修正
+```
+
+`phase-plan-ja`を実行したAgent自身がPhaseを最終承認してはならない。
+可能なら`phase-review-ja`は別sub-agent / cold contextで実行する。
+
+## Phase文書の標準Format
+
+```markdown
+# Phase <N>: <Title>
+
+## Goal
+
+## Scope
+
+### IN
+
+### OUT
+
+## Dependencies
+
+## Requirement Coverage
+
+| Requirement | Covered By | Validation |
+|---|---|---|
+
+## Current-Code Anchors
+
+| Area | Anchor | Why it owns the behavior |
+|---|---|---|
+
+## Design
+
+### <design topic>
+
+## Implementation Steps
+
+1. ...
+
+## Acceptance Criteria
+
+- [ ] ...
+
+## Automated Validation
+
+| ID | Test | Covers | Setup | Assertion |
+|---|---|---|---|---|
+
+## Manual Validation
+
+1. ...
+
+## Risks and Rollback
+
+## Handoff
+```
+
+Repositoryに既存formatがある場合は、semantic roleを失わない範囲で既存formatを優先する。
+
+## 良いPhaseのQuality Gate
+
+Phase Reviewでは最低限、次を確認する。
+
+1. Goalを1文で説明できる。
+2. Phase単体で意味のあるOutcomeになっている。
+3. IN / OUTが明確。
+4. 対象Requirementに漏れがない。
+5. Current-Code Anchorsは実在し、責務理由がある。
+6. DesignはArchitectureと整合する。
+7. Implementerへ大きな未解決設計判断を押し付けていない。
+8. Implementation Stepsがfile edit listではなくbehavioral construction orderになっている。
+9. Acceptance Criteriaがobservable / testable / binary。
+10. 全Acceptance CriteriaがAutomatedまたはManual Validationへ紐付く。
+11. Risk / RollbackがPhase固有で現実的。
+12. Handoffが次Phaseのstable contractを示す。
 
 ## 想定ドキュメント構成
 
@@ -70,6 +151,8 @@ Docs/
 │   └── PhaseN.md
 ├── Research/
 │   └── PhaseN.md
+├── Reviews/
+│   └── PhaseN-plan-review.md
 ├── Changes/
 │   └── CR-001.md
 └── Tasks/
@@ -79,168 +162,89 @@ Docs/
         └── T002.md
 ```
 
-Repository側の既存命名規則がある場合は、そちらを優先します。
+## 責務の境界
 
-## 通常Workflow
+### phase-plan-ja
 
-### Phase開始
+決めるもの:
+- Phase Goal
+- Scope IN/OUT
+- Requirement Coverage
+- Current-Code Anchors
+- Design boundary
+- Acceptance Criteria
+- Validation strategy
+- Handoff
 
-```text
-phase-research-ja
-→ phase-task-plan-ja
-→ task-implement-ja
-→ task-review-ja
-→ 必要なら task-repair-ja
-→ 全Task PASS
-→ phase-close-ja
-```
+決めないもの:
+- Task分解
+- line-level implementation
+- exact code patch
 
-### 一括実行
+### phase-review-ja
 
-Workflowが安定したら`run-phase-ja`を使用します。
+確認するもの:
+- Phase size / coherence
+- Requirement漏れ
+- Anchor evidence
+- Architecture compliance
+- Design不足・過剰
+- AC品質
+- Validation traceability
+- Handoff contract
 
-`run-phase-ja`は`Docs/STATE.md`を読み、Repository truthとのcheap consistency check後に`Next Action`から再開します。
+変更しないもの:
+- Phase本文
+- Spec
+- Architecture
+- source code
+
+### phase-research-ja
+
+承認済みPhaseについて実コードをさらに深く調査し、entry point / execution flow / similar pattern / tests / constraintsを整理する。
+
+### phase-task-plan-ja
+
+承認済みPhase + Researchを、1 Task = 1 meaningful outcomeの実装Contractへ分解する。
+
+## STATE.mdの責務
+
+`Docs/STATE.md`は仕様書や作業ログではない。
+
+保存する主な情報:
+
+- Current Phase
+- Phase Status
+- Current Stage
+- Current Task
+- Task Status一覧
+- Review retry回数
+- Active Finding ID
+- Active Change
+- Blocker
+- Last Verification要約
+- Next Action
+
+詳細なSpec、Research、Task、Review本文は複製しない。
+STATEはRepository truthより下位であり、再開時にはcheap consistency checkを行う。
 
 ## Change Control
 
-Phase Planning後に要求が変わった場合、現在Taskへそのまま追加しません。
-
-まず`change-control-ja`で分類します。
+Task実行中に新しい要求・Scope変更・Architecture変更が発生した場合、現在Taskへ黙って追加しない。
 
 ```text
+変更要求
+  ↓
+change-control-ja
+  ↓
 IMPLEMENTATION_DETAIL
 TASK_SCOPE_CHANGE
 REQUIREMENT_CHANGE
 ARCHITECTURE_CHANGE
 ```
 
-判断基準:
-
-- HOWだけ変わる → `IMPLEMENTATION_DETAIL`
-- Task boundaryだけ変わる → `TASK_SCOPE_CHANGE`
-- observable WHATが変わる → `REQUIREMENT_CHANGE`
-- system boundary / responsibility / flowが変わる → `ARCHITECTURE_CHANGE`
-
-必要に応じて`Docs/Changes/CR-xxx.md`を作成します。
-
-更新範囲は変更レベルまでだけ戻ります。
-
-```text
-TASK_SCOPE_CHANGE
-  → Research必要範囲 → Plan/Task
-
-REQUIREMENT_CHANGE
-  → Spec → Research validity check → Plan/Task
-
-ARCHITECTURE_CHANGE
-  → Architecture → Spec consistency → Research → Plan/Task
-```
-
-影響を受けないPASS済みTaskは保持します。
-
-PASS済みTaskはChange Controlで次のいずれかに分類します。
-
-- `PRESERVE`
-- `REVERIFY`
-- `INVALIDATE`
-
-## RepairとChange Controlの違い
-
-### `task-repair-ja`
-
-使う条件:
-
-- Specは変わらない
-- Task Contractは正しい
-- 実装がTask Contractを満たしていない
-
-例:
-
-`AC-004ではerror表示が必要だが、実装では表示されない`
-
-### `change-control-ja`
-
-使う条件:
-
-- 新Requirementが追加された
-- Task Contractを変更する必要がある
-- Phase scopeが変わる
-- Spec / Architectureを変更する必要がある
-
-例:
-
-`保存前に確認Dialogを追加したい`
-
-この違いを混同しないことが重要です。
-
-## STATE.mdの責務
-
-`Docs/STATE.md`は仕様書や作業ログではありません。
-
-保存するのは主に:
-
-- Current Phase
-- Phase Status
-- Stage
-- Current Task
-- Task Status一覧
-- Review retry回数
-- Active Change
-- Active Finding ID
-- Blocker
-- Last Verification要約
-- Next Action
-
-Stageには`CHANGE_CONTROL`も含みます。
-
-Active Change例:
-
-```markdown
-## Active Change
-
-Change: `Docs/Changes/CR-003.md`
-Type: `REQUIREMENT_CHANGE`
-Requested During: `Phase3 / T002 / TASK_IMPLEMENT`
-Current Work: `PARTIALLY_REUSABLE`
-Affected Tasks: `T002, T003`
-Preserved Tasks: `T001`
-```
-
-STATEへChange Request本文やSpec本文はコピーしません。
-
-STATEはRepository truthより下位です。再開時にはgit/source/task/review/change artifactとのcheap consistency checkを行います。
-
-## Task Implementation中の変更要求
-
-`task-implement-ja`実行中にTask Contract外の追加要求が入った場合:
-
-```text
-current diff保持
-   ↓
-STATE Stage = CHANGE_CONTROL
-   ↓
-change-control-ja
-   ↓
-必要Artifactだけ更新
-   ↓
-影響Taskだけ再計画
-   ↓
-READY Taskから再開
-```
-
-current diffは原則自動revertしません。
-
-## 独立Review中の変更発見
-
-Review FAILをすべてrepairへ送らないでください。
-
-```text
-実装がContract違反
-→ task-repair-ja
-
-Contract/Requirement自体の変更が必要
-→ change-control-ja
-```
+Plan以上を変更する場合は`Docs/Changes/CR-xxx.md`を作成し、影響を受ける文書・Taskだけを更新する。
+既にPASS済みのTaskは、影響がない限り保持する。
 
 ## 言語方針
 
@@ -251,17 +255,17 @@ Contract/Requirement自体の変更が必要
 
 ## 設計上の重要点
 
+- Phaseを書く前にRequirementを抽出する
+- Acceptance CriteriaをImplementation Stepsより先に考える
 - ResearchとPlanningを分離する
 - `UNKNOWN`を仮定で埋めない
+- Current-Code Anchorは`path + symbol + ownership reason`で示す
+- Phase Planner自身がPhaseを最終承認しない
 - 1 Task = 1つの意味あるOutcome
 - ImplementerはTaskを再設計しない
-- Task Contract外変更を実装へ混ぜない
 - VerificationとSemantic Reviewを分離する
-- ReviewerはTask + diff + code + verificationを根拠にする
-- 実装不備はRepair、新RequirementはChange Controlへ送る
-- Change Controlでは影響Taskだけを再計画する
-- 同一TaskのReview FAILが3回続いたら無限retryしない
-- 全Agentへ全文書を投入せず、役割に必要なContextだけを渡す
+- Reviewerは実装Agentの説明ではなくTask + diff + code + verificationを根拠にする
+- FAIL時はTask全体ではなくFindingのみを修正する
+- Requirement変更をtask-repairで処理しない
+- 同一TaskのReview FAILが3回続いたら上位文書の問題を疑う
 - STATEは短く保ち、append-only logにしない
-- Workflow stageが変わるたびにSTATEを更新する
-- 再開時はSTATEを盲信せずRepository truthと最低限の整合確認を行う
