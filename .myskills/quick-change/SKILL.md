@@ -31,7 +31,8 @@ description: >
 - Requirementが大きく増える
 - rollback / compatibility riskが複雑
 
-昇格時は直接`phase-plan`へ行かず、原則`phase-intent`でPhase級のGoal / Scopeを再確認してから`phase-research`へ進む。
+昇格時は直接`phase-plan`へ行かず、原則`phase-cycle`へ渡す。
+`phase-cycle`が必要に応じて`phase-intent → phase-research → phase-plan → cold phase-review`を処理する。
 
 ## 出力
 
@@ -80,8 +81,8 @@ description: >
 5. QC Contractを作成する。
 6. `workflow-state`でWork Type=`QUICK_CHANGE`、Current Task=`QC-xxx`、Stage=`TASK_IMPLEMENT`へ更新する。
 7. `task-implement`で実装・Verificationを行う。
-8. `task-review`で独立Reviewする。
-9. FAILなら`task-repair`→再Verification→再Review。
+8. cold/independent contextの`task-review`でReviewする。
+9. FAILなら`task-repair`→再Verification→new cold Review。
 
 ## Escalation Gate
 
@@ -98,8 +99,9 @@ description: >
 1. current diffを無条件にrevertしない。
 2. Quick Changeを完了扱いにしない。
 3. `change-control`でcurrent workの再利用可否を整理する。
-4. Phase級変更のIntentが不明確なら`phase-intent`を実行する。
-5. 同一セッションで`phase-research → phase-plan → phase-review`へ進む。
+4. Phase級変更として`phase-cycle`へhandoffする。
+5. `phase-cycle`内でIntent clarificationが不要ならそのままResearchへ進める。
+6. Review PASS後に`phase-task-plan`へ進む。
 
 ## Rules
 
@@ -108,3 +110,4 @@ description: >
 - Code Anchorは推測で書かない。
 - Contract外の要求を黙って追加しない。
 - Phaseへ昇格する際、古いQC Contractだけを新PhaseのSource of Truthにしない。
+- Phaseへ昇格するためにユーザーへ手動で別Reviewer sessionを開かせない。
