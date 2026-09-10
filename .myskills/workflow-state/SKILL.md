@@ -12,10 +12,17 @@ description: >
 `Docs/STATE.md`に現在位置だけを短く保存し、別セッションでも次のActionから安全に再開できるようにする。
 STATEは仕様書でも履歴ログでもなく、Repository truthの下位にあるdurable cacheである。
 
+## Intent Policy
+
+`phase-intent`のIntent Briefは**session-only**であり、STATEへ保存しない。
+
+Phase workflowでdurable state管理を開始するのは、原則としてIntentが明確になり`phase-research`を開始するときからとする。
+Intent確定前にセッションが切れた場合は、STATEから推測せず`phase-intent`を再実行する。
+
 ## Truth Priority
 
 1. git / source / test結果
-2. Spec / Architecture / Phase / Task / Review / Change Request
+2. Spec / Architecture / Research / Phase / Task / Review / Change Request
 3. `Docs/STATE.md`
 
 矛盾時は上位を優先し、STATEを修正する。
@@ -28,9 +35,9 @@ STATEは仕様書でも履歴ログでもなく、Repository truthの下位に�
 ## Stage
 
 - `IDLE`
+- `PHASE_RESEARCH`
 - `PHASE_PLAN`
 - `PHASE_REVIEW`
-- `PHASE_RESEARCH`
 - `TASK_PLAN`
 - `TASK_IMPLEMENT`
 - `TASK_VERIFY`
@@ -40,6 +47,8 @@ STATEは仕様書でも履歴ログでもなく、Repository truthの下位に�
 - `PHASE_CLOSE`
 - `DONE`
 - `BLOCKED`
+
+`PHASE_INTENT`はdurable Stageとして持たない。
 
 ## Task Status
 
@@ -86,36 +95,130 @@ Use Skill: `<skill-name>`
 - None
 ```
 
-## Transition Rules
+## Phase Transition Rules
 
-- Phase作成開始 → `PHASE_PLAN`
-- Phase Plan作成後 → `PHASE_REVIEW`
-- Phase Review PASS → `PHASE_RESEARCH`
-- Research完了 → `TASK_PLAN`
-- Task Planning完了 → 最初のREADY Taskを`TASK_IMPLEMENT`
-- 実装開始 → `IMPLEMENTING`
-- 実装完了 → `VERIFYING` / `TASK_VERIFY`
-- Verification PASS → `REVIEWING` / `TASK_REVIEW`
-- Review PASS → Task=`PASS`; 次Taskまたは`PHASE_CLOSE`
-- Review FAIL → `REPAIRING` / `TASK_REPAIR`
-- Repair完了 → `VERIFYING`へ戻す
-- Contract外変更 → `CHANGE_CONTROL`
-- 同一TaskのReview FAILが3回 → `BLOCKED`
-- 全Task PASS → `PHASE_CLOSE`
-- Phase Close COMPLETE → `DONE`
+### Intent完了
 
-Quick ChangeはPhase Plan/Research/Task Planを省略し、`quick-change`でContract作成後に`task-implement`へ進む。
+IntentはSTATEへ書かない。
+同一セッションで`phase-research`を開始する。
+
+### Research開始
+
+```text
+Work Type = PHASE
+Stage = PHASE_RESEARCH
+Current Task = None
+Next Action = phase-research
+```
+
+### Research完了
+
+```text
+Stage = PHASE_PLAN
+Next Action = phase-plan
+```
+
+### Phase Plan作成後
+
+```text
+Stage = PHASE_REVIEW
+Next Action = phase-review
+```
+
+### Phase Review PASS
+
+```text
+Stage = TASK_PLAN
+Next Action = phase-task-plan
+```
+
+### Phase Review FAIL
+
+Findingの`Fix At`が`PHASE_PLAN`なら:
+
+```text
+Stage = PHASE_PLAN
+Next Action = phase-planでFindingのみ修正
+```
+
+### Phase Review UPSTREAM_BLOCKED
+
+Fix Atに従う。
+
+- `PHASE_RESEARCH` → Stage=`PHASE_RESEARCH`, Next Action=`phase-research`
+- `PHASE_INTENT` → session内で`phase-intent`を再実行し、その後`PHASE_RESEARCH`
+- `SPEC` → Stage=`BLOCKED`または変更管理規則に従いSpec更新
+- `ARCHITECTURE` → Stage=`BLOCKED`または変更管理規則に従いArchitecture更新
+
+`PHASE_INTENT`自体をSTATE Stageとして保存しない。
+
+### Task Planning完了
+
+```text
+Stage = TASK_IMPLEMENT
+Current Task = 最初のREADY Task
+Next Action = task-implement
+```
+
+### 実装開始
+
+Task=`IMPLEMENTING`, Stage=`TASK_IMPLEMENT`。
+
+### 実装完了
+
+Task=`VERIFYING`, Stage=`TASK_VERIFY`。
+
+### Verification PASS
+
+Task=`REVIEWING`, Stage=`TASK_REVIEW`, Next Action=`task-review`。
+
+### Review PASS
+
+Task=`PASS`。
+Dependencyを再評価し、次READY Taskへ進む。
+全Task PASSなら`PHASE_CLOSE`。
+
+### Review FAIL
+
+Task=`REPAIRING`, Stage=`TASK_REPAIR`, Next Action=`task-repair`。
+
+### Repair完了
+
+Task=`VERIFYING`, Stage=`TASK_VERIFY`へ戻す。
+
+### Contract外変更
+
+Stage=`CHANGE_CONTROL`。
+
+### 同一Task Review FAIL 3回
+
+Stage=`BLOCKED`。
+Spec / Architecture / Research / Task Plan / Implementation / Environmentをroot cause候補として確認する。
+
+### Phase Close COMPLETE
+
+Stage=`DONE`。
+
+## Quick Change
+
+Quick ChangeはPhase Intent / Research / Plan / Task Planを省略できる。
+`quick-change`でContract作成後、直接`TASK_IMPLEMENT`へ進む。
+
+Quick ChangeがPhaseへ昇格する場合は、既存QC ContractをSource of Truthにせず、必要な要求を`phase-intent`で再確認してから`phase-research`へ進む。
 
 ## Resume
 
-再開時はSTATEを読み、Current/Next Actionを抽出してcheap consistency checkを行う。
+再開時はSTATEを読み、Current / Next Actionを抽出してcheap consistency checkを行う。
 最低限、対象Artifactの存在、PASS TaskのReview evidence、Active Change path、git stateの明らかな矛盾を確認する。
+
+Research完了前のIntentはSTATEにないため、Research artifactが存在しないのにPhase workflowを再開する場合は必要に応じて`phase-intent`から再開する。
 
 ## Rules
 
 - Next Actionは常に1つ。
+- Intent BriefをSTATEへコピーしない。
 - Task本文、diff全文、test log全文をSTATEへコピーしない。
 - Independent Review前にTaskをPASSへしない。
-- Active FindingはID/Severityだけを保持する。
-- Active ChangeはCR path/classification/affected workだけを保持する。
+- Active FindingはID / Severity / Fix Atだけを保持する。
+- Active ChangeはCR path / classification / affected workだけを保持する。
 - 原則150行以内を目標にする。
