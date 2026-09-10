@@ -1,8 +1,7 @@
 ---
 name: task-repair-ja
 description: >
-  Independent Task ReviewでFAILとなったFindingだけを対象に、最小変更で修正し再Verificationへ戻す。
-  「レビューNGを修正して」「R002だけ直して」など、レビュー後の限定修正に使用する。
+  Independent ReviewでFAILとなったPhase TaskまたはQuick ChangeのFindingだけを対象に、最小変更で修正し再Verificationへ戻す。
 ---
 
 # Targeted Task Repair
@@ -11,20 +10,26 @@ description: >
 
 Independent Reviewで指摘されたBLOCKER / MAJOR Findingを、**既に正しい部分を壊さず、最小変更で解消する**。
 
-これはTask全体の再実装ではない。
+これはContract全体の再実装ではない。
+
+対応Contract:
+
+- Phase Task: `Docs/Tasks/PhaseN/Txxx.md`
+- Quick Change: `Docs/QuickChanges/QC-xxx.md`
 
 ## 入力
 
 必須:
 
-- 対象Task `Docs/Tasks/PhaseN/Txxx.md`
+- 対象Contract
 - 最新のReview結果
 - 現在のRepository state
 
 必要に応じて読む:
 
 - 関連ソースコード
-- 関連Spec / Architecture / Research
+- Phase Taskの場合: 関連Spec / Architecture / Research
+- Quick Changeの場合: Quick Contractが参照する既存仕様/Architecture
 
 ## 言語ルール
 
@@ -33,24 +38,29 @@ Independent Reviewで指摘されたBLOCKER / MAJOR Findingを、**既に正し�
 
 ## Core Rule
 
-**Review Findingの解消に必要な箇所だけを修正する。既にPASSしている挙動を再設計しない。**
+**Review Findingの解消に必要な箇所だけを修正する。既に正しい挙動を再設計しない。**
+
+新RequirementやArchitecture変更が必要ならrepairで押し切らない。
+
+- Phase Task → `change-control-ja`
+- Quick Change → `phase-plan-ja`への昇格を検討
 
 ## 手順
 
-### 1. FAIL Findingを抽出する
+### 1. FAIL Findingを抽出
 
 対象は原則:
 
 - BLOCKER
 - MAJOR
 
-MINORはTask Contract違反や将来の重大riskに繋がる場合のみ対応する。
+MINORはContract違反や重大riskに繋がる場合のみ対応する。
 
-### 2. Findingを現在のコードで再確認する
+### 2. Findingを現在コードで再確認
 
 Reviewerの指摘を盲目的に受け入れない。
 
-Findingが事実と異なる場合は修正せず、次の形式で`DISPUTED`として報告する。
+事実と異なる場合:
 
 ```text
 DISPUTED: Rxxx
@@ -58,36 +68,73 @@ Evidence: path/to/file: symbol
 Reason: ...
 ```
 
-### 3. 最小修正する
+として修正しない。
 
-有効なFindingごとに:
+### 3. Repair可能性を判定
 
-- 必要な箇所だけを変更する
-- unrelated refactoringをしない
-- already-correct behaviorを保持する
-- later Task scopeへ広げない
+次なら通常repair:
 
-### 4. 必要ならRegression Testを追加する
+- Contract内の実装不良
+- missing error handling
+- missing test
+- localized regression
+-既存Patternからの逸脱
 
-Reviewで露出したmissing behaviorを再発防止できる場合、最小のtestを追加する。
+次ならrepairを中止:
 
-### 5. Verificationを再実行する
+- Contract自体の変更が必要
+- Scope追加が必要
+- Architecture boundary変更が必要
+- Quick Changeが複数Outcomeへ膨張した
+
+### 4. 最小修正
+
+- Findingに必要な箇所だけ変更
+- unrelated refactoring禁止
+- already-correct behavior保持
+- future scopeへ広げない
+
+### 5. Regression Test
+
+Findingで露出したbehaviorを固定できる場合、最小のtestを追加する。
+
+### 6. Verification再実行
 
 最低限:
 
 - 変更箇所に直接関係するcheck
-- 元Taskの必須Verification
+- 元Contractの必須Verification
 
 を再実行する。
 
-## 出力フォーマット
+### 7. STATE更新
+
+Phase Task:
+
+```text
+Stage = TASK_VERIFY
+Task Status = VERIFYING
+Next Action = Verification後にtask-review-ja
+```
+
+Quick Change:
+
+```text
+Stage = QUICK_CHANGE
+Quick Change Status = VERIFYING
+Next Action = Verification後にtask-review-ja
+```
+
+Repair自身はPASS / COMPLETEにしない。
+
+## 出力
 
 ```markdown
-# Repair Result: Txxx
+# Repair Result: <Txxx | QC-xxx>
 
 ## Result
 
-REPAIRED | BLOCKED
+REPAIRED | BLOCKED | CHANGE_CONTROL | ESCALATE_TO_PHASE
 
 ## Resolved Findings
 
@@ -99,32 +146,31 @@ REPAIRED | BLOCKED
 
 - None
 
-または
-
-### Rxxx
-- Evidence: ...
-- Reason: ...
-
 ## Verification
 
-- `<command>`: PASS / FAIL / SKIPPED
+- `<command>`: PASS | FAIL | SKIPPED
+
+## State Update
+
+- Stage: ...
+- Contract Status: ...
+- Next Action: ...
 
 ## Additional Changes
 
-None
-
-または必要最小限の追加変更理由。
+None または必要最小限の理由。
 
 ## Remaining Concerns
 
-None
+None または具体的内容。
 ```
 
 ## 完了条件
 
-- 有効なBLOCKER / MAJORに対して必要な修正を行った
-- 元Taskのscopeを拡張していない
+- 有効なBLOCKER / MAJORに必要な修正を行った
+- Contract scopeを拡張していない
 - 必須Verificationを再実行した
-- 次のIndependent Reviewへ渡せる状態である
+- 次のIndependent Reviewへ渡せる
+- STATEを更新した
 
-Repair自身は最終PASSを宣言しない。最終判定は必ず`task-review-ja`で再実施する。
+最終判定は必ず`task-review-ja`で再実施する。
